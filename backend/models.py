@@ -57,7 +57,8 @@ class Order(Base):
     game_type = Column(String(50), nullable=False)
     duration_min = Column(Integer, nullable=False)  # 服务时长（分钟）
     total_amount = Column(Integer, nullable=False)  # 订单总金额（分）
-    status = Column(String(20), default="pending")  # pending/assigned/processing/completed/cancelled
+    remark = Column(Text, default="")  # 老板下单备注（打手接单参考）
+    status = Column(String(20), default="pending")  # pending/pending_accept/assigned/processing/completed/cancelled/rejected
     created_at = Column(DateTime, default=datetime.now)
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
@@ -85,4 +86,29 @@ class PlayerRating(Base):
     order_id = Column(Integer, ForeignKey("orders.id"), unique=True, nullable=False)  # 关联订单，一单一评
     rating = Column(Integer, nullable=False)  # 评分 1-5 星
     comment = Column(Text, default="")  # 评价内容
+    reply = Column(Text, default="")  # 打手回复
+    reply_time = Column(DateTime, nullable=True)  # 回复时间
     created_at = Column(DateTime, default=datetime.now)
+
+# 打赏记录表（老板结单后打赏打手）
+class TipRecord(Base):
+    __tablename__ = "tip_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)  # 关联订单
+    boss_username = Column(String(50), nullable=False)  # 打赏的老板
+    player_username = Column(String(50), index=True, nullable=False)  # 被打赏打手
+    amount = Column(Integer, nullable=False)  # 打赏金额（分）
+    created_at = Column(DateTime, default=datetime.now)
+
+# 提现记录表（打手提现，带30天冷却期）
+class WithdrawalRecord(Base):
+    __tablename__ = "withdrawal_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    player_username = Column(String(50), index=True, nullable=False)  # 提现打手
+    amount = Column(Integer, nullable=False)  # 提现金额（分）
+    status = Column(String(20), default="pending")  # pending/approved/rejected
+    note = Column(Text, default="")  # 管理员审核备注
+    created_at = Column(DateTime, default=datetime.now)
+    processed_at = Column(DateTime, nullable=True)  # 审核时间

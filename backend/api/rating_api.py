@@ -1,9 +1,10 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import Order, PlayerInfo, PlayerRating, User
-from schemas import RatingCreateRequest, RatingResponse
+from schemas import RatingCreateRequest, RatingReplyRequest, RatingResponse
 from auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/rating", tags=["打手评价"])
@@ -87,3 +88,25 @@ def get_my_ratings(
     return db.query(PlayerRating).filter(
         PlayerRating.boss_username == current_user.username
     ).order_by(PlayerRating.created_at.desc()).all()
+
+# 打手回复评价（仅被评价的打手本人，可修改自己的回复）
+@router.put("/{rating_id}/reply", response_model=RatingResponse)
+def reply_rating(
+    rating_id: int,
+    request: RatingReplyRequest,
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    rating = db.query(PlayerRating).filter(PlayerRating.id == rating_id).first()
+    if not rating:
+        raise HTTPException(status_code=404, detail="评价不存在")
+    
+    # 只能回复自己被评价的记录
+    if rating.player_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能回复自己的评价")
+    
+    rating.reply = request.reply
+    rating.reply_time = datetime.now()
+    db.commit()
+    db.refresh(rating)
+    return rating

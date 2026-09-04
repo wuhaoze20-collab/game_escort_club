@@ -12,6 +12,8 @@ from api.user_info_api import router as user_info_router
 from api.order_api import router as order_router
 from api.rating_api import router as rating_router
 from api.stats_api import router as stats_router
+from api.tip_api import router as tip_router
+from api.withdraw_api import router as withdraw_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -34,6 +36,8 @@ app.include_router(user_info_router)
 app.include_router(order_router)
 app.include_router(rating_router)
 app.include_router(stats_router)
+app.include_router(tip_router)
+app.include_router(withdraw_router)
 
 # 初始化默认数据
 def init_default_data():
@@ -123,6 +127,11 @@ def init_default_data():
                 {"name": "支付宝", "desc": "支持支付宝扫码支付，实时到账", "icon": "💰"},
                 {"name": "QQ钱包", "desc": "支持QQ钱包支付，即时到账", "icon": "🐧"},
                 {"name": "银行卡转账", "desc": "支持主流银行卡转账，1-2小时到账", "icon": "💳"}
+            ],
+            "punishment": [
+                {"level": "警告", "desc": "轻微违规（言语不当、消极服务等），累计3次升级为停单处罚", "date": "2026-09-01"},
+                {"level": "停单3天", "desc": "中度违规（无故拒单、态度恶劣），期间无法接单", "date": "2026-09-01"},
+                {"level": "封禁账号", "desc": "严重违规（作弊、诈骗、恶意刷单等），永久封禁并扣除后台金额", "date": "2026-09-01"}
             ]
         }
         

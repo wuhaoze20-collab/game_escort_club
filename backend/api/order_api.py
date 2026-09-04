@@ -42,16 +42,17 @@ def create_order(
         game_type=request.game_type,
         duration_min=request.duration_min,
         total_amount=request.total_amount,
+        remark=request.remark,
         status="pending"
     )
     
-    # 老板点单直接指定打手：校验打手存在，订单直接进入已分配状态
+    # 老板点单直接指定打手：校验打手存在，订单进入"待打手确认"状态
     if request.player_username:
         player = db.query(PlayerInfo).filter(PlayerInfo.username == request.player_username).first()
         if not player:
             raise HTTPException(status_code=404, detail="打手账户不存在")
         order.player_username = request.player_username
-        order.status = "assigned"
+        order.status = "pending_accept"
     
     db.add(order)
     
@@ -73,8 +74,8 @@ def assign_player(
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    if order.status != "pending":
-        raise HTTPException(status_code=400, detail="只有待接单状态的订单可以分配打手")
+    if order.status not in ["pending", "pending_accept", "rejected"]:
+        raise HTTPException(status_code=400, detail="当前状态的订单不能人工派单")
     
     # 检查打手是否存在
     player = db.query(PlayerInfo).filter(PlayerInfo.username == request.player_username).first()
@@ -83,6 +84,54 @@ def assign_player(
     
     order.player_username = request.player_username
     order.status = "assigned"
+    db.commit()
+    db.refresh(order)
+    return order
+
+# 打手接受订单（根据老板备注自行决定是否接单）
+@router.post("/{order_id}/accept", response_model=OrderResponse)
+def accept_order(
+    order_id: int,
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    # 只能接自己的待确认订单
+    if order.player_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能处理指派给自己的订单")
+    if order.status != "pending_accept":
+        raise HTTPException(status_code=400, detail="只有待确认状态的订单可以接单")
+    
+    order.status = "assigned"
+    db.commit()
+    db.refresh(order)
+    return order
+
+# 打手拒绝订单（退回老板余额）
+@router.post("/{order_id}/reject", response_model=OrderResponse)
+def reject_order(
+    order_id: int,
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    # 只能拒自己的待确认订单
+    if order.player_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能处理指派给自己的订单")
+    if order.status != "pending_accept":
+        raise HTTPException(status_code=400, detail="只有待确认状态的订单可以拒绝")
+    
+    order.status = "rejected"
+    
+    # 退回老板余额
+    boss = db.query(BossInfo).filter(BossInfo.username == order.boss_username).first()
+    if boss:
+        boss.balance += order.total_amount
+    
     db.commit()
     db.refresh(order)
     return order
@@ -166,7 +215,7 @@ def cancel_order(
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    if order.status not in ["pending", "assigned"]:
+    if order.status not in ["pending", "pending_accept", "assigned"]:
         raise HTTPException(status_code=400, detail="进行中或已完成的订单不能取消")
     
     # 老板角色只能取消自己的订单

@@ -9,7 +9,7 @@ from auth import get_current_user, require_roles
 router = APIRouter(prefix="/api/content", tags=["内容管理"])
 
 # 允许的配置key
-VALID_CONFIG_KEYS = ["notice", "orderGuide", "price", "recharge", "member", "payment"]
+VALID_CONFIG_KEYS = ["notice", "orderGuide", "price", "recharge", "member", "payment", "punishment"]
 
 # 获取所有内容配置（所有登录用户可查看）
 @router.get("/all")

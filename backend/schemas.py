@@ -68,10 +68,54 @@ class RatingResponse(BaseModel):
     order_id: int
     rating: int
     comment: str
+    reply: str = ""
+    reply_time: Optional[datetime] = None
     created_at: datetime
     
     class Config:
         from_attributes = True
+
+# 打手回复评价请求
+class RatingReplyRequest(BaseModel):
+    reply: str
+
+# 打赏请求
+class TipCreateRequest(BaseModel):
+    order_id: int
+    amount: int  # 打赏金额（分）
+
+# 打赏记录响应
+class TipResponse(BaseModel):
+    id: int
+    order_id: int
+    boss_username: str
+    player_username: str
+    amount: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# 提现请求
+class WithdrawCreateRequest(BaseModel):
+    amount: int  # 提现金额（分）
+
+# 提现记录响应
+class WithdrawResponse(BaseModel):
+    id: int
+    player_username: str
+    amount: int
+    status: str
+    note: str = ""
+    created_at: datetime
+    processed_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+# 提现审核请求
+class WithdrawProcessRequest(BaseModel):
+    note: str = ""
 
 # 本月盈利统计响应
 class MonthlyProfitResponse(BaseModel):
@@ -89,6 +133,7 @@ class CreateOrderRequest(BaseModel):
     duration_min: int
     total_amount: int
     player_username: Optional[str] = None  # 老板点单可直接指定打手
+    remark: str = ""  # 老板下单备注（打手接单参考）
 
 # 分配打手请求
 class AssignPlayerRequest(BaseModel):
@@ -103,6 +148,7 @@ class OrderResponse(BaseModel):
     game_type: str
     duration_min: int
     total_amount: int
+    remark: str = ""
     status: str
     created_at: datetime
     start_time: Optional[datetime] = None

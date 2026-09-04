@@ -141,7 +141,17 @@
                     <div id="payment-content" class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="loading">加载中...</div></div>
                 </section>
 
-                <!-- 7. 老板管理 -->
+                <!-- 7. 处罚通告 -->
+                <section id="page-punishment" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">处罚通告</h2>
+                        <button onclick="openEditModal('punishment')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">平台违规处罚公示，所有用户可查询</p>
+                    <div id="punishment-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 8. 老板管理 -->
                 <section id="page-boss" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-semibold text-gray-800">老板信息管理</h2>
@@ -247,6 +257,10 @@
                                 <button onclick="createOrder()" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">立即下单</button>
                             </div>
                         </div>
+                        <div class="mt-3">
+                            <label class="block text-sm text-gray-600 mb-1">下单备注（打手将根据备注自行决定是否接单）</label>
+                            <textarea id="order-remark" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="例如：要求打野强势、急单需立刻开始、语音沟通等..."></textarea>
+                        </div>
                     </div>
 
                     <!-- 我的订单 -->
@@ -284,7 +298,130 @@
                     </div>
                 </section>
 
-                <!-- 12. 评价弹窗 -->
+                <!-- 12. 打手我的订单（含接单/拒单/完成情况） -->
+                <section id="page-player-orders" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">我的订单</h2>
+                        <button onclick="loadPlayerOrders()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">订单号</th>
+                                    <th class="px-4 py-2">老板</th>
+                                    <th class="px-4 py-2">服务类型</th>
+                                    <th class="px-4 py-2">时长</th>
+                                    <th class="px-4 py-2">金额</th>
+                                    <th class="px-4 py-2">老板备注</th>
+                                    <th class="px-4 py-2">状态</th>
+                                    <th class="px-4 py-2">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="player-order-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 13. 打手我的评价（可回复） -->
+                <section id="page-player-ratings" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">我的评价</h2>
+                        <button onclick="loadPlayerRatings()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div id="player-ratings-content" class="space-y-4"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 14. 打手提现中心 -->
+                <section id="page-withdraw" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-6">提现中心</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="bg-green-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">后台总金额</p>
+                            <p id="wd-backend" class="text-xl font-semibold text-gray-800 mt-1">-</p>
+                        </div>
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">可提现金额（已过30天冷却期）</p>
+                            <p id="wd-available" class="text-xl font-semibold text-blue-600 mt-1">-</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">提现规则</p>
+                            <p class="text-sm text-gray-600 mt-1">入账金额需满30天才可提现，提现需管理员审核</p>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-xl p-5 mb-6">
+                        <h3 class="text-base font-medium text-gray-800 mb-3">发起提现</h3>
+                        <div class="flex gap-3">
+                            <input id="withdraw-amount" type="number" min="1" placeholder="提现金额(元)" class="w-48 px-3 py-2 border border-gray-300 rounded-lg">
+                            <button onclick="createWithdraw()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交提现申请</button>
+                        </div>
+                    </div>
+                    <h3 class="text-base font-medium text-gray-700 mb-3">提现记录</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">申请时间</th>
+                                    <th class="px-4 py-2">金额</th>
+                                    <th class="px-4 py-2">状态</th>
+                                    <th class="px-4 py-2">审核备注</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdraw-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                    <h3 class="text-base font-medium text-gray-700 mt-8 mb-3">我的打赏记录</h3>
+                    <div id="tip-records" class="space-y-2"></div>
+                </section>
+
+                <!-- 15. 订单管理（客服/管理员人工派单） -->
+                <section id="page-order-manage" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">订单管理（人工派单）</h2>
+                        <button onclick="loadManageOrders()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">订单号</th>
+                                    <th class="px-4 py-2">老板</th>
+                                    <th class="px-4 py-2">服务类型</th>
+                                    <th class="px-4 py-2">金额</th>
+                                    <th class="px-4 py-2">备注</th>
+                                    <th class="px-4 py-2">状态</th>
+                                    <th class="px-4 py-2">派单操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="manage-order-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 16. 提现审核（管理员/客服） -->
+                <section id="page-withdraw-manage" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">提现审核</h2>
+                        <button onclick="loadWithdrawManage()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">申请时间</th>
+                                    <th class="px-4 py-2">打手</th>
+                                    <th class="px-4 py-2">金额</th>
+                                    <th class="px-4 py-2">状态</th>
+                                    <th class="px-4 py-2">备注</th>
+                                    <th class="px-4 py-2">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="withdraw-manage-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 17. 评价弹窗 -->
                 <div id="rating-modal" class="fixed inset-0 z-50 hidden">
                     <div class="modal-overlay absolute inset-0" onclick="closeRatingModal()"></div>
                     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
@@ -313,6 +450,44 @@
                         <div class="px-6 py-4 border-t flex justify-end gap-3">
                             <button onclick="closeRatingModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
                             <button onclick="submitRating()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交评价</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 18. 打赏弹窗 -->
+                <div id="tip-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeTipModal()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-800">打赏打手 <span id="tip-player-name" class="text-blue-600"></span></h3>
+                            <button onclick="closeTipModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-500 mb-4">打赏无冷却时间，累计不可超过订单金额的 <b class="text-red-500">30%</b></p>
+                            <div class="flex gap-3 items-center">
+                                <input id="tip-amount" type="number" min="0.01" step="0.01" placeholder="打赏金额(元)" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <button onclick="submitTip()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">确认打赏</button>
+                            </div>
+                            <input type="hidden" id="tip-order-id">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 19. 评价回复弹窗 -->
+                <div id="reply-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeReplyModal()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-800">回复评价</h3>
+                            <button onclick="closeReplyModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <textarea id="reply-content" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="回复老板的评价..."></textarea>
+                            <input type="hidden" id="reply-rating-id">
+                        </div>
+                        <div class="px-6 py-4 border-t flex justify-end gap-3">
+                            <button onclick="closeReplyModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
+                            <button onclick="submitReply()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交回复</button>
                         </div>
                     </div>
                 </div>
@@ -471,12 +646,17 @@
             if (currentUser.role === 'admin' || currentUser.role === 'service') {
                 await loadBossList();
                 await loadPlayerList();
+                await loadManageOrders();
+                await loadWithdrawManage();
             } else if (currentUser.role === 'boss') {
                 await loadMyProfile();
                 await loadPublicPlayers();
                 await loadMyOrders();
             } else if (currentUser.role === 'player') {
                 await loadMyProfile();
+                await loadPlayerOrders();
+                await loadPlayerRatings();
+                await loadWithdrawInfo();
             }
 
             // 管理员加载本月盈利
@@ -503,7 +683,10 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'punishment', label: '处罚通告' },
                 { key: 'profit', label: '本月盈利' },
+                { key: 'order-manage', label: '订单管理' },
+                { key: 'withdraw-manage', label: '提现审核' },
                 { key: 'boss', label: '老板管理' },
                 { key: 'player', label: '打手管理' }
             ],
@@ -514,6 +697,9 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'punishment', label: '处罚通告' },
+                { key: 'order-manage', label: '订单管理' },
+                { key: 'withdraw-manage', label: '提现审核' },
                 { key: 'boss', label: '老板信息' },
                 { key: 'player', label: '打手信息' }
             ],
@@ -524,6 +710,7 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'punishment', label: '处罚通告' },
                 { key: 'order', label: '点单中心' },
                 { key: 'profile', label: '我的账户' }
             ],
@@ -534,6 +721,10 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'punishment', label: '处罚通告' },
+                { key: 'player-orders', label: '我的订单' },
+                { key: 'player-ratings', label: '我的评价' },
+                { key: 'withdraw', label: '提现中心' },
                 { key: 'profile', label: '我的账户' }
             ]
         };
@@ -584,6 +775,7 @@
             renderRecharge();
             renderMember();
             renderPayment();
+            renderPunishment();
         }
 
         function renderNotice() {
@@ -677,6 +869,29 @@
                 `;
             });
             document.getElementById('payment-content').innerHTML = html;
+        }
+
+        function renderPunishment() {
+            const list = contentData.punishment;
+            if (!list || list.length === 0) {
+                document.getElementById('punishment-content').innerHTML = '<div class="loading">暂无处罚通告</div>';
+                return;
+            }
+            const colorMap = { '警告': 'yellow', '停单': 'orange', '封禁': 'red' };
+            let html = '';
+            list.forEach(item => {
+                const color = Object.keys(colorMap).find(k => item.level.includes(k)) ? colorMap[Object.keys(colorMap).find(k => item.level.includes(k))] : 'gray';
+                html += `
+                    <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="px-2 py-0.5 text-xs font-medium rounded bg-${color}-100 text-${color}-600">${item.level}</span>
+                            <span class="text-xs text-gray-400">${item.date || ''}</span>
+                        </div>
+                        <p class="text-sm text-gray-600">${item.desc}</p>
+                    </div>
+                `;
+            });
+            document.getElementById('punishment-content').innerHTML = html;
         }
 
         // 加载老板列表
@@ -820,6 +1035,7 @@
             const game_type = document.getElementById('order-game').value;
             const duration_min = parseInt(document.getElementById('order-duration').value);
             const amount = parseFloat(document.getElementById('order-amount').value);
+            const remark = document.getElementById('order-remark').value.trim();
 
             if (!player) { alert('请先选择打手'); return; }
             if (!duration_min || duration_min < 30) { alert('服务时长不能少于30分钟'); return; }
@@ -831,9 +1047,10 @@
                     game_type: game_type,
                     duration_min: duration_min,
                     total_amount: Math.round(amount * 100),
-                    player_username: player
+                    player_username: player,
+                    remark: remark
                 });
-                alert('下单成功！订单已分配给 ' + player);
+                alert('下单成功！订单已提交给 ' + player + '，等待打手确认接单');
                 await loadPublicPlayers();
                 await loadMyOrders();
                 await loadMyProfile();
@@ -842,18 +1059,18 @@
             }
         }
 
-        // 加载我的订单（含评价入口）
+        // 加载我的订单（含评价/打赏入口）
         async function loadMyOrders() {
             try {
                 const list = await apiRequest('/api/order/list');
                 const tbody = document.getElementById('my-order-list');
                 const statusMap = {
-                    pending: '待分配', assigned: '已分配', processing: '服务中',
-                    completed: '已完成', cancelled: '已取消'
+                    pending: '待派单', pending_accept: '待打手确认', assigned: '已接单', processing: '服务中',
+                    completed: '已完成', cancelled: '已取消', rejected: '打手拒单'
                 };
                 const statusColor = {
-                    pending: 'text-yellow-600', assigned: 'text-blue-600', processing: 'text-purple-600',
-                    completed: 'text-green-600', cancelled: 'text-gray-400'
+                    pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
+                    completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
                 };
                 tbody.innerHTML = list.map(o => `
                     <tr>
@@ -862,11 +1079,15 @@
                         <td class="px-4 py-2">${o.player_username || '<span class="text-gray-400">待分配</span>'}</td>
                         <td class="px-4 py-2">${o.duration_min}分钟</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
+                        <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
                         <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
                         <td class="px-4 py-2">
                             ${o.status === 'completed' && o.player_username
-                                ? `<button onclick="openRatingModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">评价打手</button>`
-                                : (o.status === 'pending' || o.status === 'assigned'
+                                ? `<div class="flex gap-1">
+                                    <button onclick="openRatingModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">评价</button>
+                                    <button onclick="openTipModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-red-400 text-white rounded-lg hover:bg-red-500 transition">打赏</button>
+                                   </div>`
+                                : (o.status === 'pending' || o.status === 'pending_accept' || o.status === 'assigned'
                                     ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">取消订单</button>`
                                     : '<span class="text-gray-300">—</span>')}
                         </td>
@@ -874,6 +1095,36 @@
                 `).join('');
             } catch (e) {
                 console.error('加载订单失败', e);
+            }
+        }
+
+        // ==================== 打赏模块 ====================
+        function openTipModal(orderId, playerName) {
+            document.getElementById('tip-order-id').value = orderId;
+            document.getElementById('tip-player-name').textContent = playerName;
+            document.getElementById('tip-amount').value = '';
+            document.getElementById('tip-modal').classList.remove('hidden');
+        }
+
+        function closeTipModal() {
+            document.getElementById('tip-modal').classList.add('hidden');
+        }
+
+        async function submitTip() {
+            const orderId = parseInt(document.getElementById('tip-order-id').value);
+            const amount = parseFloat(document.getElementById('tip-amount').value);
+            if (!amount || amount <= 0) { alert('请输入打赏金额'); return; }
+            try {
+                await apiRequest('/api/tip/create', 'POST', {
+                    order_id: orderId,
+                    amount: Math.round(amount * 100)
+                });
+                alert('打赏成功！');
+                closeTipModal();
+                await loadMyOrders();
+                await loadMyProfile();
+            } catch (e) {
+                alert(e.message);
             }
         }
 
@@ -985,6 +1236,261 @@
             }
         }
 
+        // ==================== 打手我的订单 ====================
+        async function loadPlayerOrders() {
+            try {
+                const list = await apiRequest('/api/order/list');
+                const tbody = document.getElementById('player-order-list');
+                const statusMap = {
+                    pending: '待派单', pending_accept: '待我确认', assigned: '已接单', processing: '服务中',
+                    completed: '已完成', cancelled: '已取消', rejected: '已拒单'
+                };
+                const statusColor = {
+                    pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
+                    completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
+                };
+                tbody.innerHTML = list.map(o => `
+                    <tr>
+                        <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
+                        <td class="px-4 py-2">${o.boss_username}</td>
+                        <td class="px-4 py-2">${o.game_type}</td>
+                        <td class="px-4 py-2">${o.duration_min}分钟</td>
+                        <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
+                        <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
+                        <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
+                        <td class="px-4 py-2">
+                            ${o.status === 'pending_accept'
+                                ? `<div class="flex gap-1">
+                                    <button onclick="acceptOrder(${o.id})" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition">接单</button>
+                                    <button onclick="rejectOrder(${o.id})" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">拒单</button>
+                                   </div>`
+                                : (o.status === 'assigned'
+                                    ? `<button onclick="startMyOrder(${o.id})" class="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">开始服务</button>`
+                                    : '<span class="text-gray-300">—</span>')}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('加载打手订单失败', e);
+            }
+        }
+
+        async function acceptOrder(orderId) {
+            if (!confirm('确定接受该订单吗？')) return;
+            try {
+                await apiRequest(`/api/order/${orderId}/accept`, 'POST');
+                alert('接单成功！');
+                await loadPlayerOrders();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function rejectOrder(orderId) {
+            if (!confirm('确定拒绝该订单吗？金额将退回老板余额。')) return;
+            try {
+                await apiRequest(`/api/order/${orderId}/reject`, 'POST');
+                alert('已拒绝该订单');
+                await loadPlayerOrders();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function startMyOrder(orderId) {
+            try {
+                await apiRequest(`/api/order/${orderId}/start`, 'POST');
+                alert('服务开始！');
+                await loadPlayerOrders();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 打手我的评价（可回复） ====================
+        async function loadPlayerRatings() {
+            try {
+                const list = await apiRequest(`/api/rating/player/${currentUser.username}`);
+                const container = document.getElementById('player-ratings-content');
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400 text-center py-8">暂无评价</div>';
+                    return;
+                }
+                container.innerHTML = list.map(r => `
+                    <div class="border border-gray-200 rounded-xl p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                            <span class="text-xs text-gray-400">老板 ${r.boss_username} · ${new Date(r.created_at).toLocaleString('zh-CN')}</span>
+                        </div>
+                        <p class="text-sm text-gray-700 mb-2">${r.comment ? escapeHtml(r.comment) : '（无评价内容）'}</p>
+                        ${r.reply
+                            ? `<div class="bg-blue-50 rounded-lg p-3 mt-2">
+                                <p class="text-xs text-blue-600 mb-1">我的回复（${new Date(r.reply_time).toLocaleString('zh-CN')}）</p>
+                                <p class="text-sm text-gray-700">${escapeHtml(r.reply)}</p>
+                                <button onclick="openReplyModal(${r.id}, '${escapeHtml(r.reply)}')" class="mt-2 text-xs text-blue-500 hover:underline">修改回复</button>
+                               </div>`
+                            : `<button onclick="openReplyModal(${r.id}, '')" class="mt-2 text-xs text-blue-500 hover:underline">回复这条评价</button>`}
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('加载评价失败', e);
+            }
+        }
+
+        function openReplyModal(ratingId, currentReply) {
+            document.getElementById('reply-rating-id').value = ratingId;
+            document.getElementById('reply-content').value = currentReply || '';
+            document.getElementById('reply-modal').classList.remove('hidden');
+        }
+
+        function closeReplyModal() {
+            document.getElementById('reply-modal').classList.add('hidden');
+        }
+
+        async function submitReply() {
+            const ratingId = parseInt(document.getElementById('reply-rating-id').value);
+            const reply = document.getElementById('reply-content').value.trim();
+            try {
+                await apiRequest(`/api/rating/${ratingId}/reply`, 'PUT', { reply: reply });
+                alert('回复成功！');
+                closeReplyModal();
+                await loadPlayerRatings();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 打手提现中心 ====================
+        async function loadWithdrawInfo() {
+            try {
+                const info = await apiRequest('/api/withdraw/available');
+                document.getElementById('wd-backend').textContent = `¥${(info.backend_amount / 100).toLocaleString()}`;
+                document.getElementById('wd-available').textContent = `¥${(info.available_amount / 100).toLocaleString()}`;
+            } catch (e) { console.error(e); }
+
+            try {
+                const records = await apiRequest('/api/withdraw/my');
+                const statusMap = { pending: '审核中', approved: '已打款', rejected: '已拒绝' };
+                const statusColor = { pending: 'text-yellow-600', approved: 'text-green-600', rejected: 'text-red-500' };
+                document.getElementById('withdraw-list').innerHTML = records.length === 0
+                    ? '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-400">暂无提现记录</td></tr>'
+                    : records.map(r => `
+                        <tr>
+                            <td class="px-4 py-2 text-xs">${new Date(r.created_at).toLocaleString('zh-CN')}</td>
+                            <td class="px-4 py-2 font-medium">¥${(r.amount / 100).toFixed(2)}</td>
+                            <td class="px-4 py-2 ${statusColor[r.status]} font-medium">${statusMap[r.status]}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">${r.note || '—'}</td>
+                        </tr>
+                    `).join('');
+            } catch (e) { console.error(e); }
+
+            try {
+                const tips = await apiRequest('/api/tip/player/me');
+                document.getElementById('tip-records').innerHTML = tips.length === 0
+                    ? '<p class="text-sm text-gray-400">暂无打赏记录</p>'
+                    : tips.map(t => `
+                        <div class="flex justify-between items-center bg-yellow-50 rounded-lg px-4 py-2">
+                            <span class="text-sm text-gray-600">订单 #${t.order_id} 来自老板 ${t.boss_username}</span>
+                            <span class="text-sm font-semibold text-yellow-600">+¥${(t.amount / 100).toFixed(2)}</span>
+                        </div>
+                    `).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function createWithdraw() {
+            const amount = parseFloat(document.getElementById('withdraw-amount').value);
+            if (!amount || amount <= 0) { alert('请输入提现金额'); return; }
+            try {
+                await apiRequest('/api/withdraw/create', 'POST', { amount: Math.round(amount * 100) });
+                alert('提现申请已提交，等待管理员审核！');
+                document.getElementById('withdraw-amount').value = '';
+                await loadWithdrawInfo();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 订单管理（客服/管理员派单） ====================
+        async function loadManageOrders() {
+            try {
+                const list = await apiRequest('/api/order/list');
+                const players = await apiRequest('/api/player/public');
+                const tbody = document.getElementById('manage-order-list');
+                const statusMap = {
+                    pending: '待派单', pending_accept: '待打手确认', assigned: '已接单', processing: '服务中',
+                    completed: '已完成', cancelled: '已取消', rejected: '已拒单'
+                };
+                const statusColor = {
+                    pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
+                    completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
+                };
+                const playerOptions = players.map(p => `<option value="${p.username}">${p.username}</option>`).join('');
+                tbody.innerHTML = list.map(o => {
+                    const canAssign = o.status === 'pending' || o.status === 'rejected';
+                    return `
+                    <tr>
+                        <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
+                        <td class="px-4 py-2">${o.boss_username}</td>
+                        <td class="px-4 py-2">${o.game_type}</td>
+                        <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
+                        <td class="px-4 py-2 max-w-xs truncate">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
+                        <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
+                        <td class="px-4 py-2">
+                            ${canAssign
+                                ? `<div class="flex gap-1">
+                                    <select id="assign-select-${o.id}" class="px-2 py-1 text-xs border border-gray-300 rounded-lg">${playerOptions}</select>
+                                    <button onclick="assignOrder(${o.id})" class="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">派单</button>
+                                   </div>`
+                                : (o.status === 'pending_accept'
+                                    ? `<span class="text-xs text-purple-500">等待打手${o.player_username}确认</span>`
+                                    : '<span class="text-gray-300">—</span>')}
+                        </td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                console.error('加载订单管理失败', e);
+            }
+        }
+
+        async function assignOrder(orderId) {
+            const player = document.getElementById(`assign-select-${orderId}`).value;
+            try {
+                await apiRequest(`/api/order/${orderId}/assign`, 'POST', { player_username: player });
+                alert('派单成功！已分配给 ' + player);
+                await loadManageOrders();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 提现审核（管理员/客服） ====================
+        async function loadWithdrawManage() {
+            try {
+                const list = await apiRequest('/api/withdraw/list');
+                const tbody = document.getElementById('withdraw-manage-list');
+                const statusMap = { pending: '审核中', approved: '已打款', rejected: '已拒绝' };
+                const statusColor = { pending: 'text-yellow-600', approved: 'text-green-600', rejected: 'text-red-500' };
+                tbody.innerHTML = list.length === 0
+                    ? '<tr><td colspan="6" class="px-4 py-4 text-center text-gray-400">暂无提现申请</td></tr>'
+                    : list.map(w => `
+                        <tr>
+                            <td class="px-4 py-2 text-xs">${new Date(w.created_at).toLocaleString('zh-CN')}</td>
+                            <td class="px-4 py-2 font-medium">${w.player_username}</td>
+                            <td class="px-4 py-2 text-blue-600 font-medium">¥${(w.amount / 100).toFixed(2)}</td>
+                            <td class="px-4 py-2 ${statusColor[w.status]} font-medium">${statusMap[w.status]}</td>
+                            <td class="px-4 py-2 text-sm text-gray-500">${w.note || '—'}</td>
+                            <td class="px-4 py-2">
+                                ${w.status === 'pending'
+                                    ? `<div class="flex gap-1">
+                                        <button onclick="processWithdraw(${w.id}, 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition">批准</button>
+                                        <button onclick="processWithdraw(${w.id}, 'reject')" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">拒绝</button>
+                                       </div>`
+                                    : '<span class="text-gray-300">—</span>'}
+                            </td>
+                        </tr>
+                    `).join('');
+            } catch (e) {
+                console.error('加载提现审核失败', e);
+            }
+        }
+
+        async function processWithdraw(withdrawId, action) {
+            const note = action === 'reject' ? (prompt('请输入拒绝原因（可选）：') || '') : '';
+            try {
+                await apiRequest(`/api/withdraw/${withdrawId}/${action}`, 'POST', { note: note });
+                alert(action === 'approve' ? '已批准提现，打手后台金额已扣减' : '已拒绝该提现申请');
+                await loadWithdrawManage();
+            } catch (e) { alert(e.message); }
+        }
+
         // HTML转义，防止XSS
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -1001,11 +1507,12 @@
                 module === 'order-guide' ? 'orderGuide' :
                 module === 'price' ? 'price' :
                 module === 'recharge' ? 'recharge' :
-                module === 'member' ? 'member' : 'payment';
+                module === 'member' ? 'member' :
+                module === 'payment' ? 'payment' : 'punishment';
             
             editData = JSON.parse(JSON.stringify(contentData[dataKey] || []));
             document.getElementById('modal-title').textContent = '编辑' + 
-                {notice:'店铺公告','order-guide':'下单须知',price:'价格预览',recharge:'充值福利',member:'会员福利',payment:'支付方式'}[module];
+                {notice:'店铺公告','order-guide':'下单须知',price:'价格预览',recharge:'充值福利',member:'会员福利',payment:'支付方式',punishment:'处罚通告'}[module];
             
             generateModalForm(module);
             document.getElementById('edit-modal').classList.remove('hidden');
@@ -1098,6 +1605,21 @@
                     paymentHtml += '</div><button onclick="addPaymentItem()" class="mt-3 text-sm text-blue-500">+ 添加支付方式</button>';
                     body.innerHTML = paymentHtml;
                     break;
+
+                case 'punishment':
+                    let punishHtml = '<div id="punishment-list" class="space-y-3">';
+                    (editData || []).forEach(item => {
+                        punishHtml += `
+                            <div class="flex gap-2 items-center">
+                                <input value="${item.level}" placeholder="处罚等级" class="w-1/5 px-3 py-2 border rounded-lg text-sm punish-level">
+                                <input value="${item.desc}" placeholder="处罚说明" class="flex-1 px-3 py-2 border rounded-lg text-sm punish-desc">
+                                <input value="${item.date || ''}" placeholder="日期" class="w-1/5 px-3 py-2 border rounded-lg text-sm punish-date">
+                                <button onclick="removePunishItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    punishHtml += '</div><button onclick="addPunishItem()" class="mt-3 text-sm text-blue-500">+ 添加处罚通告</button>';
+                    body.innerHTML = punishHtml;
+                    break;
             }
         }
 
@@ -1150,6 +1672,13 @@
                         name: row.querySelector('.payment-name').value.trim(),
                         desc: row.querySelector('.payment-desc').value.trim()
                     })).filter(v => v.name);
+                    break;
+                case 'punishment':
+                    saveValue = Array.from(document.querySelectorAll('#punishment-list > div')).map(row => ({
+                        level: row.querySelector('.punish-level').value.trim(),
+                        desc: row.querySelector('.punish-desc').value.trim(),
+                        date: row.querySelector('.punish-date').value.trim()
+                    })).filter(v => v.level);
                     break;
             }
 
@@ -1227,6 +1756,18 @@
             list.appendChild(div);
         }
         function removePaymentItem(btn) { btn.parentElement.remove(); }
+
+        function addPunishItem() {
+            const list = document.getElementById('punishment-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<input placeholder="处罚等级" class="w-1/5 px-3 py-2 border rounded-lg text-sm punish-level">
+                <input placeholder="处罚说明" class="flex-1 px-3 py-2 border rounded-lg text-sm punish-desc">
+                <input placeholder="日期" class="w-1/5 px-3 py-2 border rounded-lg text-sm punish-date">
+                <button onclick="removePunishItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removePunishItem(btn) { btn.parentElement.remove(); }
 
         // 页面加载检查登录状态
         window.addEventListener('DOMContentLoaded', () => {
