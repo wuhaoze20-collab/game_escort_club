@@ -241,7 +241,7 @@
             <div class="p-6 border-b border-white/10">
                 <h1 class="text-xl font-bold text-gray-800">游戏护航俱乐部</h1>
                 <div class="flex items-center gap-3 mt-3">
-                    <img id="sidebar-avatar" src="" alt="头像" class="w-11 h-11 rounded-full object-cover border-2 border-amber-400 bg-gray-100">
+                    <img id="sidebar-avatar" src="" alt="头像" onclick="viewAvatar(document.getElementById('sidebar-avatar').src)" class="w-11 h-11 rounded-full object-cover border-2 border-amber-400 bg-gray-100 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                     <div>
                         <p id="sidebar-nickname" class="text-sm font-semibold text-gray-800">昵称</p>
                         <p id="user-role-tip" class="text-xs text-gray-500">管理员</p>
@@ -257,7 +257,7 @@
         <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
             <div class="text-gray-600">欢迎使用管理系统</div>
             <div class="flex items-center gap-4">
-                <img id="topbar-avatar" src="" alt="头像" class="w-8 h-8 rounded-full object-cover border border-gray-200 bg-gray-100">
+                <img id="topbar-avatar" src="" alt="头像" onclick="viewAvatar(document.getElementById('topbar-avatar').src)" class="w-8 h-8 rounded-full object-cover border border-gray-200 bg-gray-100 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                 <span id="current-user" class="text-sm text-gray-700">昵称（账号：guanliyuan）</span>
                 <button id="logout-btn" class="text-sm text-red-500 hover:text-red-600">退出登录</button>
             </div>
@@ -479,7 +479,7 @@
                         <h3 class="text-base font-medium text-gray-800 mb-1">我的头像与昵称</h3>
                         <p class="text-xs text-gray-500 mb-4">从图库选择头像并填写昵称，提交后由管理员/客服审核，通过后对所有人展示；不合规会被打回</p>
                         <div class="flex items-center gap-6 mb-4">
-                            <img id="profile-avatar-preview" src="" alt="当前头像" class="w-20 h-20 rounded-full object-cover border-2 border-amber-400 bg-gray-100">
+                            <img id="profile-avatar-preview" src="" alt="当前头像" onclick="viewAvatar(document.getElementById('profile-avatar-preview').src)" class="w-20 h-20 rounded-full object-cover border-2 border-amber-400 bg-gray-100 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                             <div>
                                 <p class="text-sm text-gray-600">当前昵称：<b id="profile-nickname-current" class="text-gray-800">-</b></p>
                                 <div id="profile-review-status" class="mt-1"></div>
@@ -708,6 +708,17 @@
                     <p class="text-sm text-gray-500 mb-4">所有账户可提交头像与昵称修改，审核通过后对外展示；昵称不合规打回后改为"违规昵称"，头像不合规打回后恢复默认头像</p>
                     <div id="profile-review-content" class="space-y-4"><div class="loading">加载中...</div></div>
                 </section>
+
+                <!-- 16.8 头像查看弹窗（点击任意头像查看完整大图） -->
+                <div id="avatar-view-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeAvatarView()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <div class="relative">
+                            <button onclick="closeAvatarView()" class="absolute -top-4 -right-4 w-9 h-9 rounded-full bg-white shadow-lg text-gray-600 hover:text-gray-900 font-bold text-lg leading-none">✕</button>
+                            <img id="avatar-view-img" src="" alt="头像大图" class="max-w-[80vw] max-h-[80vh] rounded-2xl shadow-2xl border-4 border-white object-contain bg-white">
+                        </div>
+                    </div>
+                </div>
 
                 <!-- 17. 评价弹窗 -->
                 <div id="rating-modal" class="fixed inset-0 z-50 hidden">
@@ -970,6 +981,18 @@
             document.getElementById('sidebar-nickname').textContent = nick;
             document.getElementById('sidebar-avatar').src = av || 'avatars/avatar_yule.jpg';
             document.getElementById('topbar-avatar').src = av || 'avatars/avatar_yule.jpg';
+        }
+
+        // 查看头像完整大图
+        function viewAvatar(src) {
+            if (!src) src = 'avatars/avatar_yule.jpg';
+            document.getElementById('avatar-view-img').src = src;
+            document.getElementById('avatar-view-modal').classList.remove('hidden');
+        }
+
+        // 关闭头像大图
+        function closeAvatarView() {
+            document.getElementById('avatar-view-modal').classList.add('hidden');
         }
 
         async function initApp() {
@@ -1335,7 +1358,7 @@
                     <tr>
                         <td class="px-4 py-2">
                             <div class="flex items-center gap-2">
-                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover border border-gray-200">
+                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-8 h-8 rounded-full object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                                 <span class="font-medium">${escapeHtml(item.nickname || item.username)}</span>
                                 <span class="text-xs text-gray-400">(${item.username})</span>
                             </div>
@@ -1359,7 +1382,7 @@
                     <tr>
                         <td class="px-4 py-2">
                             <div class="flex items-center gap-2">
-                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover border border-gray-200">
+                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-8 h-8 rounded-full object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                                 <span class="font-medium">${escapeHtml(item.nickname || item.username)}</span>
                                 <span class="text-xs text-gray-400">(${item.username})</span>
                             </div>
@@ -1409,7 +1432,7 @@
             document.getElementById('profile-avatar-input').value = img.dataset.name;
         }
 
-        // 加载头像昵称编辑区（根据当前用户资料）
+        // 加载头像昵称编辑区（根据当前用户资料；老板不可使用头像库，仅可改昵称）
         async function loadProfileEditor() {
             let info = null;
             try {
@@ -1418,13 +1441,18 @@
                 else info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar };
             } catch (e) { info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar }; }
 
+            const isBoss = currentUser.role === 'boss';
             const nick = info.nickname || info.username;
             const av = info.avatar;
             document.getElementById('profile-nickname-current').textContent = nick;
             document.getElementById('profile-avatar-preview').src = av ? `avatars/${av}` : 'avatars/avatar_yule.jpg';
             document.getElementById('profile-nickname-input').value = '';
             document.getElementById('profile-avatar-input').value = '';
-            renderAvatarSelect(av);
+
+            // 老板不能使用头像库：隐藏头像选择区，仅保留当前头像预览与昵称修改
+            const avatarSelectBox = document.getElementById('profile-avatar-select').parentElement;
+            avatarSelectBox.classList.toggle('hidden', isBoss);
+            if (!isBoss) renderAvatarSelect(av);
 
             // 审核状态徽章
             const statusBox = document.getElementById('profile-review-status');
@@ -1468,7 +1496,7 @@
                     return `
                         <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/60">
                             <div class="flex items-center gap-3 mb-3">
-                                <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
+                                <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-10 h-10 rounded-full object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                                 <div>
                                     <p class="font-medium text-gray-800">${escapeHtml(u.nickname)}（${escapeHtml(u.username)}）</p>
                                     <p class="text-xs text-gray-500">${u.role_name}</p>
@@ -1489,7 +1517,7 @@
                                 <div class="bg-white rounded-lg p-3 border border-gray-100">
                                     <p class="text-xs text-gray-500 mb-2">头像审核 ${u.avatar_status === 'pending' ? '<span class="text-amber-600">待审核</span>' : ''}</p>
                                     <div class="flex items-center justify-between gap-2">
-                                        <div class="flex items-center gap-2 text-sm">当前头像 <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover"> 新头像 ${pendingAvatar}</div>
+                                        <div class="flex items-center gap-2 text-sm">当前头像 <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-8 h-8 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"> 新头像 ${u.pending_avatar ? `<img src="avatars/${u.pending_avatar}" onclick="viewAvatar(this.src)" class="w-8 h-8 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图">` : '<span class="text-gray-300">无</span>'}</div>
                                         ${u.avatar_status === 'pending' ? `
                                         <div class="flex gap-2 shrink-0">
                                             <button onclick="decideProfile('${u.username}', 'avatar', 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600">通过</button>
@@ -1680,7 +1708,7 @@
                     <div class="border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="selectPlayer('${p.username}')">
                         <div class="flex justify-between items-start mb-2">
                             <span class="flex items-center gap-2">
-                                <img src="${p.avatar ? 'avatars/' + p.avatar : 'avatars/avatar_yule.jpg'}" class="w-9 h-9 rounded-full object-cover border border-gray-200">
+                                <img src="${p.avatar ? 'avatars/' + p.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-9 h-9 rounded-full object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                                 <span>
                                     <span class="block font-semibold text-gray-800">${escapeHtml(p.nickname || p.username)}</span>
                                     <span class="block text-xs text-gray-400">@${p.username}</span>
@@ -1777,7 +1805,7 @@
                         <td class="px-4 py-2">${o.game_type}</td>
                         <td class="px-4 py-2">
                             ${o.player_username
-                                ? `<span class="inline-flex items-center gap-1.5"><img src="${o.player_avatar ? 'avatars/' + o.player_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.player_nickname || o.player_username)}</span></span>`
+                                ? `<span class="inline-flex items-center gap-1.5"><img src="${o.player_avatar ? 'avatars/' + o.player_avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-6 h-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"><span>${escapeHtml(o.player_nickname || o.player_username)}</span></span>`
                                 : '<span class="text-gray-400">待分配</span>'}
                         </td>
                         <td class="px-4 py-2">${o.duration_min}分钟</td>
@@ -1972,7 +2000,7 @@
                     <tr>
                         <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
                         <td class="px-4 py-2">
-                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
+                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-6 h-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
                         </td>
                         <td class="px-4 py-2">${o.game_type}</td>
                         <td class="px-4 py-2">${o.duration_min}分钟</td>
@@ -2196,7 +2224,7 @@
                     <tr>
                         <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
                         <td class="px-4 py-2">
-                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
+                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-6 h-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
                         </td>
                         <td class="px-4 py-2">${o.game_type}</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>

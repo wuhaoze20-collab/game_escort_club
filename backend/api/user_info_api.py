@@ -200,6 +200,9 @@ def update_my_profile(
             changed = True
     
     if request.avatar is not None and request.avatar.strip():
+        # 老板不能使用头像库中的头像，仅可修改昵称
+        if current_user.role == "boss":
+            raise HTTPException(status_code=400, detail="老板暂不支持使用头像库，仅可修改昵称")
         av = request.avatar.strip()
         # 头像必须是头像库中的文件（防路径穿越）
         if av not in AVATAR_LIBRARY:
