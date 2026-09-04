@@ -18,7 +18,7 @@ from api.withdraw_api import router as withdraw_router
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="1.0.0")
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.0.0")
 
 # CORS配置（允许前端跨域访问）
 app.add_middleware(
