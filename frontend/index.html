@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏护航俱乐部管理系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .sidebar-link.active { background-color: #3b82f6; color: white; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+        .page-section { display: none; }
+        .page-section.active { display: block; }
+        .loading { text-align: center; padding: 40px; color: #9ca3af; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <!-- ========== 登录页面 ========== -->
+    <div id="login-page" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-2xl font-bold text-gray-800">俱乐部管理系统</h1>
+                <p class="text-gray-500 mt-2">请输入账号密码登录</p>
+            </div>
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">账号</label>
+                    <input id="login-username" type="text" placeholder="请输入账号" 
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <div class="relative">
+                        <input id="login-password" type="password" placeholder="请输入密码" 
+                            class="w-full px-4 py-2.5 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <button id="toggle-password" type="button" 
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <svg id="eye-open" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                            </svg>
+                            <svg id="eye-close" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                    d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <p id="login-error" class="text-red-500 text-sm hidden">账号或密码错误，请重试</p>
+                <button id="login-btn" 
+                    class="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+                    登录
+                </button>
+            </div>
+            <div class="mt-6 text-xs text-gray-400 text-center">
+                <p>测试账号：guanliyuan / kefu / laoban / dashou</p>
+                <p>统一密码：123456</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 主应用页面 ========== -->
+    <div id="app-page" class="hidden">
+        <!-- 侧边导航 -->
+        <aside class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-10">
+            <div class="p-6 border-b">
+                <h1 class="text-xl font-bold text-gray-800">俱乐部管理后台</h1>
+                <p id="user-role-tip" class="text-sm text-gray-500 mt-1">管理员</p>
+            </div>
+            <nav id="sidebar-menu" class="p-4 space-y-2">
+                <!-- 菜单动态生成 -->
+            </nav>
+        </aside>
+
+        <!-- 顶部栏 -->
+        <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
+            <div class="text-gray-600">欢迎使用管理系统</div>
+            <div class="flex items-center gap-4">
+                <span id="current-user" class="text-sm text-gray-700">账号：guanliyuan</span>
+                <button id="logout-btn" class="text-sm text-red-500 hover:text-red-600">退出登录</button>
+            </div>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="ml-64 p-8">
+            <div class="max-w-5xl mx-auto space-y-8">
+
+                <!-- 1. 店铺公告 -->
+                <section id="page-notice" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">店铺公告</h2>
+                        <button onclick="openEditModal('notice')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="notice-content" class="text-gray-600 space-y-2"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 2. 下单须知 -->
+                <section id="page-order-guide" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">下单须知</h2>
+                        <button onclick="openEditModal('order-guide')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="order-guide-content" class="text-gray-600"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 3. 价格预览 -->
+                <section id="page-price" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">价格预览</h2>
+                        <button onclick="openEditModal('price')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="price-content" class="overflow-x-auto"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 4. 充值福利 -->
+                <section id="page-recharge" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">充值福利</h2>
+                        <button onclick="openEditModal('recharge')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="recharge-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 5. 会员福利 -->
+                <section id="page-member" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">会员福利</h2>
+                        <button onclick="openEditModal('member')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="member-content" class="overflow-x-auto"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 6. 支付方式 -->
+                <section id="page-payment" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">支付方式</h2>
+                        <button onclick="openEditModal('payment')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    </div>
+                    <div id="payment-content" class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 7. 老板管理 -->
+                <section id="page-boss" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">老板信息管理</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">账户名</th>
+                                    <th class="px-4 py-2">累计消费金额</th>
+                                    <th class="px-4 py-2">账户余额</th>
+                                    <th class="px-4 py-2">点单次数</th>
+                                </tr>
+                            </thead>
+                            <tbody id="boss-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 8. 打手管理 -->
+                <section id="page-player" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">打手信息管理</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">账户名</th>
+                                    <th class="px-4 py-2">接单次数</th>
+                                    <th class="px-4 py-2">投诉次数</th>
+                                    <th class="px-4 py-2">好评率</th>
+                                    <th class="px-4 py-2">后台金额</th>
+                                </tr>
+                            </thead>
+                            <tbody id="player-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. 我的账户（老板/打手个人视角） -->
+                <section id="page-profile" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-6">我的账户信息</h2>
+                    <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6"><div class="loading">加载中...</div></div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- 编辑弹窗 -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeModal()"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div class="px-6 py-4 border-b flex justify-between items-center">
+                <h3 id="modal-title" class="text-lg font-semibold text-gray-800">编辑内容</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="modal-body" class="p-6 overflow-y-auto flex-1"></div>
+            <div class="px-6 py-4 border-t flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
+                <button onclick="saveData()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 后端API地址
+        const API_BASE = 'http://localhost:8000';
+        
+        // 全局状态
+        let currentUser = null;
+        let currentModule = '';
+        let editData = null;
+        let contentData = {};
+
+        // 通用请求封装
+        async function apiRequest(url, method = 'GET', data = null) {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            };
+            
+            // 带上token
+            const token = localStorage.getItem('token');
+            if (token) {
+                options.headers['Authorization'] = 'Bearer ' + token;
+            }
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            // 发起请求（区分网络错误和后端错误）
+            let response;
+            try {
+                response = await fetch(API_BASE + url, options);
+            } catch (e) {
+                throw new Error('无法连接后端服务，请先在backend目录运行 python main.py');
+            }
+            
+            let result;
+            try {
+                result = await response.json();
+            } catch (e) {
+                throw new Error('后端返回异常（状态码 ' + response.status + '），请检查后端是否正常启动');
+            }
+            
+            // token失效时自动回到登录页
+            if (response.status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                currentUser = null;
+                appPage.classList.add('hidden');
+                loginPage.classList.remove('hidden');
+                throw new Error(result.detail || '登录已失效，请重新登录');
+            }
+            
+            if (!response.ok) {
+                throw new Error(result.detail || '请求失败');
+            }
+            return result;
+        }
+
+        // ==================== 登录逻辑 ====================
+        const loginPage = document.getElementById('login-page');
+        const appPage = document.getElementById('app-page');
+        const loginBtn = document.getElementById('login-btn');
+        const togglePasswordBtn = document.getElementById('toggle-password');
+        const passwordInput = document.getElementById('login-password');
+        const eyeOpen = document.getElementById('eye-open');
+        const eyeClose = document.getElementById('eye-close');
+
+        // 显示/隐藏密码
+        togglePasswordBtn.addEventListener('click', () => {
+            const isPassword = passwordInput.type === 'password';
+            passwordInput.type = isPassword ? 'text' : 'password';
+            eyeOpen.classList.toggle('hidden', !isPassword);
+            eyeClose.classList.toggle('hidden', isPassword);
+        });
+
+        // 登录按钮
+        loginBtn.addEventListener('click', async () => {
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+            const errorTip = document.getElementById('login-error');
+
+            if (!username || !password) {
+                errorTip.textContent = '请输入账号和密码';
+                errorTip.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const result = await apiRequest('/api/login', 'POST', { username, password });
+                localStorage.setItem('token', result.access_token);
+                currentUser = result.user;
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                errorTip.classList.add('hidden');
+                initApp();
+            } catch (e) {
+                errorTip.textContent = e.message;
+                errorTip.classList.remove('hidden');
+            }
+        });
+
+        // 退出登录
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            currentUser = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('currentUser');
+            appPage.classList.add('hidden');
+            loginPage.classList.remove('hidden');
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+        });
+
+        // ==================== 应用初始化 ====================
+        async function initApp() {
+            loginPage.classList.add('hidden');
+            appPage.classList.remove('hidden');
+
+            document.getElementById('current-user').textContent = `账号：${currentUser.username}`;
+            document.getElementById('user-role-tip').textContent = currentUser.role_name;
+
+            renderSidebar();
+            
+            // 加载所有内容
+            await loadAllContent();
+            
+            // 加载用户信息
+            if (currentUser.role === 'admin' || currentUser.role === 'service') {
+                await loadBossList();
+                await loadPlayerList();
+            } else if (currentUser.role === 'boss' || currentUser.role === 'player') {
+                await loadMyProfile();
+            }
+
+            // 控制编辑按钮显示：仅管理员和客服可见
+            const canEdit = currentUser.role === 'admin' || currentUser.role === 'service';
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.classList.toggle('hidden', !canEdit);
+            });
+
+            // 默认显示第一个菜单
+            switchPage(menuConfig[currentUser.role][0].key);
+        }
+
+        // 菜单配置
+        const menuConfig = {
+            admin: [
+                { key: 'notice', label: '店铺公告' },
+                { key: 'order-guide', label: '下单须知' },
+                { key: 'price', label: '价格预览' },
+                { key: 'recharge', label: '充值福利' },
+                { key: 'member', label: '会员福利' },
+                { key: 'payment', label: '支付方式' },
+                { key: 'boss', label: '老板管理' },
+                { key: 'player', label: '打手管理' }
+            ],
+            service: [
+                { key: 'notice', label: '店铺公告' },
+                { key: 'order-guide', label: '下单须知' },
+                { key: 'price', label: '价格预览' },
+                { key: 'recharge', label: '充值福利' },
+                { key: 'member', label: '会员福利' },
+                { key: 'payment', label: '支付方式' },
+                { key: 'boss', label: '老板信息' },
+                { key: 'player', label: '打手信息' }
+            ],
+            boss: [
+                { key: 'notice', label: '店铺公告' },
+                { key: 'order-guide', label: '下单须知' },
+                { key: 'price', label: '价格预览' },
+                { key: 'recharge', label: '充值福利' },
+                { key: 'member', label: '会员福利' },
+                { key: 'payment', label: '支付方式' },
+                { key: 'profile', label: '我的账户' }
+            ],
+            player: [
+                { key: 'notice', label: '店铺公告' },
+                { key: 'order-guide', label: '下单须知' },
+                { key: 'price', label: '价格预览' },
+                { key: 'recharge', label: '充值福利' },
+                { key: 'member', label: '会员福利' },
+                { key: 'payment', label: '支付方式' },
+                { key: 'profile', label: '我的账户' }
+            ]
+        };
+
+        // 渲染侧边栏
+        function renderSidebar() {
+            const menu = menuConfig[currentUser.role];
+            const sidebar = document.getElementById('sidebar-menu');
+            sidebar.innerHTML = '';
+            menu.forEach(item => {
+                const a = document.createElement('a');
+                a.href = 'javascript:;';
+                a.className = 'sidebar-link block px-4 py-2 rounded-lg text-gray-700 hover:bg-blue-50 transition';
+                a.textContent = item.label;
+                a.dataset.key = item.key;
+                a.addEventListener('click', () => switchPage(item.key));
+                sidebar.appendChild(a);
+            });
+        }
+
+        // 切换页面
+        function switchPage(key) {
+            const hasPermission = menuConfig[currentUser.role].some(item => item.key === key);
+            if (!hasPermission) return;
+
+            document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+            document.getElementById(`page-${key}`).classList.add('active');
+            
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.toggle('active', link.dataset.key === key);
+            });
+        }
+
+        // ==================== 内容加载与渲染 ====================
+        async function loadAllContent() {
+            try {
+                contentData = await apiRequest('/api/content/all');
+                renderAllContent();
+            } catch (e) {
+                console.error('加载内容失败', e);
+            }
+        }
+
+        function renderAllContent() {
+            renderNotice();
+            renderOrderGuide();
+            renderPrice();
+            renderRecharge();
+            renderMember();
+            renderPayment();
+        }
+
+        function renderNotice() {
+            const data = contentData.notice;
+            if (!data) {
+                document.getElementById('notice-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            document.getElementById('notice-content').innerHTML = `
+                <h3 class="text-base font-medium text-gray-800">${data.title}</h3>
+                <p class="whitespace-pre-line">${data.content}</p>
+                <p class="text-xs text-gray-400 mt-3">最后更新：${data.updateTime}</p>
+            `;
+        }
+
+        function renderOrderGuide() {
+            const list = contentData.orderGuide;
+            if (!list || list.length === 0) {
+                document.getElementById('order-guide-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            let html = '<ol class="list-decimal list-inside space-y-2">';
+            list.forEach(item => html += `<li>${item}</li>`);
+            html += '</ol>';
+            document.getElementById('order-guide-content').innerHTML = html;
+        }
+
+        function renderPrice() {
+            const list = contentData.price;
+            if (!list || list.length === 0) {
+                document.getElementById('price-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            let html = '<table class="w-full text-sm text-left"><thead class="bg-gray-50 text-gray-700"><tr><th class="px-4 py-2">游戏</th><th class="px-4 py-2">段位/类型</th><th class="px-4 py-2">价格</th></tr></thead><tbody class="divide-y divide-gray-100">';
+            list.forEach(item => {
+                html += `<tr><td class="px-4 py-2">${item.game}</td><td class="px-4 py-2">${item.rank}</td><td class="px-4 py-2 text-blue-600 font-medium">${item.price} ${item.unit}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('price-content').innerHTML = html;
+        }
+
+        function renderRecharge() {
+            const list = contentData.recharge;
+            if (!list || list.length === 0) {
+                document.getElementById('recharge-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            let html = '';
+            list.forEach(item => {
+                html += `
+                    <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition">
+                        <div class="text-2xl font-bold text-blue-600">¥${item.amount}</div>
+                        <div class="text-sm text-green-600 mt-1">赠送 ¥${item.gift}</div>
+                        <div class="text-xs text-gray-500 mt-2">${item.bonus}</div>
+                    </div>
+                `;
+            });
+            document.getElementById('recharge-content').innerHTML = html;
+        }
+
+        function renderMember() {
+            const list = contentData.member;
+            if (!list || list.length === 0) {
+                document.getElementById('member-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            let html = '<table class="w-full text-sm text-left"><thead class="bg-gray-50 text-gray-700"><tr><th class="px-4 py-2">会员等级</th><th class="px-4 py-2">消费折扣</th><th class="px-4 py-2">专属权益</th></tr></thead><tbody class="divide-y divide-gray-100">';
+            list.forEach(item => {
+                html += `<tr><td class="px-4 py-2 font-medium">${item.level}</td><td class="px-4 py-2 text-red-500">${item.discount}</td><td class="px-4 py-2 text-gray-600">${item.benefits}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('member-content').innerHTML = html;
+        }
+
+        function renderPayment() {
+            const list = contentData.payment;
+            if (!list || list.length === 0) {
+                document.getElementById('payment-content').innerHTML = '<div class="loading">暂无数据</div>';
+                return;
+            }
+            let html = '';
+            list.forEach(item => {
+                html += `
+                    <div class="border border-gray-200 rounded-lg p-4 flex items-center gap-4">
+                        <div class="text-3xl">${item.icon}</div>
+                        <div>
+                            <div class="font-medium text-gray-800">${item.name}</div>
+                            <div class="text-sm text-gray-500">${item.desc}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            document.getElementById('payment-content').innerHTML = html;
+        }
+
+        // 加载老板列表
+        async function loadBossList() {
+            try {
+                const list = await apiRequest('/api/boss/list');
+                const tbody = document.getElementById('boss-list');
+                tbody.innerHTML = list.map(item => `
+                    <tr>
+                        <td class="px-4 py-2 font-medium">${item.username}</td>
+                        <td class="px-4 py-2">¥${(item.consume_amount / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2 text-green-600">¥${(item.balance / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2">${item.order_count} 次</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('加载老板列表失败', e);
+            }
+        }
+
+        // 加载打手列表
+        async function loadPlayerList() {
+            try {
+                const list = await apiRequest('/api/player/list');
+                const tbody = document.getElementById('player-list');
+                tbody.innerHTML = list.map(item => `
+                    <tr>
+                        <td class="px-4 py-2 font-medium">${item.username}</td>
+                        <td class="px-4 py-2">${item.order_count} 单</td>
+                        <td class="px-4 py-2 text-red-500">${item.complaint_count} 次</td>
+                        <td class="px-4 py-2 text-green-600">${item.good_rate}%</td>
+                        <td class="px-4 py-2">¥${(item.backend_amount / 100).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('加载打手列表失败', e);
+            }
+        }
+
+        // 加载个人信息
+        async function loadMyProfile() {
+            try {
+                const container = document.getElementById('profile-content');
+                let info;
+                if (currentUser.role === 'boss') {
+                    info = await apiRequest('/api/boss/me');
+                    const fields = [
+                        { label: '账户名', value: info.username, color: 'gray' },
+                        { label: '累计消费', value: `¥${(info.consume_amount / 100).toLocaleString()}`, color: 'blue' },
+                        { label: '账户余额', value: `¥${(info.balance / 100).toLocaleString()}`, color: 'green' },
+                        { label: '点单次数', value: `${info.order_count} 次`, color: 'orange' }
+                    ];
+                    container.innerHTML = fields.map(f => `
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">${f.label}</p>
+                            <p class="text-xl font-semibold text-${f.color}-600 mt-1">${f.value}</p>
+                        </div>
+                    `).join('');
+                } else if (currentUser.role === 'player') {
+                    info = await apiRequest('/api/player/me');
+                    const fields = [
+                        { label: '账户名', value: info.username, color: 'gray' },
+                        { label: '接单次数', value: `${info.order_count} 单`, color: 'blue' },
+                        { label: '投诉次数', value: `${info.complaint_count} 次`, color: 'red' },
+                        { label: '好评率', value: `${info.good_rate}%`, color: 'green' },
+                        { label: '后台金额', value: `¥${(info.backend_amount / 100).toLocaleString()}`, color: 'orange' }
+                    ];
+                    container.innerHTML = fields.map(f => `
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">${f.label}</p>
+                            <p class="text-xl font-semibold text-${f.color}-600 mt-1">${f.value}</p>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('加载个人信息失败', e);
+                document.getElementById('profile-content').innerHTML = '<div class="loading">加载失败</div>';
+            }
+        }
+
+        // ==================== 编辑弹窗逻辑 ====================
+        function openEditModal(module) {
+            if (currentUser.role !== 'admin' && currentUser.role !== 'service') return;
+            
+            currentModule = module;
+            const dataKey = module === 'notice' ? 'notice' :
+                module === 'order-guide' ? 'orderGuide' :
+                module === 'price' ? 'price' :
+                module === 'recharge' ? 'recharge' :
+                module === 'member' ? 'member' : 'payment';
+            
+            editData = JSON.parse(JSON.stringify(contentData[dataKey] || []));
+            document.getElementById('modal-title').textContent = '编辑' + 
+                {notice:'店铺公告','order-guide':'下单须知',price:'价格预览',recharge:'充值福利',member:'会员福利',payment:'支付方式'}[module];
+            
+            generateModalForm(module);
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        function generateModalForm(module) {
+            const body = document.getElementById('modal-body');
+            switch(module) {
+                case 'notice':
+                    body.innerHTML = `
+                        <div class="space-y-4">
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">公告标题</label>
+                            <input id="input-title" value="${editData.title || ''}" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"></div>
+                            <div><label class="block text-sm font-medium text-gray-700 mb-1">公告内容</label>
+                            <textarea id="input-content" rows="5" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">${editData.content || ''}</textarea></div>
+                        </div>`;
+                    break;
+
+                case 'order-guide':
+                    let guideHtml = '<div id="guide-list" class="space-y-3">';
+                    (editData || []).forEach((item, i) => {
+                        guideHtml += `
+                            <div class="flex gap-2 items-center">
+                                <span class="text-gray-400 w-6">${i+1}.</span>
+                                <input type="text" value="${item}" class="flex-1 px-3 py-2 border rounded-lg text-sm guide-item">
+                                <button onclick="removeGuideItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    guideHtml += '</div><button onclick="addGuideItem()" class="mt-3 text-sm text-blue-500">+ 添加一条须知</button>';
+                    body.innerHTML = guideHtml;
+                    break;
+
+                case 'price':
+                    let priceHtml = '<div id="price-list" class="space-y-3">';
+                    (editData || []).forEach(item => {
+                        priceHtml += `
+                            <div class="flex gap-2 items-center">
+                                <input value="${item.game}" placeholder="游戏" class="w-1/4 px-3 py-2 border rounded-lg text-sm price-game">
+                                <input value="${item.rank}" placeholder="段位" class="w-1/4 px-3 py-2 border rounded-lg text-sm price-rank">
+                                <input type="number" value="${item.price}" placeholder="价格" class="w-1/5 px-3 py-2 border rounded-lg text-sm price-price">
+                                <input value="${item.unit}" placeholder="单位" class="w-1/5 px-3 py-2 border rounded-lg text-sm price-unit">
+                                <button onclick="removePriceItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    priceHtml += '</div><button onclick="addPriceItem()" class="mt-3 text-sm text-blue-500">+ 添加价格条目</button>';
+                    body.innerHTML = priceHtml;
+                    break;
+
+                case 'recharge':
+                    let rechargeHtml = '<div id="recharge-list" class="space-y-3">';
+                    (editData || []).forEach(item => {
+                        rechargeHtml += `
+                            <div class="flex gap-2 items-center">
+                                <input type="number" value="${item.amount}" placeholder="充值金额" class="w-1/4 px-3 py-2 border rounded-lg text-sm recharge-amount">
+                                <input type="number" value="${item.gift}" placeholder="赠送金额" class="w-1/4 px-3 py-2 border rounded-lg text-sm recharge-gift">
+                                <input value="${item.bonus}" placeholder="额外福利" class="flex-1 px-3 py-2 border rounded-lg text-sm recharge-bonus">
+                                <button onclick="removeRechargeItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    rechargeHtml += '</div><button onclick="addRechargeItem()" class="mt-3 text-sm text-blue-500">+ 添加充值档位</button>';
+                    body.innerHTML = rechargeHtml;
+                    break;
+
+                case 'member':
+                    let memberHtml = '<div id="member-list" class="space-y-3">';
+                    (editData || []).forEach(item => {
+                        memberHtml += `
+                            <div class="flex gap-2 items-center">
+                                <input value="${item.level}" placeholder="等级名称" class="w-1/4 px-3 py-2 border rounded-lg text-sm member-level">
+                                <input value="${item.discount}" placeholder="折扣" class="w-1/5 px-3 py-2 border rounded-lg text-sm member-discount">
+                                <input value="${item.benefits}" placeholder="权益说明" class="flex-1 px-3 py-2 border rounded-lg text-sm member-benefits">
+                                <button onclick="removeMemberItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    memberHtml += '</div><button onclick="addMemberItem()" class="mt-3 text-sm text-blue-500">+ 添加会员等级</button>';
+                    body.innerHTML = memberHtml;
+                    break;
+
+                case 'payment':
+                    let paymentHtml = '<div id="payment-list" class="space-y-3">';
+                    (editData || []).forEach(item => {
+                        paymentHtml += `
+                            <div class="flex gap-2 items-center">
+                                <input value="${item.icon}" placeholder="图标" class="w-16 px-3 py-2 border rounded-lg text-sm payment-icon">
+                                <input value="${item.name}" placeholder="支付名称" class="w-1/4 px-3 py-2 border rounded-lg text-sm payment-name">
+                                <input value="${item.desc}" placeholder="说明" class="flex-1 px-3 py-2 border rounded-lg text-sm payment-desc">
+                                <button onclick="removePaymentItem(this)" class="text-red-500 text-sm px-2">删除</button>
+                            </div>`;
+                    });
+                    paymentHtml += '</div><button onclick="addPaymentItem()" class="mt-3 text-sm text-blue-500">+ 添加支付方式</button>';
+                    body.innerHTML = paymentHtml;
+                    break;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            currentModule = '';
+            editData = null;
+        }
+
+        async function saveData() {
+            if (currentUser.role !== 'admin' && currentUser.role !== 'service') return;
+
+            let saveValue = null;
+            switch(currentModule) {
+                case 'notice':
+                    saveValue = {
+                        title: document.getElementById('input-title').value,
+                        content: document.getElementById('input-content').value,
+                        updateTime: new Date().toLocaleString('zh-CN',{hour12:false}).replace(/\//g,'-')
+                    };
+                    break;
+                case 'order-guide':
+                    saveValue = Array.from(document.querySelectorAll('.guide-item')).map(i => i.value.trim()).filter(v => v);
+                    break;
+                case 'price':
+                    saveValue = Array.from(document.querySelectorAll('#price-list > div')).map(row => ({
+                        game: row.querySelector('.price-game').value.trim(),
+                        rank: row.querySelector('.price-rank').value.trim(),
+                        price: Number(row.querySelector('.price-price').value) || 0,
+                        unit: row.querySelector('.price-unit').value.trim()
+                    })).filter(v => v.game && v.rank);
+                    break;
+                case 'recharge':
+                    saveValue = Array.from(document.querySelectorAll('#recharge-list > div')).map(row => ({
+                        amount: Number(row.querySelector('.recharge-amount').value) || 0,
+                        gift: Number(row.querySelector('.recharge-gift').value) || 0,
+                        bonus: row.querySelector('.recharge-bonus').value.trim()
+                    })).filter(v => v.amount > 0);
+                    break;
+                case 'member':
+                    saveValue = Array.from(document.querySelectorAll('#member-list > div')).map(row => ({
+                        level: row.querySelector('.member-level').value.trim(),
+                        discount: row.querySelector('.member-discount').value.trim(),
+                        benefits: row.querySelector('.member-benefits').value.trim()
+                    })).filter(v => v.level);
+                    break;
+                case 'payment':
+                    saveValue = Array.from(document.querySelectorAll('#payment-list > div')).map(row => ({
+                        icon: row.querySelector('.payment-icon').value.trim(),
+                        name: row.querySelector('.payment-name').value.trim(),
+                        desc: row.querySelector('.payment-desc').value.trim()
+                    })).filter(v => v.name);
+                    break;
+            }
+
+            try {
+                const configKey = currentModule === 'order-guide' ? 'orderGuide' : currentModule;
+                await apiRequest(`/api/content/${configKey}`, 'PUT', { value: saveValue });
+                await loadAllContent();
+                closeModal();
+                alert('保存成功');
+            } catch (e) {
+                alert('保存失败：' + e.message);
+            }
+        }
+
+        // 列表增删操作
+        function addGuideItem() {
+            const list = document.getElementById('guide-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<span class="text-gray-400 w-6">${list.children.length+1}.</span>
+                <input type="text" class="flex-1 px-3 py-2 border rounded-lg text-sm guide-item" placeholder="请输入须知">
+                <button onclick="removeGuideItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removeGuideItem(btn) {
+            btn.parentElement.remove();
+            document.querySelectorAll('#guide-list > div').forEach((d,i) => d.querySelector('span').textContent = i+1 + '.');
+        }
+
+        function addPriceItem() {
+            const list = document.getElementById('price-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<input placeholder="游戏" class="w-1/4 px-3 py-2 border rounded-lg text-sm price-game">
+                <input placeholder="段位" class="w-1/4 px-3 py-2 border rounded-lg text-sm price-rank">
+                <input type="number" placeholder="价格" class="w-1/5 px-3 py-2 border rounded-lg text-sm price-price">
+                <input placeholder="单位" class="w-1/5 px-3 py-2 border rounded-lg text-sm price-unit">
+                <button onclick="removePriceItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removePriceItem(btn) { btn.parentElement.remove(); }
+
+        function addRechargeItem() {
+            const list = document.getElementById('recharge-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<input type="number" placeholder="充值金额" class="w-1/4 px-3 py-2 border rounded-lg text-sm recharge-amount">
+                <input type="number" placeholder="赠送金额" class="w-1/4 px-3 py-2 border rounded-lg text-sm recharge-gift">
+                <input placeholder="额外福利" class="flex-1 px-3 py-2 border rounded-lg text-sm recharge-bonus">
+                <button onclick="removeRechargeItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removeRechargeItem(btn) { btn.parentElement.remove(); }
+
+        function addMemberItem() {
+            const list = document.getElementById('member-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<input placeholder="等级名称" class="w-1/4 px-3 py-2 border rounded-lg text-sm member-level">
+                <input placeholder="折扣" class="w-1/5 px-3 py-2 border rounded-lg text-sm member-discount">
+                <input placeholder="权益说明" class="flex-1 px-3 py-2 border rounded-lg text-sm member-benefits">
+                <button onclick="removeMemberItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removeMemberItem(btn) { btn.parentElement.remove(); }
+
+        function addPaymentItem() {
+            const list = document.getElementById('payment-list');
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `<input placeholder="图标" class="w-16 px-3 py-2 border rounded-lg text-sm payment-icon">
+                <input placeholder="支付名称" class="w-1/4 px-3 py-2 border rounded-lg text-sm payment-name">
+                <input placeholder="说明" class="flex-1 px-3 py-2 border rounded-lg text-sm payment-desc">
+                <button onclick="removePaymentItem(this)" class="text-red-500 text-sm px-2">删除</button>`;
+            list.appendChild(div);
+        }
+        function removePaymentItem(btn) { btn.parentElement.remove(); }
+
+        // 页面加载检查登录状态
+        window.addEventListener('DOMContentLoaded', () => {
+            const saved = localStorage.getItem('currentUser');
+            const token = localStorage.getItem('token');
+            if (saved && token) {
+                currentUser = JSON.parse(saved);
+                initApp();
+            }
+        });
+    </script>
+</body>
+</html>
