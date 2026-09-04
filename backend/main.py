@@ -47,9 +47,9 @@ def init_default_data():
         default_users = [
             {"username": "guanliyuan", "password": "123456", "role": "admin", "role_name": "管理员", "nickname": "店长", "avatar": "avatar_admin.jpg"},
             {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服", "nickname": "客服小蜜", "avatar": "avatar_service.png"},
-            {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板阿昊", "avatar": "avatar_985_1.jpg"},
-            {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板二狗", "avatar": "avatar_211_1.jpg"},
-            {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板三少", "avatar": "avatar_mingxing.jpg"},
+            {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板阿昊", "avatar": "avatar_boss.png"},
+            {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板二狗", "avatar": "avatar_boss.png"},
+            {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板三少", "avatar": "avatar_boss.png"},
             {"username": "dashou", "password": "123456", "role": "player", "role_name": "打手", "nickname": "小达", "avatar": "avatar_mowanghu.jpg"},
             {"username": "dashou_02", "password": "123456", "role": "player", "role_name": "打手", "nickname": "阿岚", "avatar": "avatar_211_2.jpg"},
             {"username": "dashou_03", "password": "123456", "role": "player", "role_name": "打手", "nickname": "老猫", "avatar": "avatar_yule.jpg"},

@@ -474,14 +474,15 @@
                 <!-- 11. 我的账户（所有角色：头像/昵称编辑 + 老板/打手个人视角） -->
                 <section id="page-profile" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-6">我的账户信息</h2>
-                    <!-- 头像与昵称编辑区（所有角色） -->
+                    <!-- 头像与昵称编辑区（头像由系统默认分配，仅可改昵称） -->
                     <div class="bg-gray-50 rounded-xl p-5 mb-6">
                         <h3 class="text-base font-medium text-gray-800 mb-1">我的头像与昵称</h3>
-                        <p class="text-xs text-gray-500 mb-4">从图库选择头像并填写昵称，提交后由管理员/客服审核，通过后对所有人展示；不合规会被打回</p>
+                        <p class="text-xs text-gray-500 mb-4">头像由系统按角色/等级自动分配（touxiangku 图库仅供默认使用）；可修改昵称，提交后由管理员/客服审核，不合规会被打回</p>
                         <div class="flex items-center gap-6 mb-4">
                             <img id="profile-avatar-preview" src="" alt="当前头像" onclick="viewAvatar(document.getElementById('profile-avatar-preview').src)" class="w-20 h-20 rounded-full object-cover border-2 border-amber-400 bg-gray-100 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                             <div>
                                 <p class="text-sm text-gray-600">当前昵称：<b id="profile-nickname-current" class="text-gray-800">-</b></p>
+                                <p class="text-xs text-gray-400 mt-1">头像由系统分配，点击可查看大图</p>
                                 <div id="profile-review-status" class="mt-1"></div>
                             </div>
                         </div>
@@ -490,7 +491,7 @@
                                 <label class="block text-sm text-gray-600 mb-1">新昵称</label>
                                 <input id="profile-nickname-input" type="text" maxlength="20" placeholder="请输入新昵称（20字以内）" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                             </div>
-                            <div>
+                            <div class="hidden">
                                 <label class="block text-sm text-gray-600 mb-1">选择新头像</label>
                                 <p class="text-xs text-gray-400 mb-1">点击下方图库图片即可选中</p>
                                 <input id="profile-avatar-input" type="hidden">
@@ -1432,7 +1433,7 @@
             document.getElementById('profile-avatar-input').value = img.dataset.name;
         }
 
-        // 加载头像昵称编辑区（根据当前用户资料；老板不可使用头像库，仅可改昵称）
+        // 加载昵称编辑区（头像由系统按角色/等级默认分配，任何人不可选用图库）
         async function loadProfileEditor() {
             let info = null;
             try {
@@ -1441,41 +1442,35 @@
                 else info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar };
             } catch (e) { info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar }; }
 
-            const isBoss = currentUser.role === 'boss';
             const nick = info.nickname || info.username;
             const av = info.avatar;
             document.getElementById('profile-nickname-current').textContent = nick;
             document.getElementById('profile-avatar-preview').src = av ? `avatars/${av}` : 'avatars/avatar_yule.jpg';
             document.getElementById('profile-nickname-input').value = '';
-            document.getElementById('profile-avatar-input').value = '';
 
-            // 老板不能使用头像库：隐藏头像选择区，仅保留当前头像预览与昵称修改
+            // 隐藏头像选择端口：图库仅作系统默认分配，任何人不可选用
             const avatarSelectBox = document.getElementById('profile-avatar-select').parentElement;
-            avatarSelectBox.classList.toggle('hidden', isBoss);
-            if (!isBoss) renderAvatarSelect(av);
+            avatarSelectBox.classList.add('hidden');
 
-            // 审核状态徽章
+            // 审核状态徽章（仅昵称）
             const statusBox = document.getElementById('profile-review-status');
             const chips = [];
             if (currentUser.nickname_status === 'pending') chips.push('<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">昵称审核中</span>');
-            if (currentUser.avatar_status === 'pending') chips.push('<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">头像审核中</span>');
             if (currentUser.nickname === '违规昵称') chips.push('<span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">昵称违规已打回</span>');
             statusBox.innerHTML = chips.join(' ') || '';
             const btn = document.getElementById('profile-submit-btn');
-            btn.disabled = currentUser.nickname_status === 'pending' || currentUser.avatar_status === 'pending';
+            btn.disabled = currentUser.nickname_status === 'pending';
             btn.classList.toggle('opacity-50', btn.disabled);
         }
 
-        // 提交头像昵称修改（进入待审核）
+        // 提交昵称修改（进入待审核；头像由系统默认分配，不可修改）
         async function submitProfileEdit() {
             const nick = document.getElementById('profile-nickname-input').value.trim();
-            const avatar = document.getElementById('profile-avatar-input').value;
-            if (!nick && !avatar) { alert('请填写新昵称或选择新头像'); return; }
+            if (!nick) { alert('请填写新昵称'); return; }
             try {
-                const res = await apiRequest('/api/profile', 'PUT', { nickname: nick, avatar: avatar });
+                const res = await apiRequest('/api/profile', 'PUT', { nickname: nick, avatar: '' });
                 alert(res.message);
                 currentUser.nickname_status = res.nickname_status;
-                currentUser.avatar_status = res.avatar_status;
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
                 await loadProfileEditor();
             } catch (e) { alert(e.message); }

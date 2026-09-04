@@ -20,35 +20,26 @@ TECH_LEVELS = ["985", "211", "大专", "魔王护", "明星护"]
 # 违规昵称（头像/昵称被管理员打回后的昵称）
 VIOLATION_NICKNAME = "违规昵称"
 
-# 默认头像库（frontend/avatars/ 下的文件，来自 touxiangku 图库）
-AVATAR_LIBRARY = [
-    "avatar_985_1.jpg", "avatar_985_2.jpg",
-    "avatar_211_1.jpg", "avatar_211_2.jpg",
-    "avatar_dazhuan.png", "avatar_yule.jpg",
-    "avatar_mingxing.jpg", "avatar_mowanghu.jpg",
-    "avatar_admin.jpg", "avatar_service.png"
-]
-
-# 用户默认头像分配（按角色/等级）
+# 用户默认头像分配（touxiangku 图库仅供系统默认分配，任何人不可选用）
 def default_avatar_for(user: User, db: Session = None) -> str:
     if user.role == "admin":
         return "avatar_admin.jpg"
     if user.role == "service":
         return "avatar_service.png"
-    if user.role == "player":
-        if db:
-            p = db.query(PlayerInfo).filter(PlayerInfo.username == user.username).first()
-            if p:
-                mapping = {
-                    "985": "avatar_985_1.jpg", "211": "avatar_211_1.jpg",
-                    "大专": "avatar_dazhuan.png", "魔王护": "avatar_mowanghu.jpg",
-                    "明星护": "avatar_mingxing.jpg", "娱乐陪": "avatar_yule.jpg"
-                }
-                key = p.tech_level or p.level_type or "娱乐陪"
-                return mapping.get(key, "avatar_yule.jpg")
-        return "avatar_yule.jpg"
-    # 老板
-    return "avatar_985_1.jpg"
+    if user.role == "boss":
+        return "avatar_boss.png"
+    # 打手按等级分配
+    if db:
+        p = db.query(PlayerInfo).filter(PlayerInfo.username == user.username).first()
+        if p:
+            mapping = {
+                "985": "avatar_985_1.jpg", "211": "avatar_211_1.jpg",
+                "大专": "avatar_dazhuan.png", "魔王护": "avatar_mowanghu.jpg",
+                "明星护": "avatar_mingxing.jpg", "娱乐陪": "avatar_yule.jpg"
+            }
+            key = p.tech_level or p.level_type or "娱乐陪"
+            return mapping.get(key, "avatar_yule.jpg")
+    return "avatar_yule.jpg"
 
 # 组装用户资料（nickname/avatar，空昵称用用户名兜底）
 def user_profile(user: User):
@@ -178,14 +169,17 @@ def get_my_player_info(
 
 # ==================== 头像与昵称（所有账户可自定义，管理员/客服审核） ====================
 
-# 提交头像/昵称修改（进入待审核状态，审核通过后对外展示）
+# 提交昵称修改（头像由系统默认分配，任何人不可选用图库头像）
 @router.put("/profile")
 def update_my_profile(
     request: ProfileUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    changed = False
+    # 头像不再支持自定义：touxiangku 图库仅供默认分配
+    if request.avatar is not None and request.avatar.strip():
+        raise HTTPException(status_code=400, detail="头像由系统默认分配，暂不支持自定义修改")
+    
     if request.nickname is not None and request.nickname.strip():
         nick = request.nickname.strip()
         if len(nick) > 20:
@@ -197,31 +191,15 @@ def update_my_profile(
         if nick != current_user.nickname:
             current_user.pending_nickname = nick
             current_user.nickname_status = "pending"
-            changed = True
-    
-    if request.avatar is not None and request.avatar.strip():
-        # 老板不能使用头像库中的头像，仅可修改昵称
-        if current_user.role == "boss":
-            raise HTTPException(status_code=400, detail="老板暂不支持使用头像库，仅可修改昵称")
-        av = request.avatar.strip()
-        # 头像必须是头像库中的文件（防路径穿越）
-        if av not in AVATAR_LIBRARY:
-            raise HTTPException(status_code=400, detail="头像不在可选图库中")
-        if current_user.avatar_status == "pending":
-            raise HTTPException(status_code=400, detail="头像审核中，请等待管理员审核后再修改")
-        if av != current_user.avatar:
-            current_user.pending_avatar = av
-            current_user.avatar_status = "pending"
-            changed = True
-    
-    if not changed:
-        raise HTTPException(status_code=400, detail="没有需要修改的内容")
+        else:
+            raise HTTPException(status_code=400, detail="新昵称与当前昵称相同")
+    else:
+        raise HTTPException(status_code=400, detail="没有需要修改的内容，请填写新昵称")
     
     db.commit()
     return {
         "message": "已提交，等待管理员/客服审核",
-        "nickname_status": current_user.nickname_status,
-        "avatar_status": current_user.avatar_status
+        "nickname_status": current_user.nickname_status
     }
 
 # 管理员/客服查看待审核的头像与昵称
