@@ -10,6 +10,8 @@ from api.auth_api import router as auth_router
 from api.content_api import router as content_router
 from api.user_info_api import router as user_info_router
 from api.order_api import router as order_router
+from api.rating_api import router as rating_router
+from api.stats_api import router as stats_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -30,6 +32,8 @@ app.include_router(auth_router)
 app.include_router(content_router)
 app.include_router(user_info_router)
 app.include_router(order_router)
+app.include_router(rating_router)
+app.include_router(stats_router)
 
 # 初始化默认数据
 def init_default_data():
@@ -40,7 +44,11 @@ def init_default_data():
             {"username": "guanliyuan", "password": "123456", "role": "admin", "role_name": "管理员"},
             {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服"},
             {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板"},
-            {"username": "dashou", "password": "123456", "role": "player", "role_name": "打手"}
+            {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板"},
+            {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板"},
+            {"username": "dashou", "password": "123456", "role": "player", "role_name": "打手"},
+            {"username": "dashou_02", "password": "123456", "role": "player", "role_name": "打手"},
+            {"username": "dashou_03", "password": "123456", "role": "player", "role_name": "打手"}
         ]
         
         for user_data in default_users:
@@ -67,9 +75,9 @@ def init_default_data():
         
         # 初始化默认打手信息
         default_player = [
-            {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000},
-            {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000},
-            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000}
+            {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！"},
+            {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。"},
+            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。"}
         ]
         for player_data in default_player:
             existing = db.query(PlayerInfo).filter(PlayerInfo.username == player_data["username"]).first()

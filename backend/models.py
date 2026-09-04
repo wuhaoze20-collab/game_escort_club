@@ -43,6 +43,7 @@ class PlayerInfo(Base):
     complaint_count = Column(Integer, default=0)  # 投诉次数
     good_rate = Column(Float, default=100.0)  # 好评率
     backend_amount = Column(Integer, default=0)  # 后台金额（单位：分）
+    intro = Column(Text, default="")  # 打手自我介绍
     created_at = Column(DateTime, default=datetime.now)
 
 # 订单表
@@ -73,3 +74,15 @@ class SalaryRecord(Base):
     player_income = Column(Integer, nullable=False)  # 打手收入（分）
     settlement_time = Column(DateTime, default=datetime.now)
     payout_status = Column(String(20), default="unpaid")  # unpaid/paid
+
+# 打手评价表（老板结单后评价，其他老板点单可见）
+class PlayerRating(Base):
+    __tablename__ = "player_ratings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    player_username = Column(String(50), index=True, nullable=False)  # 被评价打手
+    boss_username = Column(String(50), nullable=False)  # 评价的老板
+    order_id = Column(Integer, ForeignKey("orders.id"), unique=True, nullable=False)  # 关联订单，一单一评
+    rating = Column(Integer, nullable=False)  # 评分 1-5 星
+    comment = Column(Text, default="")  # 评价内容
+    created_at = Column(DateTime, default=datetime.now)

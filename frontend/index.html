@@ -182,11 +182,140 @@
                     </div>
                 </section>
 
-                <!-- 9. 我的账户（老板/打手个人视角） -->
+                <!-- 9. 本月盈利（管理员专属） -->
+                <section id="page-profit" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">本月盈利统计</h2>
+                        <button onclick="loadProfit()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div id="profit-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div class="loading">加载中...</div></div>
+                    <h3 class="text-base font-medium text-gray-700 mb-3">各打手盈利明细</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">打手账户</th>
+                                    <th class="px-4 py-2">本月接单数</th>
+                                    <th class="px-4 py-2">订单总额</th>
+                                    <th class="px-4 py-2">俱乐部盈利</th>
+                                    <th class="px-4 py-2">打手发放</th>
+                                </tr>
+                            </thead>
+                            <tbody id="profit-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 10. 点单中心（老板专属） -->
+                <section id="page-order" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">点单中心</h2>
+                        <div id="order-boss-balance" class="text-sm text-gray-500"></div>
+                    </div>
+
+                    <!-- 打手选择区 -->
+                    <h3 class="text-base font-medium text-gray-700 mb-3">选择打手（查看公开数据与评价）</h3>
+                    <div id="public-players" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"><div class="loading">加载中...</div></div>
+
+                    <!-- 下单表单 -->
+                    <div class="bg-gray-50 rounded-xl p-5 mb-6">
+                        <h3 class="text-base font-medium text-gray-800 mb-4">填写订单信息</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">选中打手</label>
+                                <input id="order-player" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600" readonly placeholder="请先选择打手">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">游戏/服务类型</label>
+                                <select id="order-game" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                    <option>王者荣耀上分</option>
+                                    <option>英雄联盟排位</option>
+                                    <option>和平精英护航</option>
+                                    <option>原神代肝</option>
+                                    <option>其他</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">服务时长(分钟)</label>
+                                <input id="order-duration" type="number" min="30" step="30" value="60" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">金额(元)</label>
+                                <input id="order-amount" type="number" min="1" value="25" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            </div>
+                            <div class="flex items-end">
+                                <button onclick="createOrder()" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">立即下单</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 我的订单 -->
+                    <h3 class="text-base font-medium text-gray-700 mb-3">我的订单</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 text-gray-700">
+                                <tr>
+                                    <th class="px-4 py-2">订单号</th>
+                                    <th class="px-4 py-2">服务类型</th>
+                                    <th class="px-4 py-2">打手</th>
+                                    <th class="px-4 py-2">时长</th>
+                                    <th class="px-4 py-2">金额</th>
+                                    <th class="px-4 py-2">状态</th>
+                                    <th class="px-4 py-2">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="my-order-list" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 11. 我的账户（老板/打手个人视角） -->
                 <section id="page-profile" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-6">我的账户信息</h2>
-                    <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6"><div class="loading">加载中...</div></div>
+                    <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6"><div class="loading">加载中...</div></div>
+                    <!-- 打手自我介绍编辑区 -->
+                    <div id="player-intro-box" class="hidden bg-gray-50 rounded-xl p-5">
+                        <h3 class="text-base font-medium text-gray-800 mb-2">我的自我介绍</h3>
+                        <p class="text-xs text-gray-500 mb-3">写一段介绍，老板点单时会看到（接单数、好评率等公开数据也会展示给老板）</p>
+                        <textarea id="player-intro-input" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="介绍你的擅长游戏、段位、服务风格..."></textarea>
+                        <div class="flex justify-end mt-3">
+                            <button onclick="saveIntro()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存自我介绍</button>
+                        </div>
+                    </div>
                 </section>
+
+                <!-- 12. 评价弹窗 -->
+                <div id="rating-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeRatingModal()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-800">评价打手 <span id="rating-player-name" class="text-blue-600"></span></h3>
+                            <button onclick="closeRatingModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <div class="mb-4">
+                                <label class="block text-sm text-gray-600 mb-2">评分（1-5星）</label>
+                                <div class="flex gap-2 text-3xl" id="rating-stars">
+                                    <span class="star cursor-pointer" data-star="1">☆</span>
+                                    <span class="star cursor-pointer" data-star="2">☆</span>
+                                    <span class="star cursor-pointer" data-star="3">☆</span>
+                                    <span class="star cursor-pointer" data-star="4">☆</span>
+                                    <span class="star cursor-pointer" data-star="5">☆</span>
+                                </div>
+                                <input type="hidden" id="rating-value" value="5">
+                                <input type="hidden" id="rating-order-id">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-2">评价内容</label>
+                                <textarea id="rating-comment" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="说说这次护航体验..."></textarea>
+                            </div>
+                        </div>
+                        <div class="px-6 py-4 border-t flex justify-end gap-3">
+                            <button onclick="closeRatingModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
+                            <button onclick="submitRating()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交评价</button>
+                        </div>
+                    </div>
+                </div>
 
             </div>
         </main>
@@ -342,8 +471,17 @@
             if (currentUser.role === 'admin' || currentUser.role === 'service') {
                 await loadBossList();
                 await loadPlayerList();
-            } else if (currentUser.role === 'boss' || currentUser.role === 'player') {
+            } else if (currentUser.role === 'boss') {
                 await loadMyProfile();
+                await loadPublicPlayers();
+                await loadMyOrders();
+            } else if (currentUser.role === 'player') {
+                await loadMyProfile();
+            }
+
+            // 管理员加载本月盈利
+            if (currentUser.role === 'admin') {
+                await loadProfit();
             }
 
             // 控制编辑按钮显示：仅管理员和客服可见
@@ -365,6 +503,7 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'profit', label: '本月盈利' },
                 { key: 'boss', label: '老板管理' },
                 { key: 'player', label: '打手管理' }
             ],
@@ -385,6 +524,7 @@
                 { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
                 { key: 'payment', label: '支付方式' },
+                { key: 'order', label: '点单中心' },
                 { key: 'profile', label: '我的账户' }
             ],
             player: [
@@ -610,11 +750,246 @@
                             <p class="text-xl font-semibold text-${f.color}-600 mt-1">${f.value}</p>
                         </div>
                     `).join('');
+                    // 填充自我介绍编辑框
+                    const introBox = document.getElementById('player-intro-box');
+                    introBox.classList.remove('hidden');
+                    document.getElementById('player-intro-input').value = info.intro || '';
                 }
             } catch (e) {
                 console.error('加载个人信息失败', e);
                 document.getElementById('profile-content').innerHTML = '<div class="loading">加载失败</div>';
             }
+        }
+
+        // ==================== 点单中心（老板） ====================
+        // 加载公开打手列表（含自我介绍和评价）
+        async function loadPublicPlayers() {
+            try {
+                const list = await apiRequest('/api/player/public');
+                const container = document.getElementById('public-players');
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div class="loading col-span-3">暂无打手</div>';
+                    return;
+                }
+                // 并行加载每个打手的评价
+                const withRatings = await Promise.all(list.map(async p => {
+                    try {
+                        const ratings = await apiRequest(`/api/rating/player/${p.username}`);
+                        return { ...p, ratings };
+                    } catch (e) {
+                        return { ...p, ratings: [] };
+                    }
+                }));
+                container.innerHTML = withRatings.map(p => `
+                    <div class="border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="selectPlayer('${p.username}')">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="font-semibold text-gray-800">${p.username}</span>
+                            <span class="text-sm text-blue-600 bg-blue-50 px-2 py-0.5 rounded">好评 ${p.good_rate}%</span>
+                        </div>
+                        <div class="flex gap-4 text-xs text-gray-500 mb-2">
+                            <span>接单 <b class="text-gray-700">${p.order_count}</b> 单</span>
+                            <span>投诉 <b class="text-red-500">${p.complaint_count}</b> 次</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-2 line-clamp-3">${p.intro ? escapeHtml(p.intro) : '<span class="text-gray-400">该打手暂无自我介绍</span>'}</p>
+                        <div class="border-t border-gray-100 pt-2">
+                            <p class="text-xs font-medium text-gray-500 mb-1">近期评价（${p.ratings.length}）</p>
+                            ${p.ratings.length === 0
+                                ? '<p class="text-xs text-gray-400">暂无评价</p>'
+                                : p.ratings.slice(0, 2).map(r => `
+                                    <div class="text-xs text-gray-600 mb-1">
+                                        <span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                                        ${r.comment ? escapeHtml(r.comment) : ''}
+                                    </div>
+                                `).join('') + (p.ratings.length > 2 ? `<p class="text-xs text-gray-400">还有 ${p.ratings.length - 2} 条评价</p>` : '')}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('public-players').innerHTML = `<div class="text-red-500 col-span-3">${e.message}</div>`;
+            }
+        }
+
+        // 选中打手
+        function selectPlayer(username) {
+            document.getElementById('order-player').value = username;
+        }
+
+        // 老板下单
+        async function createOrder() {
+            const player = document.getElementById('order-player').value.trim();
+            const game_type = document.getElementById('order-game').value;
+            const duration_min = parseInt(document.getElementById('order-duration').value);
+            const amount = parseFloat(document.getElementById('order-amount').value);
+
+            if (!player) { alert('请先选择打手'); return; }
+            if (!duration_min || duration_min < 30) { alert('服务时长不能少于30分钟'); return; }
+            if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
+
+            try {
+                await apiRequest('/api/order/create', 'POST', {
+                    boss_username: currentUser.username,
+                    game_type: game_type,
+                    duration_min: duration_min,
+                    total_amount: Math.round(amount * 100),
+                    player_username: player
+                });
+                alert('下单成功！订单已分配给 ' + player);
+                await loadPublicPlayers();
+                await loadMyOrders();
+                await loadMyProfile();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        // 加载我的订单（含评价入口）
+        async function loadMyOrders() {
+            try {
+                const list = await apiRequest('/api/order/list');
+                const tbody = document.getElementById('my-order-list');
+                const statusMap = {
+                    pending: '待分配', assigned: '已分配', processing: '服务中',
+                    completed: '已完成', cancelled: '已取消'
+                };
+                const statusColor = {
+                    pending: 'text-yellow-600', assigned: 'text-blue-600', processing: 'text-purple-600',
+                    completed: 'text-green-600', cancelled: 'text-gray-400'
+                };
+                tbody.innerHTML = list.map(o => `
+                    <tr>
+                        <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
+                        <td class="px-4 py-2">${o.game_type}</td>
+                        <td class="px-4 py-2">${o.player_username || '<span class="text-gray-400">待分配</span>'}</td>
+                        <td class="px-4 py-2">${o.duration_min}分钟</td>
+                        <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
+                        <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
+                        <td class="px-4 py-2">
+                            ${o.status === 'completed' && o.player_username
+                                ? `<button onclick="openRatingModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">评价打手</button>`
+                                : (o.status === 'pending' || o.status === 'assigned'
+                                    ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">取消订单</button>`
+                                    : '<span class="text-gray-300">—</span>')}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('加载订单失败', e);
+            }
+        }
+
+        // 取消订单
+        async function cancelOrder(orderId) {
+            if (!confirm('确定取消该订单吗？金额将退回余额。')) return;
+            try {
+                await apiRequest(`/api/order/${orderId}/cancel`, 'POST');
+                alert('订单已取消，金额已退回');
+                await loadMyOrders();
+                await loadMyProfile();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        // ==================== 评价模块 ====================
+        function openRatingModal(orderId, playerName) {
+            document.getElementById('rating-order-id').value = orderId;
+            document.getElementById('rating-player-name').textContent = playerName;
+            document.getElementById('rating-value').value = '5';
+            document.getElementById('rating-comment').value = '';
+            updateStars(5);
+            document.getElementById('rating-modal').classList.remove('hidden');
+        }
+
+        function closeRatingModal() {
+            document.getElementById('rating-modal').classList.add('hidden');
+        }
+
+        function updateStars(value) {
+            document.getElementById('rating-value').value = value;
+            document.querySelectorAll('#rating-stars .star').forEach(s => {
+                s.textContent = parseInt(s.dataset.star) <= value ? '★' : '☆';
+                s.classList.toggle('text-yellow-500', parseInt(s.dataset.star) <= value);
+                s.classList.toggle('text-gray-300', parseInt(s.dataset.star) > value);
+            });
+        }
+
+        // 星星点击
+        document.addEventListener('click', (e) => {
+            if (e.target.classList && e.target.classList.contains('star')) {
+                updateStars(parseInt(e.target.dataset.star));
+            }
+        });
+
+        // 提交评价
+        async function submitRating() {
+            const orderId = parseInt(document.getElementById('rating-order-id').value);
+            const rating = parseInt(document.getElementById('rating-value').value);
+            const comment = document.getElementById('rating-comment').value.trim();
+            if (!orderId || !rating) { alert('请选择评分'); return; }
+            try {
+                await apiRequest('/api/rating/create', 'POST', {
+                    order_id: orderId, rating: rating, comment: comment
+                });
+                alert('评价成功，感谢反馈！');
+                closeRatingModal();
+                await loadMyOrders();
+                await loadPublicPlayers();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        // ==================== 本月盈利（管理员） ====================
+        async function loadProfit() {
+            try {
+                const data = await apiRequest('/api/stats/monthly-profit');
+                const cards = [
+                    { label: '本月总盈利', value: `¥${(data.total_profit / 100).toLocaleString()}`, color: 'green' },
+                    { label: '完成订单数', value: `${data.order_count} 单`, color: 'blue' },
+                    { label: '订单总额', value: `¥${(data.total_amount / 100).toLocaleString()}`, color: 'gray' },
+                    { label: '打手发放', value: `¥${(data.player_payout / 100).toLocaleString()}`, color: 'orange' }
+                ];
+                document.getElementById('profit-cards').innerHTML = cards.map(c => `
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p class="text-sm text-gray-500">${c.label}</p>
+                        <p class="text-xl font-semibold text-${c.color}-600 mt-1">${c.value}</p>
+                    </div>
+                `).join('');
+                const tbody = document.getElementById('profit-list');
+                if (!data.records || data.records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">本月暂无已结算订单</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.records.map(r => `
+                    <tr>
+                        <td class="px-4 py-2 font-medium">${r.player_username}</td>
+                        <td class="px-4 py-2">${r.order_count} 单</td>
+                        <td class="px-4 py-2">¥${(r.total_amount / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2 text-green-600 font-medium">¥${(r.profit / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2">¥${(r.payout / 100).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                document.getElementById('profit-cards').innerHTML = `<div class="text-red-500 col-span-4">${e.message}</div>`;
+            }
+        }
+
+        // ==================== 打手自我介绍 ====================
+        async function saveIntro() {
+            const intro = document.getElementById('player-intro-input').value.trim();
+            try {
+                await apiRequest('/api/player/intro', 'PUT', { intro: intro });
+                alert('自我介绍已保存，老板点单时可以看到！');
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        // HTML转义，防止XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // ==================== 编辑弹窗逻辑 ====================

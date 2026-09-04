@@ -44,6 +44,15 @@ def create_order(
         total_amount=request.total_amount,
         status="pending"
     )
+    
+    # 老板点单直接指定打手：校验打手存在，订单直接进入已分配状态
+    if request.player_username:
+        player = db.query(PlayerInfo).filter(PlayerInfo.username == request.player_username).first()
+        if not player:
+            raise HTTPException(status_code=404, detail="打手账户不存在")
+        order.player_username = request.player_username
+        order.status = "assigned"
+    
     db.add(order)
     
     # 冻结老板余额
