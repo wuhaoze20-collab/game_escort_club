@@ -9,6 +9,30 @@ from auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/rating", tags=["打手评价"])
 
+# 组装评价数据（带老板/打手昵称与头像）
+def _rating_profile(db: Session, r: PlayerRating):
+    boss_user = db.query(User).filter(User.username == r.boss_username).first()
+    player_user = db.query(User).filter(User.username == r.player_username).first()
+    return {
+        "id": r.id,
+        "player_username": r.player_username,
+        "player_nickname": (player_user.nickname or player_user.username) if player_user else r.player_username,
+        "player_avatar": player_user.avatar if player_user else "",
+        "boss_username": r.boss_username,
+        "boss_nickname": (boss_user.nickname or boss_user.username) if boss_user else r.boss_username,
+        "boss_avatar": boss_user.avatar if boss_user else "",
+        "order_id": r.order_id,
+        "rating": r.rating,
+        "comment": r.comment,
+        "reply": r.reply,
+        "reply_time": r.reply_time,
+        "review_status": r.review_status,
+        "review_reason": r.review_reason,
+        "review_note": r.review_note,
+        "review_time": r.review_time,
+        "created_at": r.created_at
+    }
+
 # 重新计算打手好评率（仅统计有效评价：normal状态，好评=4星及以上）
 def recalc_good_rate(db: Session, player_username: str):
     player = db.query(PlayerInfo).filter(PlayerInfo.username == player_username).first()
@@ -72,7 +96,7 @@ def create_rating(
     return rating
 
 # 查询某打手的有效评价列表（所有登录用户可看，已移除的评价不显示）
-@router.get("/player/{player_username}", response_model=List[RatingResponse])
+@router.get("/player/{player_username}")
 def get_player_ratings(
     player_username: str,
     current_user: User = Depends(get_current_user),
@@ -83,30 +107,33 @@ def get_player_ratings(
     if not player:
         raise HTTPException(status_code=404, detail="打手不存在")
     
-    return db.query(PlayerRating).filter(
+    ratings = db.query(PlayerRating).filter(
         PlayerRating.player_username == player_username,
         PlayerRating.review_status == "normal"
     ).order_by(PlayerRating.created_at.desc()).all()
+    return [_rating_profile(db, r) for r in ratings]
 
 # 打手查看自己的全部评价（含复查中/已移除状态）
-@router.get("/my-reviews", response_model=List[RatingResponse])
+@router.get("/my-reviews")
 def get_my_reviews(
     current_user: User = Depends(require_roles("player")),
     db: Session = Depends(get_db)
 ):
-    return db.query(PlayerRating).filter(
+    ratings = db.query(PlayerRating).filter(
         PlayerRating.player_username == current_user.username
     ).order_by(PlayerRating.created_at.desc()).all()
+    return [_rating_profile(db, r) for r in ratings]
 
 # 查询当前老板给自己的评价历史（老板可见自己评价过的记录）
-@router.get("/my", response_model=List[RatingResponse])
+@router.get("/my")
 def get_my_ratings(
     current_user: User = Depends(require_roles("boss")),
     db: Session = Depends(get_db)
 ):
-    return db.query(PlayerRating).filter(
+    ratings = db.query(PlayerRating).filter(
         PlayerRating.boss_username == current_user.username
     ).order_by(PlayerRating.created_at.desc()).all()
+    return [_rating_profile(db, r) for r in ratings]
 
 # 打手回复评价（仅被评价的打手本人，可修改自己的回复）
 @router.put("/{rating_id}/reply", response_model=RatingResponse)
@@ -163,14 +190,15 @@ def request_review(
     return rating
 
 # 管理员/客服查看复查申请列表
-@router.get("/review-list", response_model=List[RatingResponse])
+@router.get("/review-list")
 def get_review_list(
     current_user: User = Depends(require_roles("admin", "service")),
     db: Session = Depends(get_db)
 ):
-    return db.query(PlayerRating).filter(
+    ratings = db.query(PlayerRating).filter(
         PlayerRating.review_status == "reviewing"
     ).order_by(PlayerRating.review_time.desc()).all()
+    return [_rating_profile(db, r) for r in ratings]
 
 # 管理员审核复查：approve=移除评价 / reject=保留评价
 @router.post("/{rating_id}/review-decision", response_model=RatingResponse)

@@ -38,6 +38,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             "id": user.id,
             "username": user.username,
             "role": user.role,
-            "role_name": user.role_name
+            "role_name": user.role_name,
+            "nickname": user.nickname or user.username,
+            "avatar": user.avatar
         }
     )

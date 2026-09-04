@@ -240,7 +240,13 @@
         <aside class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-10">
             <div class="p-6 border-b border-white/10">
                 <h1 class="text-xl font-bold text-gray-800">游戏护航俱乐部</h1>
-                <p id="user-role-tip" class="text-sm text-gray-500 mt-1">管理员</p>
+                <div class="flex items-center gap-3 mt-3">
+                    <img id="sidebar-avatar" src="" alt="头像" class="w-11 h-11 rounded-full object-cover border-2 border-amber-400 bg-gray-100">
+                    <div>
+                        <p id="sidebar-nickname" class="text-sm font-semibold text-gray-800">昵称</p>
+                        <p id="user-role-tip" class="text-xs text-gray-500">管理员</p>
+                    </div>
+                </div>
             </div>
             <nav id="sidebar-menu" class="p-4 space-y-2">
                 <!-- 菜单动态生成 -->
@@ -251,7 +257,8 @@
         <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
             <div class="text-gray-600">欢迎使用管理系统</div>
             <div class="flex items-center gap-4">
-                <span id="current-user" class="text-sm text-gray-700">账号：guanliyuan</span>
+                <img id="topbar-avatar" src="" alt="头像" class="w-8 h-8 rounded-full object-cover border border-gray-200 bg-gray-100">
+                <span id="current-user" class="text-sm text-gray-700">昵称（账号：guanliyuan）</span>
                 <button id="logout-btn" class="text-sm text-red-500 hover:text-red-600">退出登录</button>
             </div>
         </header>
@@ -464,9 +471,36 @@
                     </div>
                 </section>
 
-                <!-- 11. 我的账户（老板/打手个人视角） -->
+                <!-- 11. 我的账户（所有角色：头像/昵称编辑 + 老板/打手个人视角） -->
                 <section id="page-profile" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <h2 class="text-lg font-semibold text-gray-800 mb-6">我的账户信息</h2>
+                    <!-- 头像与昵称编辑区（所有角色） -->
+                    <div class="bg-gray-50 rounded-xl p-5 mb-6">
+                        <h3 class="text-base font-medium text-gray-800 mb-1">我的头像与昵称</h3>
+                        <p class="text-xs text-gray-500 mb-4">从图库选择头像并填写昵称，提交后由管理员/客服审核，通过后对所有人展示；不合规会被打回</p>
+                        <div class="flex items-center gap-6 mb-4">
+                            <img id="profile-avatar-preview" src="" alt="当前头像" class="w-20 h-20 rounded-full object-cover border-2 border-amber-400 bg-gray-100">
+                            <div>
+                                <p class="text-sm text-gray-600">当前昵称：<b id="profile-nickname-current" class="text-gray-800">-</b></p>
+                                <div id="profile-review-status" class="mt-1"></div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">新昵称</label>
+                                <input id="profile-nickname-input" type="text" maxlength="20" placeholder="请输入新昵称（20字以内）" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">选择新头像</label>
+                                <p class="text-xs text-gray-400 mb-1">点击下方图库图片即可选中</p>
+                                <input id="profile-avatar-input" type="hidden">
+                                <div id="profile-avatar-select" class="flex flex-wrap gap-2"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button onclick="submitProfileEdit()" id="profile-submit-btn" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交审核</button>
+                        </div>
+                    </div>
                     <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6"><div class="loading">加载中...</div></div>
                     <!-- 打手自我介绍编辑区 -->
                     <div id="player-intro-box" class="hidden bg-gray-50 rounded-xl p-5 mb-4">
@@ -663,6 +697,16 @@
                         </div>
                     </div>
                     <div id="tag-review-content" class="space-y-3"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 16.7 头像昵称审核（管理员/客服） -->
+                <section id="page-profile-review" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">头像昵称审核</h2>
+                        <button onclick="loadProfileReview()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">所有账户可提交头像与昵称修改，审核通过后对外展示；昵称不合规打回后改为"违规昵称"，头像不合规打回后恢复默认头像</p>
+                    <div id="profile-review-content" class="space-y-4"><div class="loading">加载中...</div></div>
                 </section>
 
                 <!-- 17. 评价弹窗 -->
@@ -919,12 +963,22 @@
         });
 
         // ==================== 应用初始化 ====================
+        // 渲染侧边栏与顶栏的用户头像/昵称
+        function renderUserArea() {
+            const nick = currentUser.nickname || currentUser.username;
+            const av = currentUser.avatar ? `avatars/${currentUser.avatar}` : '';
+            document.getElementById('sidebar-nickname').textContent = nick;
+            document.getElementById('sidebar-avatar').src = av || 'avatars/avatar_yule.jpg';
+            document.getElementById('topbar-avatar').src = av || 'avatars/avatar_yule.jpg';
+        }
+
         async function initApp() {
             loginPage.classList.add('hidden');
             appPage.classList.remove('hidden');
 
-            document.getElementById('current-user').textContent = `账号：${currentUser.username}`;
+            document.getElementById('current-user').textContent = `${currentUser.nickname || currentUser.username}（账号：${currentUser.username}）`;
             document.getElementById('user-role-tip').textContent = currentUser.role_name;
+            renderUserArea();
 
             renderSidebar();
             
@@ -938,6 +992,8 @@
                 await loadManageOrders();
                 await loadWithdrawManage();
                 await loadTagReview();
+                await loadProfileReview();
+                await loadMyProfile();
                 // 管理端隐藏充值页的编辑按钮不生效（保留编辑权限），编辑按钮对老板隐藏
                 document.getElementById('recharge-edit-btn').classList.remove('hidden');
             } else if (currentUser.role === 'boss') {
@@ -984,8 +1040,10 @@
                 { key: 'withdraw-manage', label: '提现审核' },
                 { key: 'review-manage', label: '评价复查' },
                 { key: 'tag-review', label: '标签审核' },
+                { key: 'profile-review', label: '头像昵称审核' },
                 { key: 'boss', label: '老板管理' },
-                { key: 'player', label: '打手管理' }
+                { key: 'player', label: '打手管理' },
+                { key: 'profile', label: '我的账户' }
             ],
             service: [
                 { key: 'notice', label: '店铺公告' },
@@ -998,8 +1056,10 @@
                 { key: 'order-manage', label: '订单管理' },
                 { key: 'withdraw-manage', label: '提现审核' },
                 { key: 'tag-review', label: '标签审核' },
+                { key: 'profile-review', label: '头像昵称审核' },
                 { key: 'boss', label: '老板信息' },
-                { key: 'player', label: '打手信息' }
+                { key: 'player', label: '打手信息' },
+                { key: 'profile', label: '我的账户' }
             ],
             boss: [
                 { key: 'notice', label: '店铺公告' },
@@ -1273,7 +1333,13 @@
                 const tbody = document.getElementById('boss-list');
                 tbody.innerHTML = list.map(item => `
                     <tr>
-                        <td class="px-4 py-2 font-medium">${item.username}</td>
+                        <td class="px-4 py-2">
+                            <div class="flex items-center gap-2">
+                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover border border-gray-200">
+                                <span class="font-medium">${escapeHtml(item.nickname || item.username)}</span>
+                                <span class="text-xs text-gray-400">(${item.username})</span>
+                            </div>
+                        </td>
                         <td class="px-4 py-2">¥${(item.consume_amount / 100).toLocaleString()}</td>
                         <td class="px-4 py-2 text-green-600">${item.balance} 大狗币</td>
                         <td class="px-4 py-2">${item.order_count} 次</td>
@@ -1291,7 +1357,13 @@
                 const tbody = document.getElementById('player-list');
                 tbody.innerHTML = list.map(item => `
                     <tr>
-                        <td class="px-4 py-2 font-medium">${item.username}</td>
+                        <td class="px-4 py-2">
+                            <div class="flex items-center gap-2">
+                                <img src="${item.avatar ? 'avatars/' + item.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover border border-gray-200">
+                                <span class="font-medium">${escapeHtml(item.nickname || item.username)}</span>
+                                <span class="text-xs text-gray-400">(${item.username})</span>
+                            </div>
+                        </td>
                         <td class="px-4 py-2">
                             <span class="text-xs px-2 py-0.5 rounded-full ${item.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${item.level_type === '技术陪' ? `技术陪·${item.tech_level}` : '娱乐陪'}</span>
                         </td>
@@ -1306,6 +1378,148 @@
             }
         }
 
+        // ==================== 头像与昵称（所有角色可编辑，管理员审核） ====================
+        // 可选头像图库（与 backend/user_info_api.py 的 AVATAR_LIBRARY 保持一致）
+        const AVATAR_LIBRARY = [
+            'avatar_985_1.jpg', 'avatar_985_2.jpg',
+            'avatar_211_1.jpg', 'avatar_211_2.jpg',
+            'avatar_dazhuan.png', 'avatar_yule.jpg',
+            'avatar_mingxing.jpg', 'avatar_mowanghu.jpg',
+            'avatar_admin.jpg', 'avatar_service.png'
+        ];
+
+        // 渲染头像选择图库
+        function renderAvatarSelect(selected) {
+            const box = document.getElementById('profile-avatar-select');
+            box.innerHTML = AVATAR_LIBRARY.map(name => `
+                <img src="avatars/${name}" data-name="${name}"
+                    onclick="selectAvatar(this)"
+                    class="w-14 h-14 rounded-full object-cover cursor-pointer border-2 ${name === selected ? 'border-amber-500 ring-2 ring-amber-300' : 'border-gray-200 hover:border-amber-300'} transition">
+            `).join('');
+        }
+
+        // 选择头像
+        function selectAvatar(img) {
+            document.querySelectorAll('#profile-avatar-select img').forEach(i => {
+                i.classList.remove('border-amber-500', 'ring-2', 'ring-amber-300');
+                i.classList.add('border-gray-200');
+            });
+            img.classList.remove('border-gray-200');
+            img.classList.add('border-amber-500', 'ring-2', 'ring-amber-300');
+            document.getElementById('profile-avatar-input').value = img.dataset.name;
+        }
+
+        // 加载头像昵称编辑区（根据当前用户资料）
+        async function loadProfileEditor() {
+            let info = null;
+            try {
+                if (currentUser.role === 'boss') info = await apiRequest('/api/boss/me');
+                else if (currentUser.role === 'player') info = await apiRequest('/api/player/me');
+                else info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar };
+            } catch (e) { info = { username: currentUser.username, nickname: currentUser.nickname, avatar: currentUser.avatar }; }
+
+            const nick = info.nickname || info.username;
+            const av = info.avatar;
+            document.getElementById('profile-nickname-current').textContent = nick;
+            document.getElementById('profile-avatar-preview').src = av ? `avatars/${av}` : 'avatars/avatar_yule.jpg';
+            document.getElementById('profile-nickname-input').value = '';
+            document.getElementById('profile-avatar-input').value = '';
+            renderAvatarSelect(av);
+
+            // 审核状态徽章
+            const statusBox = document.getElementById('profile-review-status');
+            const chips = [];
+            if (currentUser.nickname_status === 'pending') chips.push('<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">昵称审核中</span>');
+            if (currentUser.avatar_status === 'pending') chips.push('<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">头像审核中</span>');
+            if (currentUser.nickname === '违规昵称') chips.push('<span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">昵称违规已打回</span>');
+            statusBox.innerHTML = chips.join(' ') || '';
+            const btn = document.getElementById('profile-submit-btn');
+            btn.disabled = currentUser.nickname_status === 'pending' || currentUser.avatar_status === 'pending';
+            btn.classList.toggle('opacity-50', btn.disabled);
+        }
+
+        // 提交头像昵称修改（进入待审核）
+        async function submitProfileEdit() {
+            const nick = document.getElementById('profile-nickname-input').value.trim();
+            const avatar = document.getElementById('profile-avatar-input').value;
+            if (!nick && !avatar) { alert('请填写新昵称或选择新头像'); return; }
+            try {
+                const res = await apiRequest('/api/profile', 'PUT', { nickname: nick, avatar: avatar });
+                alert(res.message);
+                currentUser.nickname_status = res.nickname_status;
+                currentUser.avatar_status = res.avatar_status;
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                await loadProfileEditor();
+            } catch (e) { alert(e.message); }
+        }
+
+        // 管理员/客服加载待审核的头像昵称
+        async function loadProfileReview() {
+            try {
+                const list = await apiRequest('/api/profile/review');
+                const box = document.getElementById('profile-review-content');
+                if (!list || list.length === 0) {
+                    box.innerHTML = '<div class="text-sm text-gray-400 text-center py-6">暂无待审核的头像与昵称</div>';
+                    return;
+                }
+                box.innerHTML = list.map(u => {
+                    const pendingNick = u.pending_nickname ? `<span class="text-amber-600 font-medium">${escapeHtml(u.pending_nickname)}</span>` : '<span class="text-gray-300">无</span>';
+                    const pendingAvatar = u.pending_avatar ? `<img src="avatars/${u.pending_avatar}" class="w-10 h-10 rounded-full object-cover border border-amber-400">` : '<span class="text-gray-300">无</span>';
+                    return `
+                        <div class="border border-gray-200 rounded-xl p-4 bg-gray-50/60">
+                            <div class="flex items-center gap-3 mb-3">
+                                <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" class="w-10 h-10 rounded-full object-cover border border-gray-200">
+                                <div>
+                                    <p class="font-medium text-gray-800">${escapeHtml(u.nickname)}（${escapeHtml(u.username)}）</p>
+                                    <p class="text-xs text-gray-500">${u.role_name}</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <p class="text-xs text-gray-500 mb-2">昵称审核 ${u.nickname_status === 'pending' ? '<span class="text-amber-600">待审核</span>' : ''}</p>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="text-sm">当前：${escapeHtml(u.nickname)}<br>新昵称：${pendingNick}</div>
+                                        ${u.nickname_status === 'pending' ? `
+                                        <div class="flex gap-2 shrink-0">
+                                            <button onclick="decideProfile('${u.username}', 'nickname', 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600">通过</button>
+                                            <button onclick="decideProfile('${u.username}', 'nickname', 'reject')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">打回</button>
+                                        </div>` : '<span class="text-xs text-green-600">已通过</span>'}
+                                    </div>
+                                </div>
+                                <div class="bg-white rounded-lg p-3 border border-gray-100">
+                                    <p class="text-xs text-gray-500 mb-2">头像审核 ${u.avatar_status === 'pending' ? '<span class="text-amber-600">待审核</span>' : ''}</p>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-2 text-sm">当前头像 <img src="${u.avatar ? 'avatars/' + u.avatar : 'avatars/avatar_yule.jpg'}" class="w-8 h-8 rounded-full object-cover"> 新头像 ${pendingAvatar}</div>
+                                        ${u.avatar_status === 'pending' ? `
+                                        <div class="flex gap-2 shrink-0">
+                                            <button onclick="decideProfile('${u.username}', 'avatar', 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600">通过</button>
+                                            <button onclick="decideProfile('${u.username}', 'avatar', 'reject')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">打回</button>
+                                        </div>` : '<span class="text-xs text-green-600">已通过</span>'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                document.getElementById('profile-review-content').innerHTML = `<div class="text-red-500 text-sm">${e.message}</div>`;
+            }
+        }
+
+        // 管理员审核：通过/打回头像昵称
+        async function decideProfile(username, field, action) {
+            let note = '';
+            if (action === 'reject') {
+                note = prompt(field === 'nickname' ? '请输入打回原因（打回后该用户昵称将改为"违规昵称"）：' : '请输入打回原因（打回后该用户头像将恢复默认）：', '');
+                if (note === null) return;
+            }
+            try {
+                const res = await apiRequest(`/api/profile/review/${username}`, 'POST', { field: field, action: action, note: note });
+                alert(res.message);
+                await loadProfileReview();
+            } catch (e) { alert(e.message); }
+        }
+
         // 加载个人信息
         async function loadMyProfile() {
             try {
@@ -1317,6 +1531,8 @@
                 introBox.classList.add('hidden');
                 levelBox.classList.add('hidden');
                 tagBox.classList.add('hidden');
+                // 头像昵称编辑区（所有角色）
+                await loadProfileEditor();
                 let info;
                 if (currentUser.role === 'boss') {
                     info = await apiRequest('/api/boss/me');
@@ -1359,6 +1575,20 @@
                     // 加载标签
                     tagBox.classList.remove('hidden');
                     await loadMyTags();
+                } else {
+                    // 管理员/客服简版账户信息
+                    const fields = [
+                        { label: '账户名', value: currentUser.username, color: 'gray' },
+                        { label: '角色', value: currentUser.role_name, color: 'blue' },
+                        { label: '当前昵称', value: currentUser.nickname || currentUser.username, color: 'green' },
+                        { label: '账户权限', value: currentUser.role === 'admin' ? '全部权限' : '客服权限', color: 'orange' }
+                    ];
+                    container.innerHTML = fields.map(f => `
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-sm text-gray-500">${f.label}</p>
+                            <p class="text-xl font-semibold text-${f.color}-600 mt-1">${f.value}</p>
+                        </div>
+                    `).join('');
                 }
             } catch (e) {
                 console.error('加载个人信息失败', e);
@@ -1450,7 +1680,11 @@
                     <div class="border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="selectPlayer('${p.username}')">
                         <div class="flex justify-between items-start mb-2">
                             <span class="flex items-center gap-2">
-                                <span class="font-semibold text-gray-800">${p.username}</span>
+                                <img src="${p.avatar ? 'avatars/' + p.avatar : 'avatars/avatar_yule.jpg'}" class="w-9 h-9 rounded-full object-cover border border-gray-200">
+                                <span>
+                                    <span class="block font-semibold text-gray-800">${escapeHtml(p.nickname || p.username)}</span>
+                                    <span class="block text-xs text-gray-400">@${p.username}</span>
+                                </span>
                                 <span class="text-xs px-2 py-0.5 rounded-full ${p.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${p.level_type === '技术陪' ? `技术陪·${p.tech_level}` : '娱乐陪'}</span>
                             </span>
                             <span class="text-sm text-blue-600 bg-blue-50 px-2 py-0.5 rounded">好评 ${p.good_rate}%</span>
@@ -1541,7 +1775,11 @@
                     <tr>
                         <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
                         <td class="px-4 py-2">${o.game_type}</td>
-                        <td class="px-4 py-2">${o.player_username || '<span class="text-gray-400">待分配</span>'}</td>
+                        <td class="px-4 py-2">
+                            ${o.player_username
+                                ? `<span class="inline-flex items-center gap-1.5"><img src="${o.player_avatar ? 'avatars/' + o.player_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.player_nickname || o.player_username)}</span></span>`
+                                : '<span class="text-gray-400">待分配</span>'}
+                        </td>
                         <td class="px-4 py-2">${o.duration_min}分钟</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
                         <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
@@ -1733,7 +1971,9 @@
                 tbody.innerHTML = list.map(o => `
                     <tr>
                         <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
-                        <td class="px-4 py-2">${o.boss_username}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
+                        </td>
                         <td class="px-4 py-2">${o.game_type}</td>
                         <td class="px-4 py-2">${o.duration_min}分钟</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
@@ -1812,7 +2052,7 @@
                             <span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
                             <span class="flex items-center gap-2">
                                 <span class="text-xs ${statusColor[r.review_status]} font-medium">${statusMap[r.review_status] || r.review_status}</span>
-                                <span class="text-xs text-gray-400">老板 ${r.boss_username} · ${new Date(r.created_at).toLocaleString('zh-CN')}</span>
+                                <span class="text-xs text-gray-400">老板 ${escapeHtml(r.boss_nickname || r.boss_username)} · ${new Date(r.created_at).toLocaleString('zh-CN')}</span>
                             </span>
                         </div>
                         <p class="text-sm text-gray-700 mb-2">${r.comment ? escapeHtml(r.comment) : '（无评价内容）'}</p>
@@ -1949,13 +2189,15 @@
                     pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
                     completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
                 };
-                const playerOptions = players.map(p => `<option value="${p.username}">${p.username}</option>`).join('');
+                const playerOptions = players.map(p => `<option value="${p.username}">${escapeHtml(p.nickname || p.username)}</option>`).join('');
                 tbody.innerHTML = list.map(o => {
                     const canAssign = o.status === 'pending' || o.status === 'rejected';
                     return `
                     <tr>
                         <td class="px-4 py-2 font-mono text-xs">${o.order_no}</td>
-                        <td class="px-4 py-2">${o.boss_username}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" class="w-6 h-6 rounded-full object-cover"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
+                        </td>
                         <td class="px-4 py-2">${o.game_type}</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
                         <td class="px-4 py-2 max-w-xs truncate">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
@@ -1967,7 +2209,7 @@
                                     <button onclick="assignOrder(${o.id})" class="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">派单</button>
                                    </div>`
                                 : (o.status === 'pending_accept'
-                                    ? `<span class="text-xs text-purple-500">等待打手${o.player_username}确认</span>`
+                                    ? `<span class="text-xs text-purple-500">等待打手确认</span>`
                                     : '<span class="text-gray-300">—</span>')}
                         </td>
                     </tr>`;
@@ -2038,8 +2280,8 @@
                 container.innerHTML = list.map(r => `
                     <div class="border border-orange-200 rounded-xl p-4 bg-orange-50/30">
                         <div class="flex justify-between items-center mb-2">
-                            <span class="font-medium text-gray-800">打手：${r.player_username}</span>
-                            <span class="text-xs text-gray-400">评价ID #${r.id} · 老板 ${r.boss_username} · ${new Date(r.review_time || r.created_at).toLocaleString('zh-CN')}</span>
+                            <span class="font-medium text-gray-800">打手：${escapeHtml(r.player_nickname || r.player_username)}</span>
+                            <span class="text-xs text-gray-400">评价ID #${r.id} · 老板 ${escapeHtml(r.boss_nickname || r.boss_username)} · ${new Date(r.review_time || r.created_at).toLocaleString('zh-CN')}</span>
                         </div>
                         <div class="bg-white rounded-lg p-3 mb-2">
                             <p class="text-sm text-gray-700"><span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span> ${r.comment ? escapeHtml(r.comment) : ''}</p>

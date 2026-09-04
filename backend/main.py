@@ -18,7 +18,7 @@ from api.withdraw_api import router as withdraw_router
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.0.0")
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.2.0")
 
 # CORS配置（允许前端跨域访问）
 app.add_middleware(
@@ -43,16 +43,19 @@ app.include_router(withdraw_router)
 def init_default_data():
     db = SessionLocal()
     try:
-        # 初始化默认用户
+        # 初始化默认用户（含默认昵称与默认头像，头像来自 touxiangku 图库）
         default_users = [
-            {"username": "guanliyuan", "password": "123456", "role": "admin", "role_name": "管理员"},
-            {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服"},
-            {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板"},
-            {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板"},
-            {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板"},
-            {"username": "dashou", "password": "123456", "role": "player", "role_name": "打手"},
-            {"username": "dashou_02", "password": "123456", "role": "player", "role_name": "打手"},
-            {"username": "dashou_03", "password": "123456", "role": "player", "role_name": "打手"}
+            {"username": "guanliyuan", "password": "123456", "role": "admin", "role_name": "管理员", "nickname": "店长", "avatar": "avatar_admin.jpg"},
+            {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服", "nickname": "客服小蜜", "avatar": "avatar_service.png"},
+            {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板阿昊", "avatar": "avatar_985_1.jpg"},
+            {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板二狗", "avatar": "avatar_211_1.jpg"},
+            {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板三少", "avatar": "avatar_mingxing.jpg"},
+            {"username": "dashou", "password": "123456", "role": "player", "role_name": "打手", "nickname": "小达", "avatar": "avatar_mowanghu.jpg"},
+            {"username": "dashou_02", "password": "123456", "role": "player", "role_name": "打手", "nickname": "阿岚", "avatar": "avatar_211_2.jpg"},
+            {"username": "dashou_03", "password": "123456", "role": "player", "role_name": "打手", "nickname": "老猫", "avatar": "avatar_yule.jpg"},
+            {"username": "dashou_04", "password": "123456", "role": "player", "role_name": "打手", "nickname": "北冥", "avatar": "avatar_985_2.jpg"},
+            {"username": "dashou_05", "password": "123456", "role": "player", "role_name": "打手", "nickname": "阿澈", "avatar": "avatar_dazhuan.png"},
+            {"username": "dashou_06", "password": "123456", "role": "player", "role_name": "打手", "nickname": "星火", "avatar": "avatar_mingxing.jpg"}
         ]
         
         for user_data in default_users:
@@ -62,7 +65,9 @@ def init_default_data():
                     username=user_data["username"],
                     password_hash=hash_password(user_data["password"]),
                     role=user_data["role"],
-                    role_name=user_data["role_name"]
+                    role_name=user_data["role_name"],
+                    nickname=user_data.get("nickname", ""),
+                    avatar=user_data.get("avatar", "")
                 )
                 db.add(user)
         
@@ -81,7 +86,10 @@ def init_default_data():
         default_player = [
             {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！", "level_type": "技术陪", "tech_level": "魔王护"},
             {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。", "level_type": "技术陪", "tech_level": "211"},
-            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。", "level_type": "娱乐陪", "tech_level": ""}
+            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。", "level_type": "娱乐陪", "tech_level": ""},
+            {"username": "dashou_04", "order_count": 76, "complaint_count": 0, "good_rate": 99.1, "backend_amount": 156000, "intro": "王者荣耀国服百星打野，985技术陪全程语音指导，稳上分不炸车，高端局也能带飞。", "level_type": "技术陪", "tech_level": "985"},
+            {"username": "dashou_05", "order_count": 54, "complaint_count": 2, "good_rate": 96.4, "backend_amount": 98000, "intro": "大专技术陪，主玩王者/和平精英，价格实惠服务到位，性价比之选，欢迎新老板体验。", "level_type": "技术陪", "tech_level": "大专"},
+            {"username": "dashou_06", "order_count": 168, "complaint_count": 4, "good_rate": 96.9, "backend_amount": 452000, "intro": "明星级护航，原神满命深渊、王者巅峰赛顶级对局，高端局专属陪玩，全天可约。", "level_type": "技术陪", "tech_level": "明星护"}
         ]
         for player_data in default_player:
             existing = db.query(PlayerInfo).filter(PlayerInfo.username == player_data["username"]).first()

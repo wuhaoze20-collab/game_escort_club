@@ -283,8 +283,8 @@ def cancel_order(
     db.refresh(order)
     return order
 
-# 获取订单列表
-@router.get("/list", response_model=List[OrderResponse])
+# 获取订单列表（带老板/打手昵称与头像）
+@router.get("/list")
 def get_order_list(
     status: str = None,
     current_user: User = Depends(get_current_user),
@@ -302,7 +302,30 @@ def get_order_list(
     if status:
         query = query.filter(Order.status == status)
     
-    return query.order_by(Order.created_at.desc()).all()
+    orders = query.order_by(Order.created_at.desc()).all()
+    result = []
+    for o in orders:
+        boss_user = db.query(User).filter(User.username == o.boss_username).first()
+        player_user = db.query(User).filter(User.username == o.player_username).first() if o.player_username else None
+        result.append({
+            "id": o.id,
+            "order_no": o.order_no,
+            "boss_username": o.boss_username,
+            "boss_nickname": (boss_user.nickname or boss_user.username) if boss_user else o.boss_username,
+            "boss_avatar": boss_user.avatar if boss_user else "",
+            "player_username": o.player_username,
+            "player_nickname": (player_user.nickname or player_user.username) if player_user else "",
+            "player_avatar": player_user.avatar if player_user else "",
+            "game_type": o.game_type,
+            "duration_min": o.duration_min,
+            "total_amount": o.total_amount,
+            "remark": o.remark,
+            "status": o.status,
+            "created_at": o.created_at,
+            "start_time": o.start_time,
+            "end_time": o.end_time
+        })
+    return result
 
 # 获取工资记录列表
 @router.get("/salary/list", response_model=List[SalaryRecordResponse])

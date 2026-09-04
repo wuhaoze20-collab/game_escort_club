@@ -13,6 +13,17 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: dict
 
+# 资料修改请求（昵称/头像提交审核）
+class ProfileUpdateRequest(BaseModel):
+    nickname: Optional[str] = ""  # 新昵称（提交审核）
+    avatar: Optional[str] = ""  # 新头像文件名（提交审核，来自头像库）
+
+# 资料审核请求（管理员打回/通过）
+class ProfileReviewRequest(BaseModel):
+    field: str  # nickname / avatar
+    action: str  # approve / reject
+    note: str = ""  # 打回原因
+
 # 内容配置更新
 class ContentConfigUpdate(BaseModel):
     value: Any
@@ -20,6 +31,8 @@ class ContentConfigUpdate(BaseModel):
 # 老板信息响应
 class BossInfoResponse(BaseModel):
     username: str
+    nickname: str = ""
+    avatar: str = ""
     consume_amount: int
     balance: int
     order_count: int
@@ -30,6 +43,8 @@ class BossInfoResponse(BaseModel):
 # 打手信息响应
 class PlayerInfoResponse(BaseModel):
     username: str
+    nickname: str = ""
+    avatar: str = ""
     order_count: int
     complaint_count: int
     good_rate: float
@@ -44,6 +59,8 @@ class PlayerInfoResponse(BaseModel):
 # 打手公开信息（老板点单可见，不含后台金额等敏感信息）
 class PlayerPublicInfo(BaseModel):
     username: str
+    nickname: str = ""
+    avatar: str = ""
     order_count: int
     complaint_count: int
     good_rate: float

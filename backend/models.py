@@ -11,6 +11,13 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)  # admin/service/boss/player
     role_name = Column(String(20), nullable=False)
+    nickname = Column(String(50), default="")  # 当前展示昵称（空则显示用户名）
+    avatar = Column(String(255), default="")  # 当前展示头像文件名（frontend/avatars/ 下）
+    pending_nickname = Column(String(50), default="")  # 待审核昵称
+    pending_avatar = Column(String(255), default="")  # 待审核头像
+    nickname_status = Column(String(20), default="approved")  # approved/pending
+    avatar_status = Column(String(20), default="approved")  # approved/pending
+    reject_reason = Column(String(255), default="")  # 头像/昵称打回原因
     created_at = Column(DateTime, default=datetime.now)
 
 # 内容配置表（公告、须知、价格、充值、会员、支付方式统一存储）

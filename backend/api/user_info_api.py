@@ -8,7 +8,7 @@ from models import BossInfo, PlayerInfo, PlayerTag, User, ContentConfig
 from schemas import (
     BossInfoResponse, PlayerInfoResponse, PlayerPublicInfo,
     IntroUpdateRequest, LevelUpdateRequest, TagCreateRequest, TagResponse,
-    TagDecisionRequest, RechargeRequest
+    TagDecisionRequest, RechargeRequest, ProfileUpdateRequest, ProfileReviewRequest
 )
 from auth import get_current_user, require_roles
 
@@ -17,13 +17,68 @@ router = APIRouter(prefix="/api", tags=["用户信息"])
 # 技术陪细分等级（由低到高）
 TECH_LEVELS = ["985", "211", "大专", "魔王护", "明星护"]
 
+# 违规昵称（头像/昵称被管理员打回后的昵称）
+VIOLATION_NICKNAME = "违规昵称"
+
+# 默认头像库（frontend/avatars/ 下的文件，来自 touxiangku 图库）
+AVATAR_LIBRARY = [
+    "avatar_985_1.jpg", "avatar_985_2.jpg",
+    "avatar_211_1.jpg", "avatar_211_2.jpg",
+    "avatar_dazhuan.png", "avatar_yule.jpg",
+    "avatar_mingxing.jpg", "avatar_mowanghu.jpg",
+    "avatar_admin.jpg", "avatar_service.png"
+]
+
+# 用户默认头像分配（按角色/等级）
+def default_avatar_for(user: User, db: Session = None) -> str:
+    if user.role == "admin":
+        return "avatar_admin.jpg"
+    if user.role == "service":
+        return "avatar_service.png"
+    if user.role == "player":
+        if db:
+            p = db.query(PlayerInfo).filter(PlayerInfo.username == user.username).first()
+            if p:
+                mapping = {
+                    "985": "avatar_985_1.jpg", "211": "avatar_211_1.jpg",
+                    "大专": "avatar_dazhuan.png", "魔王护": "avatar_mowanghu.jpg",
+                    "明星护": "avatar_mingxing.jpg", "娱乐陪": "avatar_yule.jpg"
+                }
+                key = p.tech_level or p.level_type or "娱乐陪"
+                return mapping.get(key, "avatar_yule.jpg")
+        return "avatar_yule.jpg"
+    # 老板
+    return "avatar_985_1.jpg"
+
+# 组装用户资料（nickname/avatar，空昵称用用户名兜底）
+def user_profile(user: User):
+    return {
+        "username": user.username,
+        "nickname": user.nickname or user.username,
+        "avatar": user.avatar
+    }
+
 # 获取老板列表（仅管理员和客服可查看全部）
 @router.get("/boss/list", response_model=List[BossInfoResponse])
 def get_boss_list(
     current_user: User = Depends(require_roles("admin", "service")),
     db: Session = Depends(get_db)
 ):
-    return db.query(BossInfo).all()
+    bosses = db.query(BossInfo).all()
+    result = []
+    for b in bosses:
+        u = db.query(User).filter(User.username == b.username).first()
+        item = {
+            "username": b.username,
+            "consume_amount": b.consume_amount,
+            "balance": b.balance,
+            "order_count": b.order_count
+        }
+        if u:
+            item["nickname"] = u.nickname or u.username
+            item["avatar"] = u.avatar
+        result.append(item)
+    return result
 
 # 获取打手列表（仅管理员和客服可查看全部，含后台金额等敏感数据）
 @router.get("/player/list", response_model=List[PlayerInfoResponse])
@@ -31,7 +86,25 @@ def get_player_list(
     current_user: User = Depends(require_roles("admin", "service")),
     db: Session = Depends(get_db)
 ):
-    return db.query(PlayerInfo).all()
+    players = db.query(PlayerInfo).all()
+    result = []
+    for p in players:
+        u = db.query(User).filter(User.username == p.username).first()
+        item = {
+            "username": p.username,
+            "order_count": p.order_count,
+            "complaint_count": p.complaint_count,
+            "good_rate": p.good_rate,
+            "backend_amount": p.backend_amount,
+            "intro": p.intro,
+            "level_type": p.level_type,
+            "tech_level": p.tech_level
+        }
+        if u:
+            item["nickname"] = u.nickname or u.username
+            item["avatar"] = u.avatar
+        result.append(item)
+    return result
 
 # 获取打手公开列表（所有登录用户可见，供老板点单参考，不含后台金额等敏感信息，含等级与已审核标签）
 @router.get("/player/public", response_model=List[PlayerPublicInfo])
@@ -42,11 +115,12 @@ def get_player_public_list(
     players = db.query(PlayerInfo).all()
     result = []
     for p in players:
+        u = db.query(User).filter(User.username == p.username).first()
         tags = db.query(PlayerTag).filter(
             PlayerTag.username == p.username,
             PlayerTag.status == "approved"
         ).order_by(PlayerTag.id.desc()).all()
-        result.append({
+        item = {
             "username": p.username,
             "order_count": p.order_count,
             "complaint_count": p.complaint_count,
@@ -55,7 +129,11 @@ def get_player_public_list(
             "level_type": p.level_type,
             "tech_level": p.tech_level,
             "tags": [{"id": t.id, "tag": t.tag} for t in tags]
-        })
+        }
+        if u:
+            item["nickname"] = u.nickname or u.username
+            item["avatar"] = u.avatar
+        result.append(item)
     return result
 
 # 获取当前老板的个人信息
@@ -67,7 +145,14 @@ def get_my_boss_info(
     info = db.query(BossInfo).filter(BossInfo.username == current_user.username).first()
     if not info:
         raise HTTPException(status_code=404, detail="用户信息不存在")
-    return info
+    return {
+        "username": info.username,
+        "nickname": current_user.nickname or current_user.username,
+        "avatar": current_user.avatar,
+        "consume_amount": info.consume_amount,
+        "balance": info.balance,
+        "order_count": info.order_count
+    }
 
 # 获取当前打手的个人信息
 @router.get("/player/me", response_model=PlayerInfoResponse)
@@ -78,7 +163,134 @@ def get_my_player_info(
     info = db.query(PlayerInfo).filter(PlayerInfo.username == current_user.username).first()
     if not info:
         raise HTTPException(status_code=404, detail="用户信息不存在")
-    return info
+    return {
+        "username": info.username,
+        "nickname": current_user.nickname or current_user.username,
+        "avatar": current_user.avatar,
+        "order_count": info.order_count,
+        "complaint_count": info.complaint_count,
+        "good_rate": info.good_rate,
+        "backend_amount": info.backend_amount,
+        "intro": info.intro,
+        "level_type": info.level_type,
+        "tech_level": info.tech_level
+    }
+
+# ==================== 头像与昵称（所有账户可自定义，管理员/客服审核） ====================
+
+# 提交头像/昵称修改（进入待审核状态，审核通过后对外展示）
+@router.put("/profile")
+def update_my_profile(
+    request: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    changed = False
+    if request.nickname is not None and request.nickname.strip():
+        nick = request.nickname.strip()
+        if len(nick) > 20:
+            raise HTTPException(status_code=400, detail="昵称不能超过20个字符")
+        if nick == VIOLATION_NICKNAME:
+            raise HTTPException(status_code=400, detail="该昵称不可用")
+        if current_user.nickname_status == "pending":
+            raise HTTPException(status_code=400, detail="昵称审核中，请等待管理员审核后再修改")
+        if nick != current_user.nickname:
+            current_user.pending_nickname = nick
+            current_user.nickname_status = "pending"
+            changed = True
+    
+    if request.avatar is not None and request.avatar.strip():
+        av = request.avatar.strip()
+        # 头像必须是头像库中的文件（防路径穿越）
+        if av not in AVATAR_LIBRARY:
+            raise HTTPException(status_code=400, detail="头像不在可选图库中")
+        if current_user.avatar_status == "pending":
+            raise HTTPException(status_code=400, detail="头像审核中，请等待管理员审核后再修改")
+        if av != current_user.avatar:
+            current_user.pending_avatar = av
+            current_user.avatar_status = "pending"
+            changed = True
+    
+    if not changed:
+        raise HTTPException(status_code=400, detail="没有需要修改的内容")
+    
+    db.commit()
+    return {
+        "message": "已提交，等待管理员/客服审核",
+        "nickname_status": current_user.nickname_status,
+        "avatar_status": current_user.avatar_status
+    }
+
+# 管理员/客服查看待审核的头像与昵称
+@router.get("/profile/review")
+def get_profile_review_list(
+    current_user: User = Depends(require_roles("admin", "service")),
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).filter(
+        (User.nickname_status == "pending") | (User.avatar_status == "pending")
+    ).all()
+    result = []
+    for u in users:
+        result.append({
+            "username": u.username,
+            "role_name": u.role_name,
+            "role": u.role,
+            "nickname": u.nickname or u.username,
+            "avatar": u.avatar,
+            "pending_nickname": u.pending_nickname,
+            "pending_avatar": u.pending_avatar,
+            "nickname_status": u.nickname_status,
+            "avatar_status": u.avatar_status
+        })
+    return result
+
+# 管理员/客服审核头像或昵称（approve=通过生效 / reject=打回；昵称打回改为违规昵称，头像打回恢复默认头像）
+@router.post("/profile/review/{username}")
+def decide_profile(
+    username: str,
+    request: ProfileReviewRequest,
+    current_user: User = Depends(require_roles("admin", "service")),
+    db: Session = Depends(get_db)
+):
+    if request.field not in ["nickname", "avatar"]:
+        raise HTTPException(status_code=400, detail="审核对象必须为 nickname 或 avatar")
+    if request.action not in ["approve", "reject"]:
+        raise HTTPException(status_code=400, detail="操作必须为 approve 或 reject")
+    
+    u = db.query(User).filter(User.username == username).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    if request.field == "nickname":
+        if u.nickname_status != "pending" or not u.pending_nickname:
+            raise HTTPException(status_code=400, detail="该用户没有待审核的昵称")
+        if request.action == "approve":
+            u.nickname = u.pending_nickname
+            u.nickname_status = "approved"
+            msg = f"昵称审核通过：{u.nickname}"
+        else:
+            u.nickname = VIOLATION_NICKNAME
+            u.nickname_status = "approved"
+            u.reject_reason = request.note
+            msg = f"昵称不合规，已改为：{VIOLATION_NICKNAME}"
+        u.pending_nickname = ""
+    else:
+        if u.avatar_status != "pending" or not u.pending_avatar:
+            raise HTTPException(status_code=400, detail="该用户没有待审核的头像")
+        if request.action == "approve":
+            u.avatar = u.pending_avatar
+            u.avatar_status = "approved"
+            msg = "头像审核通过"
+        else:
+            u.avatar = default_avatar_for(u, db)
+            u.avatar_status = "approved"
+            u.reject_reason = request.note
+            msg = "头像不合规，已恢复默认头像"
+        u.pending_avatar = ""
+    
+    db.commit()
+    return {"message": msg, "nickname": u.nickname, "avatar": u.avatar}
 
 # 打手更新自己的自我介绍（仅打手本人）
 @router.put("/player/intro")
