@@ -168,7 +168,7 @@
 
         /* 弹窗鎏金边框 */
         #edit-modal > div > div, #rating-modal > div > div, #tip-modal > div > div,
-        #reply-modal > div > div, #review-modal > div > div {
+        #reply-modal > div > div, #review-modal > div > div, #recharge-modal > div > div {
             background: rgba(255, 255, 255, 0.98) !important;
             border: 1px solid var(--gs-gold);
             box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55) !important;
@@ -287,13 +287,19 @@
                     <div id="price-content" class="overflow-x-auto"><div class="loading">加载中...</div></div>
                 </section>
 
-                <!-- 4. 充值福利 -->
+                <!-- 4. 充值中心（老板可充值；管理员/客服管理配置） -->
                 <section id="page-recharge" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-gray-800">充值福利</h2>
-                        <button onclick="openEditModal('recharge')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                        <h2 class="text-lg font-semibold text-gray-800">充值中心</h2>
+                        <div class="flex items-center gap-3">
+                            <div id="recharge-balance-box" class="hidden text-sm px-4 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                                当前大狗币余额：<b id="recharge-balance" class="text-amber-700 text-base">0</b> 枚
+                            </div>
+                            <button id="recharge-edit-btn" onclick="openEditModal('recharge')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                        </div>
                     </div>
-                    <div id="recharge-content" class="grid grid-cols-1 md:grid-cols-3 gap-4"><div class="loading">加载中...</div></div>
+                    <p id="recharge-tip" class="text-sm text-gray-500 mb-4">选择充值金额，到账大狗币（1元 = 1大狗币），点单与打赏将消耗大狗币</p>
+                    <div id="recharge-content" class="grid grid-cols-1 md:grid-cols-4 gap-4"><div class="loading">加载中...</div></div>
                 </section>
 
                 <!-- 5. 会员福利 -->
@@ -335,7 +341,7 @@
                                 <tr>
                                     <th class="px-4 py-2">账户名</th>
                                     <th class="px-4 py-2">累计消费金额</th>
-                                    <th class="px-4 py-2">账户余额</th>
+                                    <th class="px-4 py-2">大狗币余额</th>
                                     <th class="px-4 py-2">点单次数</th>
                                 </tr>
                             </thead>
@@ -354,6 +360,7 @@
                             <thead class="bg-gray-50 text-gray-700">
                                 <tr>
                                     <th class="px-4 py-2">账户名</th>
+                                    <th class="px-4 py-2">等级</th>
                                     <th class="px-4 py-2">接单次数</th>
                                     <th class="px-4 py-2">投诉次数</th>
                                     <th class="px-4 py-2">好评率</th>
@@ -424,7 +431,8 @@
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-600 mb-1">金额(元)</label>
-                                <input id="order-amount" type="number" min="1" value="25" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <input id="order-amount" type="number" min="1" step="1" value="25" oninput="updateCoinCost()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <p class="text-xs text-amber-600 mt-1">将消耗 <b id="coin-cost">25</b> 大狗币</p>
                             </div>
                             <div class="flex items-end">
                                 <button onclick="createOrder()" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">立即下单</button>
@@ -461,13 +469,50 @@
                     <h2 class="text-lg font-semibold text-gray-800 mb-6">我的账户信息</h2>
                     <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6"><div class="loading">加载中...</div></div>
                     <!-- 打手自我介绍编辑区 -->
-                    <div id="player-intro-box" class="hidden bg-gray-50 rounded-xl p-5">
+                    <div id="player-intro-box" class="hidden bg-gray-50 rounded-xl p-5 mb-4">
                         <h3 class="text-base font-medium text-gray-800 mb-2">我的自我介绍</h3>
                         <p class="text-xs text-gray-500 mb-3">写一段介绍，老板点单时会看到（接单数、好评率等公开数据也会展示给老板）</p>
                         <textarea id="player-intro-input" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="介绍你的擅长游戏、段位、服务风格..."></textarea>
                         <div class="flex justify-end mt-3">
                             <button onclick="saveIntro()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存自我介绍</button>
                         </div>
+                    </div>
+                    <!-- 打手等级编辑区 -->
+                    <div id="player-level-box" class="hidden bg-gray-50 rounded-xl p-5 mb-4">
+                        <h3 class="text-base font-medium text-gray-800 mb-2">我的等级</h3>
+                        <p class="text-xs text-gray-500 mb-3">等级分两类：娱乐陪 / 技术陪（技术陪由低到高：985 → 211 → 大专 → 魔王护 → 明星护），老板点单时可见</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">等级大类</label>
+                                <select id="player-level-type" onchange="toggleTechLevel()" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                    <option value="娱乐陪">娱乐陪</option>
+                                    <option value="技术陪">技术陪</option>
+                                </select>
+                            </div>
+                            <div id="tech-level-box" class="hidden">
+                                <label class="block text-sm text-gray-600 mb-1">技术陪细分等级</label>
+                                <select id="player-tech-level" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                    <option value="985">985</option>
+                                    <option value="211">211</option>
+                                    <option value="大专">大专</option>
+                                    <option value="魔王护">魔王护</option>
+                                    <option value="明星护">明星护</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex justify-end mt-3">
+                            <button onclick="saveLevel()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存等级</button>
+                        </div>
+                    </div>
+                    <!-- 打手标签管理区 -->
+                    <div id="player-tag-box" class="hidden bg-gray-50 rounded-xl p-5">
+                        <h3 class="text-base font-medium text-gray-800 mb-2">我的标签</h3>
+                        <p class="text-xs text-gray-500 mb-3">添加个人标签（如"王者百星""全程语音"），由管理员/客服审核通过后展示给老板</p>
+                        <div class="flex gap-2 mb-3">
+                            <input id="player-tag-input" type="text" maxlength="20" placeholder="输入标签内容，如：王者百星" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                            <button onclick="addMyTag()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">添加标签</button>
+                        </div>
+                        <div id="my-tags-content" class="flex flex-wrap gap-2"></div>
                     </div>
                 </section>
 
@@ -603,6 +648,23 @@
                     <div id="review-manage-content" class="space-y-4"><div class="loading">加载中...</div></div>
                 </section>
 
+                <!-- 16.6 打手标签审核（管理员/客服） -->
+                <section id="page-tag-review" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">打手标签审核</h2>
+                        <div class="flex items-center gap-3">
+                            <select id="tag-review-filter" onchange="loadTagReview()" class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg">
+                                <option value="pending">待审核</option>
+                                <option value="approved">已通过</option>
+                                <option value="rejected">已拒绝</option>
+                                <option value="all">全部</option>
+                            </select>
+                            <button onclick="loadTagReview()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                        </div>
+                    </div>
+                    <div id="tag-review-content" class="space-y-3"><div class="loading">加载中...</div></div>
+                </section>
+
                 <!-- 17. 评价弹窗 -->
                 <div id="rating-modal" class="fixed inset-0 z-50 hidden">
                     <div class="modal-overlay absolute inset-0" onclick="closeRatingModal()"></div>
@@ -690,6 +752,31 @@
                         <div class="px-6 py-4 border-t flex justify-end gap-3">
                             <button onclick="closeReviewModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
                             <button onclick="submitReviewRequest()" class="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">提交申请</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 21. 充值支付方式弹窗（老板） -->
+                <div id="recharge-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeRechargeModal()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-800">选择支付方式</h3>
+                            <button onclick="closeRechargeModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 text-center">
+                                <p class="text-sm text-gray-500">充值 <b id="recharge-amount-show" class="text-xl text-gray-800">0</b> 元</p>
+                                <p class="text-sm text-amber-700 mt-1">到账 <b id="recharge-total-show">0</b> 大狗币（含赠送 <b id="recharge-gift-show">0</b>）</p>
+                                <p id="recharge-bonus-show" class="text-xs text-gray-500 mt-1"></p>
+                            </div>
+                            <p class="text-sm font-medium text-gray-700 mb-3">支付方式</p>
+                            <div id="recharge-payment-list" class="space-y-2 mb-4"></div>
+                            <input type="hidden" id="recharge-amount-input">
+                        </div>
+                        <div class="px-6 py-4 border-t flex justify-end gap-3">
+                            <button onclick="closeRechargeModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
+                            <button onclick="submitRecharge()" class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition">确认充值</button>
                         </div>
                     </div>
                 </div>
@@ -850,10 +937,15 @@
                 await loadPlayerList();
                 await loadManageOrders();
                 await loadWithdrawManage();
+                await loadTagReview();
+                // 管理端隐藏充值页的编辑按钮不生效（保留编辑权限），编辑按钮对老板隐藏
+                document.getElementById('recharge-edit-btn').classList.remove('hidden');
             } else if (currentUser.role === 'boss') {
                 await loadMyProfile();
                 await loadPublicPlayers();
                 await loadMyOrders();
+                await updateRechargeBalance();
+                document.getElementById('recharge-edit-btn').classList.add('hidden');
             } else if (currentUser.role === 'player') {
                 await loadMyProfile();
                 await loadPlayerOrders();
@@ -891,6 +983,7 @@
                 { key: 'order-manage', label: '订单管理' },
                 { key: 'withdraw-manage', label: '提现审核' },
                 { key: 'review-manage', label: '评价复查' },
+                { key: 'tag-review', label: '标签审核' },
                 { key: 'boss', label: '老板管理' },
                 { key: 'player', label: '打手管理' }
             ],
@@ -904,6 +997,7 @@
                 { key: 'punishment', label: '处罚通告' },
                 { key: 'order-manage', label: '订单管理' },
                 { key: 'withdraw-manage', label: '提现审核' },
+                { key: 'tag-review', label: '标签审核' },
                 { key: 'boss', label: '老板信息' },
                 { key: 'player', label: '打手信息' }
             ],
@@ -911,9 +1005,8 @@
                 { key: 'notice', label: '店铺公告' },
                 { key: 'order-guide', label: '下单须知' },
                 { key: 'price', label: '价格预览' },
-                { key: 'recharge', label: '充值福利' },
+                { key: 'recharge', label: '充值中心' },
                 { key: 'member', label: '会员福利' },
-                { key: 'payment', label: '支付方式' },
                 { key: 'punishment', label: '处罚通告' },
                 { key: 'order', label: '点单中心' },
                 { key: 'profile', label: '我的账户' }
@@ -922,9 +1015,7 @@
                 { key: 'notice', label: '店铺公告' },
                 { key: 'order-guide', label: '下单须知' },
                 { key: 'price', label: '价格预览' },
-                { key: 'recharge', label: '充值福利' },
                 { key: 'member', label: '会员福利' },
-                { key: 'payment', label: '支付方式' },
                 { key: 'punishment', label: '处罚通告' },
                 { key: 'player-orders', label: '我的订单' },
                 { key: 'player-ratings', label: '我的评价' },
@@ -1027,17 +1118,94 @@
                 document.getElementById('recharge-content').innerHTML = '<div class="loading">暂无数据</div>';
                 return;
             }
+            // 老板视角：可点击充值；管理员/客服视角：只读配置展示
+            const isBoss = currentUser.role === 'boss';
             let html = '';
             list.forEach(item => {
                 html += `
-                    <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition">
-                        <div class="text-2xl font-bold text-blue-600">¥${item.amount}</div>
-                        <div class="text-sm text-green-600 mt-1">赠送 ¥${item.gift}</div>
+                    <div onclick="${isBoss ? `openRechargeModal(${item.amount}, ${item.gift}, '${escapeHtml(String(item.bonus || ''))}')` : ''}"
+                        class="border ${isBoss ? 'cursor-pointer hover:border-amber-400 hover:shadow-lg' : ''} border-gray-200 rounded-xl p-5 bg-gradient-to-b from-white to-amber-50/40 transition">
+                        <div class="text-2xl font-bold text-amber-600">${item.amount} 元</div>
+                        <div class="text-sm text-green-600 mt-1 font-medium">+ 赠送 ${item.gift} 大狗币</div>
                         <div class="text-xs text-gray-500 mt-2">${item.bonus}</div>
+                        ${isBoss ? '<div class="mt-3 text-xs text-amber-500 font-medium">点击充值 →</div>' : ''}
                     </div>
                 `;
             });
             document.getElementById('recharge-content').innerHTML = html;
+        }
+
+        // ==================== 老板充值（大狗币） ====================
+        // 更新充值页余额显示
+        async function updateRechargeBalance() {
+            try {
+                const info = await apiRequest('/api/boss/me');
+                document.getElementById('recharge-balance').textContent = info.balance;
+                document.getElementById('recharge-balance-box').classList.remove('hidden');
+            } catch (e) { console.error('加载大狗币余额失败', e); }
+        }
+
+        // 打开充值支付方式弹窗
+        function openRechargeModal(amount, gift, bonus) {
+            document.getElementById('recharge-amount-input').value = amount;
+            document.getElementById('recharge-amount-show').textContent = amount;
+            document.getElementById('recharge-total-show').textContent = amount + gift;
+            document.getElementById('recharge-gift-show').textContent = gift;
+            document.getElementById('recharge-bonus-show').textContent = bonus || '';
+            // 渲染支付方式（来自支付方式内容模块）
+            const paymentList = (contentData.payment || []);
+            const listBox = document.getElementById('recharge-payment-list');
+            if (paymentList.length === 0) {
+                listBox.innerHTML = '<p class="text-sm text-gray-400">暂无可用的支付方式</p>';
+            } else {
+                listBox.innerHTML = paymentList.map((p, i) => `
+                    <label onclick="selectRechargePayment(this)" data-name="${escapeHtml(p.name)}"
+                        class="flex items-center gap-3 border rounded-lg px-4 py-3 cursor-pointer hover:border-amber-400 transition ${i === 0 ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}">
+                        <span class="text-2xl">${p.icon || '💳'}</span>
+                        <span class="flex-1">
+                            <span class="block text-sm font-medium text-gray-800">${p.name}</span>
+                            <span class="block text-xs text-gray-500">${p.desc}</span>
+                        </span>
+                        <span class="payment-radio w-4 h-4 rounded-full border-2 ${i === 0 ? 'border-amber-500' : 'border-gray-300'} flex items-center justify-center">
+                            ${i === 0 ? '<span class="w-2 h-2 rounded-full bg-amber-500"></span>' : ''}
+                        </span>
+                    </label>
+                `).join('');
+            }
+            document.getElementById('recharge-modal').classList.remove('hidden');
+        }
+
+        // 选择支付方式
+        function selectRechargePayment(el) {
+            document.querySelectorAll('#recharge-payment-list label').forEach(l => {
+                l.classList.remove('border-amber-400', 'bg-amber-50');
+                l.classList.add('border-gray-200');
+                l.querySelector('.payment-radio').className = 'payment-radio w-4 h-4 rounded-full border-2 border-gray-300 flex items-center justify-center';
+                l.querySelector('.payment-radio').innerHTML = '';
+            });
+            el.classList.remove('border-gray-200');
+            el.classList.add('border-amber-400', 'bg-amber-50');
+            el.querySelector('.payment-radio').className = 'payment-radio w-4 h-4 rounded-full border-2 border-amber-500 flex items-center justify-center';
+            el.querySelector('.payment-radio').innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500"></span>';
+        }
+
+        function closeRechargeModal() {
+            document.getElementById('recharge-modal').classList.add('hidden');
+        }
+
+        // 提交充值
+        async function submitRecharge() {
+            const amount = parseInt(document.getElementById('recharge-amount-input').value);
+            const selected = document.querySelector('#recharge-payment-list label.border-amber-400');
+            if (!selected) { alert('请选择支付方式'); return; }
+            const payment = selected.dataset.name;
+            try {
+                const res = await apiRequest('/api/boss/recharge', 'POST', { amount: amount, payment: payment });
+                alert(res.message);
+                closeRechargeModal();
+                await updateRechargeBalance();
+                await loadMyProfile();
+            } catch (e) { alert(e.message); }
         }
 
         function renderMember() {
@@ -1107,7 +1275,7 @@
                     <tr>
                         <td class="px-4 py-2 font-medium">${item.username}</td>
                         <td class="px-4 py-2">¥${(item.consume_amount / 100).toLocaleString()}</td>
-                        <td class="px-4 py-2 text-green-600">¥${(item.balance / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2 text-green-600">${item.balance} 大狗币</td>
                         <td class="px-4 py-2">${item.order_count} 次</td>
                     </tr>
                 `).join('');
@@ -1124,6 +1292,9 @@
                 tbody.innerHTML = list.map(item => `
                     <tr>
                         <td class="px-4 py-2 font-medium">${item.username}</td>
+                        <td class="px-4 py-2">
+                            <span class="text-xs px-2 py-0.5 rounded-full ${item.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${item.level_type === '技术陪' ? `技术陪·${item.tech_level}` : '娱乐陪'}</span>
+                        </td>
                         <td class="px-4 py-2">${item.order_count} 单</td>
                         <td class="px-4 py-2 text-red-500">${item.complaint_count} 次</td>
                         <td class="px-4 py-2 text-green-600">${item.good_rate}%</td>
@@ -1140,15 +1311,19 @@
             try {
                 const container = document.getElementById('profile-content');
                 const introBox = document.getElementById('player-intro-box');
-                // 默认隐藏自我介绍编辑区（仅打手可见）
+                const levelBox = document.getElementById('player-level-box');
+                const tagBox = document.getElementById('player-tag-box');
+                // 默认隐藏打手专属编辑区（仅打手可见）
                 introBox.classList.add('hidden');
+                levelBox.classList.add('hidden');
+                tagBox.classList.add('hidden');
                 let info;
                 if (currentUser.role === 'boss') {
                     info = await apiRequest('/api/boss/me');
                     const fields = [
                         { label: '账户名', value: info.username, color: 'gray' },
                         { label: '累计消费', value: `¥${(info.consume_amount / 100).toLocaleString()}`, color: 'blue' },
-                        { label: '账户余额', value: `¥${(info.balance / 100).toLocaleString()}`, color: 'green' },
+                        { label: '大狗币余额', value: `${info.balance} 枚`, color: 'green' },
                         { label: '点单次数', value: `${info.order_count} 次`, color: 'orange' }
                     ];
                     container.innerHTML = fields.map(f => `
@@ -1161,6 +1336,7 @@
                     info = await apiRequest('/api/player/me');
                     const fields = [
                         { label: '账户名', value: info.username, color: 'gray' },
+                        { label: '等级', value: info.level_type === '技术陪' ? `${info.level_type}-${info.tech_level}` : info.level_type, color: 'blue' },
                         { label: '接单次数', value: `${info.order_count} 单`, color: 'blue' },
                         { label: '投诉次数', value: `${info.complaint_count} 次`, color: 'red' },
                         { label: '好评率', value: `${info.good_rate}%`, color: 'green' },
@@ -1173,14 +1349,82 @@
                         </div>
                     `).join('');
                     // 填充自我介绍编辑框
-                    const introBox = document.getElementById('player-intro-box');
                     introBox.classList.remove('hidden');
                     document.getElementById('player-intro-input').value = info.intro || '';
+                    // 填充等级编辑框
+                    levelBox.classList.remove('hidden');
+                    document.getElementById('player-level-type').value = info.level_type || '娱乐陪';
+                    document.getElementById('player-tech-level').value = info.tech_level || '985';
+                    toggleTechLevel();
+                    // 加载标签
+                    tagBox.classList.remove('hidden');
+                    await loadMyTags();
                 }
             } catch (e) {
                 console.error('加载个人信息失败', e);
                 document.getElementById('profile-content').innerHTML = '<div class="loading">加载失败</div>';
             }
+        }
+
+        // ==================== 打手等级与标签 ====================
+        // 切换等级大类时显示/隐藏技术陪细分
+        function toggleTechLevel() {
+            const isTech = document.getElementById('player-level-type').value === '技术陪';
+            document.getElementById('tech-level-box').classList.toggle('hidden', !isTech);
+        }
+
+        // 保存等级
+        async function saveLevel() {
+            const level_type = document.getElementById('player-level-type').value;
+            const tech_level = level_type === '技术陪' ? document.getElementById('player-tech-level').value : '';
+            try {
+                const res = await apiRequest('/api/player/level', 'PUT', { level_type: level_type, tech_level: tech_level });
+                alert(res.message);
+                await loadMyProfile();
+            } catch (e) { alert(e.message); }
+        }
+
+        // 加载我的标签
+        async function loadMyTags() {
+            try {
+                const list = await apiRequest('/api/player/tags');
+                const box = document.getElementById('my-tags-content');
+                if (!list || list.length === 0) {
+                    box.innerHTML = '<p class="text-sm text-gray-400">还没有标签，添加一个展示自己吧</p>';
+                    return;
+                }
+                const statusMap = { pending: '审核中', approved: '已展示', rejected: '未通过' };
+                const statusColor = { pending: 'bg-yellow-100 text-yellow-700', approved: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600' };
+                box.innerHTML = list.map(t => `
+                    <div class="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-full pl-3 pr-2 py-1">
+                        <span class="text-sm text-gray-700">${escapeHtml(t.tag)}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full ${statusColor[t.status]}">${statusMap[t.status]}</span>
+                        ${t.note && t.status === 'rejected' ? `<span class="text-xs text-red-400">（${escapeHtml(t.note)}）</span>` : ''}
+                        <button onclick="deleteMyTag(${t.id})" class="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                    </div>
+                `).join('');
+            } catch (e) { console.error('加载标签失败', e); }
+        }
+
+        // 添加标签
+        async function addMyTag() {
+            const tag = document.getElementById('player-tag-input').value.trim();
+            if (!tag) { alert('请输入标签内容'); return; }
+            try {
+                const res = await apiRequest('/api/player/tags', 'POST', { tag: tag });
+                alert('标签已提交，等待管理员审核通过后对外展示');
+                document.getElementById('player-tag-input').value = '';
+                await loadMyTags();
+            } catch (e) { alert(e.message); }
+        }
+
+        // 删除标签
+        async function deleteMyTag(tagId) {
+            if (!confirm('确定删除该标签吗？')) return;
+            try {
+                await apiRequest(`/api/player/tags/${tagId}`, 'DELETE');
+                await loadMyTags();
+            } catch (e) { alert(e.message); }
         }
 
         // ==================== 点单中心（老板） ====================
@@ -1205,13 +1449,19 @@
                 container.innerHTML = withRatings.map(p => `
                     <div class="border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="selectPlayer('${p.username}')">
                         <div class="flex justify-between items-start mb-2">
-                            <span class="font-semibold text-gray-800">${p.username}</span>
+                            <span class="flex items-center gap-2">
+                                <span class="font-semibold text-gray-800">${p.username}</span>
+                                <span class="text-xs px-2 py-0.5 rounded-full ${p.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${p.level_type === '技术陪' ? `技术陪·${p.tech_level}` : '娱乐陪'}</span>
+                            </span>
                             <span class="text-sm text-blue-600 bg-blue-50 px-2 py-0.5 rounded">好评 ${p.good_rate}%</span>
                         </div>
                         <div class="flex gap-4 text-xs text-gray-500 mb-2">
                             <span>接单 <b class="text-gray-700">${p.order_count}</b> 单</span>
                             <span>投诉 <b class="text-red-500">${p.complaint_count}</b> 次</span>
                         </div>
+                        ${p.tags && p.tags.length > 0
+                            ? `<div class="flex flex-wrap gap-1 mb-2">${p.tags.slice(0, 5).map(t => `<span class="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">${escapeHtml(t.tag)}</span>`).join('')}</div>`
+                            : ''}
                         <p class="text-sm text-gray-600 mb-2 line-clamp-3">${p.intro ? escapeHtml(p.intro) : '<span class="text-gray-400">该打手暂无自我介绍</span>'}</p>
                         <div class="border-t border-gray-100 pt-2">
                             <p class="text-xs font-medium text-gray-500 mb-1">近期评价（${p.ratings.length}）</p>
@@ -1236,6 +1486,12 @@
             document.getElementById('order-player').value = username;
         }
 
+        // 更新大狗币消耗提示
+        function updateCoinCost() {
+            const amount = parseFloat(document.getElementById('order-amount').value) || 0;
+            document.getElementById('coin-cost').textContent = Math.round(amount);
+        }
+
         // 老板下单
         async function createOrder() {
             const player = document.getElementById('order-player').value.trim();
@@ -1247,20 +1503,22 @@
             if (!player) { alert('请先选择打手'); return; }
             if (!duration_min || duration_min < 30) { alert('服务时长不能少于30分钟'); return; }
             if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
+            if (!Number.isInteger(amount)) { alert('金额须为整数元（1元 = 1大狗币）'); return; }
 
             try {
                 await apiRequest('/api/order/create', 'POST', {
                     boss_username: currentUser.username,
                     game_type: game_type,
                     duration_min: duration_min,
-                    total_amount: Math.round(amount * 100),
+                    total_amount: amount * 100,
                     player_username: player,
                     remark: remark
                 });
-                alert('下单成功！订单已提交给 ' + player + '，等待打手确认接单');
+                alert(`下单成功！已消耗 ${amount} 大狗币，订单已提交给 ${player}，等待打手确认接单`);
                 await loadPublicPlayers();
                 await loadMyOrders();
                 await loadMyProfile();
+                await updateRechargeBalance();
             } catch (e) {
                 alert(e.message);
             }
@@ -1334,15 +1592,17 @@
             const orderId = parseInt(document.getElementById('tip-order-id').value);
             const amount = parseFloat(document.getElementById('tip-amount').value);
             if (!amount || amount <= 0) { alert('请输入打赏金额'); return; }
+            if (!Number.isInteger(amount)) { alert('打赏金额须为整数元（1元 = 1大狗币）'); return; }
             try {
                 await apiRequest('/api/tip/create', 'POST', {
                     order_id: orderId,
-                    amount: Math.round(amount * 100)
+                    amount: amount * 100
                 });
-                alert('打赏成功！');
+                alert(`打赏成功！已消耗 ${amount} 大狗币，打手后台已按1:1折算入账`);
                 closeTipModal();
                 await loadMyOrders();
                 await loadMyProfile();
+                await updateRechargeBalance();
             } catch (e) {
                 alert(e.message);
             }
@@ -1350,12 +1610,13 @@
 
         // 取消订单
         async function cancelOrder(orderId) {
-            if (!confirm('确定取消该订单吗？金额将退回余额。')) return;
+            if (!confirm('确定取消该订单吗？大狗币将退回余额。')) return;
             try {
                 await apiRequest(`/api/order/${orderId}/cancel`, 'POST');
-                alert('订单已取消，金额已退回');
+                alert('订单已取消，大狗币已退回');
                 await loadMyOrders();
                 await loadMyProfile();
+                await updateRechargeBalance();
             } catch (e) {
                 alert(e.message);
             }
@@ -1518,7 +1779,7 @@
         }
 
         async function rejectOrder(orderId) {
-            if (!confirm('确定拒绝该订单吗？金额将退回老板余额。')) return;
+            if (!confirm('确定拒绝该订单吗？大狗币将退回老板余额。')) return;
             try {
                 await apiRequest(`/api/order/${orderId}/reject`, 'POST');
                 alert('已拒绝该订单');
@@ -1804,6 +2065,50 @@
                 await apiRequest(`/api/rating/${ratingId}/review-decision`, 'POST', { action: action, note: note });
                 alert(action === 'approve' ? '已移除该评价，好评率已重新计算' : '已驳回申请，评价恢复显示');
                 await loadReviewManage();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 打手标签审核（管理员/客服） ====================
+        async function loadTagReview() {
+            try {
+                const status = document.getElementById('tag-review-filter').value;
+                const list = await apiRequest(`/api/player/tags/review?status=${status}`);
+                const container = document.getElementById('tag-review-content');
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400 text-center py-8">暂无符合条件的标签</div>';
+                    return;
+                }
+                const statusMap = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+                const statusColor = { pending: 'bg-yellow-100 text-yellow-700', approved: 'bg-green-100 text-green-700', rejected: 'bg-red-100 text-red-600' };
+                container.innerHTML = list.map(t => `
+                    <div class="flex items-center justify-between border border-gray-200 rounded-xl p-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-base font-medium text-gray-800">${escapeHtml(t.tag)}</span>
+                            <span class="text-xs px-2 py-0.5 rounded-full ${statusColor[t.status]}">${statusMap[t.status]}</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm text-gray-500">打手：<b>${t.username}</b></span>
+                            <span class="text-xs text-gray-400">${new Date(t.created_at).toLocaleString('zh-CN')}</span>
+                            ${t.note ? `<span class="text-xs text-red-400">备注：${escapeHtml(t.note)}</span>` : ''}
+                            ${t.status === 'pending' ? `
+                                <div class="flex gap-2">
+                                    <button onclick="decideTag(${t.id}, 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition">通过展示</button>
+                                    <button onclick="decideTag(${t.id}, 'reject')" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">拒绝</button>
+                                </div>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('加载标签审核失败', e);
+            }
+        }
+
+        async function decideTag(tagId, action) {
+            const note = action === 'reject' ? (prompt('填写拒绝原因（打手可见，可选）：', '') || '') : '';
+            try {
+                await apiRequest(`/api/player/tags/${tagId}/decision`, 'POST', { action: action, note: note });
+                alert(action === 'approve' ? '已通过，标签将对老板展示' : '已拒绝该标签');
+                await loadTagReview();
             } catch (e) { alert(e.message); }
         }
 

@@ -29,7 +29,7 @@ class BossInfo(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     consume_amount = Column(Integer, default=0)  # 累计消费（单位：分）
-    balance = Column(Integer, default=0)  # 账户余额（单位：分）
+    balance = Column(Integer, default=0)  # 大狗币余额（1大狗币 = 1元，点单/打赏消耗）
     order_count = Column(Integer, default=0)  # 点单次数
     created_at = Column(DateTime, default=datetime.now)
 
@@ -42,9 +42,23 @@ class PlayerInfo(Base):
     order_count = Column(Integer, default=0)  # 接单次数
     complaint_count = Column(Integer, default=0)  # 投诉次数
     good_rate = Column(Float, default=100.0)  # 好评率
-    backend_amount = Column(Integer, default=0)  # 后台金额（单位：分）
+    backend_amount = Column(Integer, default=0)  # 后台金额（单位：分，订单大狗币按1:1折算为人民币）
     intro = Column(Text, default="")  # 打手自我介绍
+    level_type = Column(String(20), default="娱乐陪")  # 等级大类：娱乐陪 / 技术陪
+    tech_level = Column(String(20), default="")  # 技术陪细分：985/211/大专/魔王护/明星护
     created_at = Column(DateTime, default=datetime.now)
+
+# 打手标签表（打手添加，管理员/客服审核通过后对外展示）
+class PlayerTag(Base):
+    __tablename__ = "player_tags"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), index=True, nullable=False)  # 标签所属打手
+    tag = Column(String(50), nullable=False)  # 标签内容
+    status = Column(String(20), default="pending")  # pending/approved/rejected
+    note = Column(Text, default="")  # 审核备注
+    created_at = Column(DateTime, default=datetime.now)
+    processed_at = Column(DateTime, nullable=True)  # 审核时间
 
 # 订单表
 class Order(Base):

@@ -43,13 +43,18 @@ def create_tip(
     if already_tipped + request.amount > max_tip:
         raise HTTPException(status_code=400, detail=f"该订单累计打赏不能超过订单金额的30%（上限¥{max_tip / 100:.2f}，已打赏¥{already_tipped / 100:.2f}）")
     
-    # 检查老板余额
+    # 打赏金额必须为整数元（大狗币1:1结算）
+    if request.amount % 100 != 0:
+        raise HTTPException(status_code=400, detail="打赏金额须为整数元（大狗币按1:1结算）")
+    coins_required = request.amount // 100
+
+    # 检查老板大狗币余额
     boss_info = db.query(BossInfo).filter(BossInfo.username == current_user.username).first()
-    if not boss_info or boss_info.balance < request.amount:
-        raise HTTPException(status_code=400, detail="老板余额不足，请先充值")
+    if not boss_info or boss_info.balance < coins_required:
+        raise HTTPException(status_code=400, detail=f"大狗币余额不足，需要 {coins_required} 大狗币，请先充值")
     
-    # 扣老板余额，增加打手后台金额
-    boss_info.balance -= request.amount
+    # 扣老板大狗币，增加打手后台金额（自动按1:1折算为人民币）
+    boss_info.balance -= coins_required
     player = db.query(PlayerInfo).filter(PlayerInfo.username == order.player_username).first()
     if player:
         player.backend_amount += request.amount

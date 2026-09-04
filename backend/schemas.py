@@ -35,6 +35,8 @@ class PlayerInfoResponse(BaseModel):
     good_rate: float
     backend_amount: int
     intro: str = ""
+    level_type: str = "娱乐陪"
+    tech_level: str = ""
     
     class Config:
         from_attributes = True
@@ -46,6 +48,9 @@ class PlayerPublicInfo(BaseModel):
     complaint_count: int
     good_rate: float
     intro: str = ""
+    level_type: str = "娱乐陪"
+    tech_level: str = ""
+    tags: list = []  # 审核通过的标签
     
     class Config:
         from_attributes = True
@@ -53,6 +58,38 @@ class PlayerPublicInfo(BaseModel):
 # 更新打手自我介绍请求
 class IntroUpdateRequest(BaseModel):
     intro: str
+
+# 更新打手等级请求
+class LevelUpdateRequest(BaseModel):
+    level_type: str  # 娱乐陪 / 技术陪
+    tech_level: str = ""  # 985/211/大专/魔王护/明星护
+
+# 打手添加标签请求
+class TagCreateRequest(BaseModel):
+    tag: str
+
+# 打手标签响应
+class TagResponse(BaseModel):
+    id: int
+    username: str
+    tag: str
+    status: str
+    note: str = ""
+    created_at: datetime
+    processed_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+# 标签审核请求
+class TagDecisionRequest(BaseModel):
+    action: str  # approve/reject
+    note: str = ""
+
+# 老板充值请求
+class RechargeRequest(BaseModel):
+    amount: int  # 充值金额（元），1:1 到账大狗币
+    payment: str  # 支付方式
 
 # 创建评价请求
 class RatingCreateRequest(BaseModel):

@@ -66,22 +66,22 @@ def init_default_data():
                 )
                 db.add(user)
         
-        # 初始化默认老板信息
+        # 初始化默认老板信息（balance 为大狗币，1大狗币=1元）
         default_boss = [
-            {"username": "laoban", "consume_amount": 520000, "balance": 128000, "order_count": 36},
-            {"username": "laoban_02", "consume_amount": 310000, "balance": 50000, "order_count": 18},
-            {"username": "laoban_03", "consume_amount": 890000, "balance": 230000, "order_count": 62}
+            {"username": "laoban", "consume_amount": 520000, "balance": 1280, "order_count": 36},
+            {"username": "laoban_02", "consume_amount": 310000, "balance": 500, "order_count": 18},
+            {"username": "laoban_03", "consume_amount": 890000, "balance": 2300, "order_count": 62}
         ]
         for boss_data in default_boss:
             existing = db.query(BossInfo).filter(BossInfo.username == boss_data["username"]).first()
             if not existing:
                 db.add(BossInfo(**boss_data))
         
-        # 初始化默认打手信息
+        # 初始化默认打手信息（含等级）
         default_player = [
-            {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！"},
-            {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。"},
-            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。"}
+            {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！", "level_type": "技术陪", "tech_level": "魔王护"},
+            {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。", "level_type": "技术陪", "tech_level": "211"},
+            {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。", "level_type": "娱乐陪", "tech_level": ""}
         ]
         for player_data in default_player:
             existing = db.query(PlayerInfo).filter(PlayerInfo.username == player_data["username"]).first()
@@ -111,10 +111,10 @@ def init_default_data():
                 {"game": "原神", "rank": "深渊代打", "price": 60, "unit": "元/层"}
             ],
             "recharge": [
-                {"amount": 100, "gift": 10, "bonus": "送普通会员1天"},
-                {"amount": 300, "gift": 50, "bonus": "送白银会员7天"},
-                {"amount": 500, "gift": 120, "bonus": "送黄金会员15天"},
-                {"amount": 1000, "gift": 300, "bonus": "送黄金会员30天+专属打手"}
+                {"amount": 100, "gift": 10, "bonus": "送大狗币10枚 + 普通会员1天"},
+                {"amount": 300, "gift": 50, "bonus": "送大狗币50枚 + 白银会员7天"},
+                {"amount": 500, "gift": 120, "bonus": "送大狗币120枚 + 黄金会员15天"},
+                {"amount": 1000, "gift": 300, "bonus": "送大狗币300枚 + 黄金会员30天 + 专属打手"}
             ],
             "member": [
                 {"level": "普通会员", "discount": "无折扣", "benefits": "基础客服服务、订单优先分配"},

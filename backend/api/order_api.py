@@ -29,9 +29,14 @@ def create_order(
     if not boss:
         raise HTTPException(status_code=404, detail="老板账户不存在")
     
-    # 检查余额是否足够
-    if boss.balance < request.total_amount:
-        raise HTTPException(status_code=400, detail="老板余额不足")
+    # 订单金额必须为整数元（1大狗币 = 1元）
+    if request.total_amount % 100 != 0:
+        raise HTTPException(status_code=400, detail="订单金额须为整数元（大狗币按1:1结算）")
+    coins_required = request.total_amount // 100
+    
+    # 检查大狗币余额是否足够
+    if boss.balance < coins_required:
+        raise HTTPException(status_code=400, detail=f"大狗币余额不足，需要 {coins_required} 大狗币，当前余额 {boss.balance}，请先充值")
     
     # 生成订单号
     order_no = "ORD" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()
@@ -56,8 +61,8 @@ def create_order(
     
     db.add(order)
     
-    # 冻结老板余额
-    boss.balance -= request.total_amount
+    # 冻结老板大狗币
+    boss.balance -= coins_required
     
     db.commit()
     db.refresh(order)
@@ -127,10 +132,10 @@ def reject_order(
     
     order.status = "rejected"
     
-    # 退回老板余额
+    # 退回老板大狗币（1:1）
     boss = db.query(BossInfo).filter(BossInfo.username == order.boss_username).first()
     if boss:
-        boss.balance += order.total_amount
+        boss.balance += order.total_amount // 100
     
     db.commit()
     db.refresh(order)
@@ -269,10 +274,10 @@ def cancel_order(
     
     order.status = "cancelled"
     
-    # 退回老板余额
+    # 退回老板大狗币（1:1）
     boss = db.query(BossInfo).filter(BossInfo.username == order.boss_username).first()
     if boss:
-        boss.balance += order.total_amount
+        boss.balance += order.total_amount // 100
     
     db.commit()
     db.refresh(order)
