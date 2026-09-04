@@ -70,6 +70,9 @@ class RatingResponse(BaseModel):
     comment: str
     reply: str = ""
     reply_time: Optional[datetime] = None
+    review_status: str = "normal"
+    review_reason: str = ""
+    review_note: str = ""
     created_at: datetime
     
     class Config:
@@ -78,6 +81,15 @@ class RatingResponse(BaseModel):
 # 打手回复评价请求
 class RatingReplyRequest(BaseModel):
     reply: str
+
+# 打手复查申请请求
+class ReviewRequest(BaseModel):
+    reason: str
+
+# 管理员复查审核请求
+class ReviewDecisionRequest(BaseModel):
+    action: str  # approve=移除评价 / reject=保留评价
+    note: str = ""
 
 # 打赏请求
 class TipCreateRequest(BaseModel):

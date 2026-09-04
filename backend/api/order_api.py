@@ -159,19 +159,8 @@ def start_order(
     db.refresh(order)
     return order
 
-# 完成订单并结算
-@router.post("/{order_id}/complete", response_model=OrderResponse)
-def complete_order(
-    order_id: int,
-    current_user: User = Depends(require_roles("admin", "service")),
-    db: Session = Depends(get_db)
-):
-    order = db.query(Order).filter(Order.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="订单不存在")
-    if order.status != "processing":
-        raise HTTPException(status_code=400, detail="只有进行中的订单可以完成")
-    
+# 结算订单（完成订单并生成工资记录，金额入账）
+def settle_order(db: Session, order: Order):
     order.status = "completed"
     order.end_time = datetime.now()
     
@@ -200,7 +189,63 @@ def complete_order(
     if boss:
         boss.consume_amount += order.total_amount
         boss.order_count += 1
+
+# 打手提交结单申请（服务完成后，等待老板确认，金额尚未入账）
+@router.post("/{order_id}/submit-settlement", response_model=OrderResponse)
+def submit_settlement(
+    order_id: int,
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if order.status != "processing":
+        raise HTTPException(status_code=400, detail="只有服务中的订单可以提交结单")
+    # 只能提交自己的订单
+    if order.player_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能提交自己的订单")
     
+    order.status = "pending_settlement"
+    db.commit()
+    db.refresh(order)
+    return order
+
+# 老板确认结单（金额转入打手账户；管理员/客服也可代为确认）
+@router.post("/{order_id}/confirm-settlement", response_model=OrderResponse)
+def confirm_settlement(
+    order_id: int,
+    current_user: User = Depends(require_roles("admin", "service", "boss")),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if order.status != "pending_settlement":
+        raise HTTPException(status_code=400, detail="只有待确认结单的订单可以确认")
+    # 老板只能确认自己的订单
+    if current_user.role == "boss" and order.boss_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能确认自己的订单")
+    
+    settle_order(db, order)
+    db.commit()
+    db.refresh(order)
+    return order
+
+# 完成订单并结算（管理员/客服直接完成）
+@router.post("/{order_id}/complete", response_model=OrderResponse)
+def complete_order(
+    order_id: int,
+    current_user: User = Depends(require_roles("admin", "service")),
+    db: Session = Depends(get_db)
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if order.status not in ["processing", "pending_settlement"]:
+        raise HTTPException(status_code=400, detail="当前状态的订单不能直接完成")
+    
+    settle_order(db, order)
     db.commit()
     db.refresh(order)
     return order

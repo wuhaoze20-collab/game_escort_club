@@ -11,6 +11,179 @@
         .page-section { display: none; }
         .page-section.active { display: block; }
         .loading { text-align: center; padding: 40px; color: #9ca3af; }
+
+        /* ==================== 原神主题美化 ==================== */
+        :root {
+            --gs-gold: #e8c47a;
+            --gs-gold-deep: #c9a063;
+            --gs-gold-text: #8a6d1d;
+            --gs-navy: #0d1b2e;
+            --gs-card: rgba(255, 255, 255, 0.94);
+        }
+
+        /* 星空背景 */
+        body {
+            background: radial-gradient(ellipse at top, #24365c 0%, #14213d 40%, #0a1120 100%) fixed;
+            font-family: "Microsoft YaHei", "PingFang SC", "Noto Serif SC", serif;
+        }
+        body::before {
+            content: "";
+            position: fixed; inset: 0; z-index: -1; pointer-events: none;
+            background-image:
+                radial-gradient(1.2px 1.2px at 18% 25%, rgba(255,255,255,0.7), transparent),
+                radial-gradient(1px 1px at 72% 18%, rgba(255,255,255,0.5), transparent),
+                radial-gradient(1.6px 1.6px at 42% 68%, rgba(232,196,122,0.65), transparent),
+                radial-gradient(1px 1px at 86% 55%, rgba(255,255,255,0.5), transparent),
+                radial-gradient(1px 1px at 9% 78%, rgba(232,196,122,0.5), transparent),
+                radial-gradient(1.6px 1.6px at 55% 38%, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1px 1px at 93% 88%, rgba(255,255,255,0.5), transparent),
+                radial-gradient(1.2px 1.2px at 30% 50%, rgba(255,255,255,0.35), transparent),
+                radial-gradient(1px 1px at 64% 75%, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1.4px 1.4px at 78% 33%, rgba(232,196,122,0.45), transparent);
+        }
+
+        /* 主内容卡片：玻璃质感 + 鎏金边框 */
+        .page-section {
+            background: var(--gs-card) !important;
+            border: 1px solid rgba(232, 196, 122, 0.55);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(232, 196, 122, 0.06);
+            border-radius: 16px;
+            position: relative;
+        }
+        .page-section h2 {
+            color: var(--gs-gold-text);
+            letter-spacing: 2px;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+        .page-section h2::before {
+            content: "✦ ";
+            color: var(--gs-gold-deep);
+        }
+        .page-section h3 {
+            color: #6b4e0a;
+        }
+
+        /* 侧边栏：星空深蓝 + 金色点缀 */
+        aside {
+            background: linear-gradient(180deg, rgba(21, 35, 63, 0.97), rgba(9, 15, 30, 0.98)) !important;
+            border-right: 1px solid rgba(232, 196, 122, 0.4) !important;
+        }
+        aside h1 {
+            color: var(--gs-gold) !important;
+            text-shadow: 0 0 14px rgba(232, 196, 122, 0.45);
+            letter-spacing: 2px;
+        }
+        aside h1::before { content: "✦ "; }
+        aside p { color: #aeb9d4 !important; }
+        .sidebar-link {
+            color: #c3cde4 !important;
+            border-left: 2px solid transparent;
+            transition: all .2s;
+        }
+        .sidebar-link:hover {
+            background: rgba(232, 196, 122, 0.12) !important;
+            color: #fff !important;
+        }
+        .sidebar-link.active {
+            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
+            color: #241a05 !important;
+            font-weight: 600;
+            border-left-color: #fff;
+            box-shadow: 0 2px 10px rgba(232, 196, 122, 0.4);
+        }
+
+        /* 顶部栏 */
+        header {
+            background: rgba(13, 27, 46, 0.88) !important;
+            border-bottom: 1px solid rgba(232, 196, 122, 0.35) !important;
+            backdrop-filter: blur(6px);
+        }
+        header .text-gray-600 { color: #c9d4e8 !important; }
+        header .text-gray-700 { color: #f0ead8 !important; }
+        header #logout-btn { color: #e8a0a0 !important; }
+
+        /* 主按钮：鎏金渐变 */
+        button.bg-blue-500, button.bg-blue-600 {
+            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
+            color: #241a05 !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 10px rgba(232, 196, 122, 0.35);
+            font-weight: 600;
+        }
+        button.hover\:bg-blue-600:hover {
+            background: linear-gradient(135deg, #f2d690, #d4ab6b) !important;
+        }
+        /* 红色/绿色/橙色/黄色操作按钮保留原色但统一质感 */
+        button.bg-red-400, button.bg-red-500, button.bg-orange-500, button.bg-yellow-500, button.bg-green-500 {
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            font-weight: 600;
+        }
+
+        /* 表格鎏金表头 */
+        thead {
+            background: linear-gradient(90deg, #f6e9c8, #ecd9a8) !important;
+        }
+        thead th {
+            color: #6b4e0a !important;
+            font-weight: 700 !important;
+            letter-spacing: 1px;
+        }
+        tbody tr:hover { background: rgba(232, 196, 122, 0.07) !important; }
+        .divide-y > * + * { border-color: rgba(232, 196, 122, 0.25) !important; }
+
+        /* 输入框金色聚焦 */
+        input, select, textarea {
+            border-color: #d4c08a !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--gs-gold) !important;
+            box-shadow: 0 0 0 3px rgba(232, 196, 122, 0.25) !important;
+        }
+
+        /* 登录页：原神星空 */
+        #login-page {
+            background: radial-gradient(ellipse at 30% 20%, #2c4170 0%, #132242 48%, #070d1c 100%) !important;
+        }
+        #login-page > div {
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid var(--gs-gold);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), 0 0 70px rgba(232, 196, 122, 0.18) !important;
+            border-radius: 20px;
+        }
+        #login-page h1 {
+            color: var(--gs-gold-text);
+            letter-spacing: 3px;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+        #login-page button {
+            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
+            color: #241a05 !important;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 14px rgba(201, 160, 99, 0.45);
+            font-weight: 700;
+            letter-spacing: 4px;
+        }
+
+        /* 弹窗鎏金边框 */
+        #edit-modal > div > div, #rating-modal > div > div, #tip-modal > div > div,
+        #reply-modal > div > div, #review-modal > div > div {
+            background: rgba(255, 255, 255, 0.98) !important;
+            border: 1px solid var(--gs-gold);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55) !important;
+            border-radius: 16px !important;
+        }
+        .modal-overlay { background-color: rgba(5, 10, 25, 0.7) !important; }
+
+        /* 打手卡片 */
+        #public-players > div:hover {
+            border-color: var(--gs-gold) !important;
+            box-shadow: 0 4px 18px rgba(232, 196, 122, 0.25) !important;
+        }
+
+        /* 状态徽章统一圆角 */
+        .text-xs { border-radius: 4px; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -19,8 +192,8 @@
     <div id="login-page" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center z-50">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
             <div class="text-center mb-8">
-                <h1 class="text-2xl font-bold text-gray-800">俱乐部管理系统</h1>
-                <p class="text-gray-500 mt-2">请输入账号密码登录</p>
+                <h1 class="text-2xl font-bold text-gray-800">✦ 游戏护航俱乐部 ✦</h1>
+                <p class="text-gray-500 mt-2">愿此行，终抵群星 — 请登录进入管理后台</p>
             </div>
             <div class="space-y-5">
                 <div>
@@ -65,8 +238,8 @@
     <div id="app-page" class="hidden">
         <!-- 侧边导航 -->
         <aside class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-10">
-            <div class="p-6 border-b">
-                <h1 class="text-xl font-bold text-gray-800">俱乐部管理后台</h1>
+            <div class="p-6 border-b border-white/10">
+                <h1 class="text-xl font-bold text-gray-800">游戏护航俱乐部</h1>
                 <p id="user-role-tip" class="text-sm text-gray-500 mt-1">管理员</p>
             </div>
             <nav id="sidebar-menu" class="p-4 space-y-2">
@@ -421,6 +594,15 @@
                     </div>
                 </section>
 
+                <!-- 16.5 评价复查审核（管理员） -->
+                <section id="page-review-manage" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-semibold text-gray-800">评价复查审核</h2>
+                        <button onclick="loadReviewManage()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <div id="review-manage-content" class="space-y-4"><div class="loading">加载中...</div></div>
+                </section>
+
                 <!-- 17. 评价弹窗 -->
                 <div id="rating-modal" class="fixed inset-0 z-50 hidden">
                     <div class="modal-overlay absolute inset-0" onclick="closeRatingModal()"></div>
@@ -488,6 +670,26 @@
                         <div class="px-6 py-4 border-t flex justify-end gap-3">
                             <button onclick="closeReplyModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
                             <button onclick="submitReply()" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交回复</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 20. 评价复查申请弹窗 -->
+                <div id="review-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="modal-overlay absolute inset-0" onclick="closeReviewModal()"></div>
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl w-full max-w-md">
+                        <div class="px-6 py-4 border-b flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-gray-800">申请评价复查</h3>
+                            <button onclick="closeReviewModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <p class="text-sm text-gray-500 mb-4">提交复查后，该评价将暂时对所有人隐藏，由管理员审核是否保留。审核通过则移除评价，不通过则恢复显示。</p>
+                            <textarea id="review-reason" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="请说明复查理由，例如：评价与事实不符、存在误解..."></textarea>
+                            <input type="hidden" id="review-rating-id">
+                        </div>
+                        <div class="px-6 py-4 border-t flex justify-end gap-3">
+                            <button onclick="closeReviewModal()" class="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition">取消</button>
+                            <button onclick="submitReviewRequest()" class="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">提交申请</button>
                         </div>
                     </div>
                 </div>
@@ -659,9 +861,10 @@
                 await loadWithdrawInfo();
             }
 
-            // 管理员加载本月盈利
+            // 管理员加载本月盈利和复查审核
             if (currentUser.role === 'admin') {
                 await loadProfit();
+                await loadReviewManage();
             }
 
             // 控制编辑按钮显示：仅管理员和客服可见
@@ -687,6 +890,7 @@
                 { key: 'profit', label: '本月盈利' },
                 { key: 'order-manage', label: '订单管理' },
                 { key: 'withdraw-manage', label: '提现审核' },
+                { key: 'review-manage', label: '评价复查' },
                 { key: 'boss', label: '老板管理' },
                 { key: 'player', label: '打手管理' }
             ],
@@ -935,6 +1139,9 @@
         async function loadMyProfile() {
             try {
                 const container = document.getElementById('profile-content');
+                const introBox = document.getElementById('player-intro-box');
+                // 默认隐藏自我介绍编辑区（仅打手可见）
+                introBox.classList.add('hidden');
                 let info;
                 if (currentUser.role === 'boss') {
                     info = await apiRequest('/api/boss/me');
@@ -1059,18 +1266,18 @@
             }
         }
 
-        // 加载我的订单（含评价/打赏入口）
+        // 加载我的订单（含评价/打赏/确认结单入口）
         async function loadMyOrders() {
             try {
                 const list = await apiRequest('/api/order/list');
                 const tbody = document.getElementById('my-order-list');
                 const statusMap = {
                     pending: '待派单', pending_accept: '待打手确认', assigned: '已接单', processing: '服务中',
-                    completed: '已完成', cancelled: '已取消', rejected: '打手拒单'
+                    pending_settlement: '待我确认结单', completed: '已完成', cancelled: '已取消', rejected: '打手拒单'
                 };
                 const statusColor = {
                     pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
-                    completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
+                    pending_settlement: 'text-orange-600', completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
                 };
                 tbody.innerHTML = list.map(o => `
                     <tr>
@@ -1082,20 +1289,33 @@
                         <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
                         <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
                         <td class="px-4 py-2">
-                            ${o.status === 'completed' && o.player_username
-                                ? `<div class="flex gap-1">
-                                    <button onclick="openRatingModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">评价</button>
-                                    <button onclick="openTipModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-red-400 text-white rounded-lg hover:bg-red-500 transition">打赏</button>
-                                   </div>`
-                                : (o.status === 'pending' || o.status === 'pending_accept' || o.status === 'assigned'
-                                    ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">取消订单</button>`
-                                    : '<span class="text-gray-300">—</span>')}
+                            ${o.status === 'pending_settlement'
+                                ? `<button onclick="confirmSettlement(${o.id})" class="px-3 py-1 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">确认结单</button>`
+                                : (o.status === 'completed' && o.player_username
+                                    ? `<div class="flex gap-1">
+                                        <button onclick="openRatingModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition">评价</button>
+                                        <button onclick="openTipModal(${o.id}, '${o.player_username}')" class="px-3 py-1 text-xs bg-red-400 text-white rounded-lg hover:bg-red-500 transition">打赏</button>
+                                       </div>`
+                                    : (o.status === 'pending' || o.status === 'pending_accept' || o.status === 'assigned'
+                                        ? `<button onclick="cancelOrder(${o.id})" class="px-3 py-1 text-xs border border-red-300 text-red-500 rounded-lg hover:bg-red-50 transition">取消订单</button>`
+                                        : '<span class="text-gray-300">—</span>'))}
                         </td>
                     </tr>
                 `).join('');
             } catch (e) {
                 console.error('加载订单失败', e);
             }
+        }
+
+        // 老板确认结单（金额转入打手账户）
+        async function confirmSettlement(orderId) {
+            if (!confirm('确认结单后，金额将转入打手账户，且不可撤销。确定确认吗？')) return;
+            try {
+                await apiRequest(`/api/order/${orderId}/confirm-settlement`, 'POST');
+                alert('结单确认成功！金额已转入打手账户。');
+                await loadMyOrders();
+                await loadMyProfile();
+            } catch (e) { alert(e.message); }
         }
 
         // ==================== 打赏模块 ====================
@@ -1243,11 +1463,11 @@
                 const tbody = document.getElementById('player-order-list');
                 const statusMap = {
                     pending: '待派单', pending_accept: '待我确认', assigned: '已接单', processing: '服务中',
-                    completed: '已完成', cancelled: '已取消', rejected: '已拒单'
+                    pending_settlement: '待老板确认结单', completed: '已完成', cancelled: '已取消', rejected: '已拒单'
                 };
                 const statusColor = {
                     pending: 'text-yellow-600', pending_accept: 'text-purple-600', assigned: 'text-blue-600', processing: 'text-purple-600',
-                    completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
+                    pending_settlement: 'text-orange-600', completed: 'text-green-600', cancelled: 'text-gray-400', rejected: 'text-red-500'
                 };
                 tbody.innerHTML = list.map(o => `
                     <tr>
@@ -1266,13 +1486,26 @@
                                    </div>`
                                 : (o.status === 'assigned'
                                     ? `<button onclick="startMyOrder(${o.id})" class="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">开始服务</button>`
-                                    : '<span class="text-gray-300">—</span>')}
+                                    : (o.status === 'processing'
+                                        ? `<button onclick="submitSettlement(${o.id})" class="px-3 py-1 text-xs bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition">提交结单</button>`
+                                        : (o.status === 'pending_settlement'
+                                            ? `<span class="text-xs text-orange-500">已提交，等待老板确认</span>`
+                                            : '<span class="text-gray-300">—</span>')))}
                         </td>
                     </tr>
                 `).join('');
             } catch (e) {
                 console.error('加载打手订单失败', e);
             }
+        }
+
+        async function submitSettlement(orderId) {
+            if (!confirm('确定提交结单吗？提交后需要老板确认，金额确认后才转入你的账户。')) return;
+            try {
+                await apiRequest(`/api/order/${orderId}/submit-settlement`, 'POST');
+                alert('结单已提交，等待老板确认！');
+                await loadPlayerOrders();
+            } catch (e) { alert(e.message); }
         }
 
         async function acceptOrder(orderId) {
@@ -1301,34 +1534,75 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ==================== 打手我的评价（可回复） ====================
+        // ==================== 打手我的评价（可回复/申请复查） ====================
         async function loadPlayerRatings() {
             try {
-                const list = await apiRequest(`/api/rating/player/${currentUser.username}`);
+                const list = await apiRequest('/api/rating/my-reviews');
                 const container = document.getElementById('player-ratings-content');
                 if (!list || list.length === 0) {
                     container.innerHTML = '<div class="text-gray-400 text-center py-8">暂无评价</div>';
                     return;
                 }
+                const statusMap = { normal: '有效', reviewing: '复查中', removed: '已移除' };
+                const statusColor = { normal: 'text-green-600', reviewing: 'text-orange-600', removed: 'text-red-500' };
                 container.innerHTML = list.map(r => `
                     <div class="border border-gray-200 rounded-xl p-4">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-                            <span class="text-xs text-gray-400">老板 ${r.boss_username} · ${new Date(r.created_at).toLocaleString('zh-CN')}</span>
+                            <span class="flex items-center gap-2">
+                                <span class="text-xs ${statusColor[r.review_status]} font-medium">${statusMap[r.review_status] || r.review_status}</span>
+                                <span class="text-xs text-gray-400">老板 ${r.boss_username} · ${new Date(r.created_at).toLocaleString('zh-CN')}</span>
+                            </span>
                         </div>
                         <p class="text-sm text-gray-700 mb-2">${r.comment ? escapeHtml(r.comment) : '（无评价内容）'}</p>
+                        ${r.review_status === 'reviewing' && r.review_reason
+                            ? `<div class="bg-orange-50 rounded-lg p-3 mt-2">
+                                <p class="text-xs text-orange-600 mb-1">复查申请理由：${escapeHtml(r.review_reason)}</p>
+                                <p class="text-xs text-gray-500">等待管理员审核中...</p>
+                               </div>` : ''}
+                        ${r.review_status === 'removed'
+                            ? `<div class="bg-red-50 rounded-lg p-3 mt-2">
+                                <p class="text-xs text-red-500">该评价已被管理员移除${r.review_note ? '：' + escapeHtml(r.review_note) : ''}</p>
+                               </div>` : ''}
                         ${r.reply
                             ? `<div class="bg-blue-50 rounded-lg p-3 mt-2">
                                 <p class="text-xs text-blue-600 mb-1">我的回复（${new Date(r.reply_time).toLocaleString('zh-CN')}）</p>
                                 <p class="text-sm text-gray-700">${escapeHtml(r.reply)}</p>
-                                <button onclick="openReplyModal(${r.id}, '${escapeHtml(r.reply)}')" class="mt-2 text-xs text-blue-500 hover:underline">修改回复</button>
+                                ${r.review_status === 'normal' ? `<button onclick="openReplyModal(${r.id}, '${escapeHtml(r.reply)}')" class="mt-2 text-xs text-blue-500 hover:underline">修改回复</button>` : ''}
                                </div>`
-                            : `<button onclick="openReplyModal(${r.id}, '')" class="mt-2 text-xs text-blue-500 hover:underline">回复这条评价</button>`}
+                            : (r.review_status === 'normal'
+                                ? `<button onclick="openReplyModal(${r.id}, '')" class="mt-2 text-xs text-blue-500 hover:underline">回复这条评价</button>`
+                                : '')}
+                        ${r.review_status === 'normal'
+                            ? `<button onclick="openReviewModal(${r.id})" class="mt-2 ml-3 text-xs text-orange-500 hover:underline">申请复查</button>`
+                            : ''}
                     </div>
                 `).join('');
             } catch (e) {
                 console.error('加载评价失败', e);
             }
+        }
+
+        function openReviewModal(ratingId) {
+            document.getElementById('review-rating-id').value = ratingId;
+            document.getElementById('review-reason').value = '';
+            document.getElementById('review-modal').classList.remove('hidden');
+        }
+
+        function closeReviewModal() {
+            document.getElementById('review-modal').classList.add('hidden');
+        }
+
+        async function submitReviewRequest() {
+            const ratingId = parseInt(document.getElementById('review-rating-id').value);
+            const reason = document.getElementById('review-reason').value.trim();
+            if (!reason) { alert('请填写复查申请理由'); return; }
+            try {
+                await apiRequest(`/api/rating/${ratingId}/review-request`, 'POST', { reason: reason });
+                alert('复查申请已提交，等待管理员审核！');
+                closeReviewModal();
+                await loadPlayerRatings();
+            } catch (e) { alert(e.message); }
         }
 
         function openReplyModal(ratingId, currentReply) {
@@ -1488,6 +1762,48 @@
                 await apiRequest(`/api/withdraw/${withdrawId}/${action}`, 'POST', { note: note });
                 alert(action === 'approve' ? '已批准提现，打手后台金额已扣减' : '已拒绝该提现申请');
                 await loadWithdrawManage();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 评价复查审核（管理员） ====================
+        async function loadReviewManage() {
+            try {
+                const list = await apiRequest('/api/rating/review-list');
+                const container = document.getElementById('review-manage-content');
+                if (!list || list.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400 text-center py-8">暂无待审核的复查申请</div>';
+                    return;
+                }
+                container.innerHTML = list.map(r => `
+                    <div class="border border-orange-200 rounded-xl p-4 bg-orange-50/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-medium text-gray-800">打手：${r.player_username}</span>
+                            <span class="text-xs text-gray-400">评价ID #${r.id} · 老板 ${r.boss_username} · ${new Date(r.review_time || r.created_at).toLocaleString('zh-CN')}</span>
+                        </div>
+                        <div class="bg-white rounded-lg p-3 mb-2">
+                            <p class="text-sm text-gray-700"><span class="text-yellow-500">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span> ${r.comment ? escapeHtml(r.comment) : ''}</p>
+                        </div>
+                        <div class="bg-orange-50 rounded-lg p-3 mb-3">
+                            <p class="text-sm text-orange-700"><b>打手复查理由：</b>${escapeHtml(r.review_reason)}</p>
+                            <p class="text-xs text-gray-500 mt-1">打手回复：${r.reply ? escapeHtml(r.reply) : '（未回复）'}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="reviewDecision(${r.id}, 'approve')" class="px-4 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition">移除该评价</button>
+                            <button onclick="reviewDecision(${r.id}, 'reject')" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">保留该评价</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('加载复查审核失败', e);
+            }
+        }
+
+        async function reviewDecision(ratingId, action) {
+            const note = prompt(action === 'approve' ? '填写移除原因（打手可见）：' : '填写驳回理由（可选）：', '') || '';
+            try {
+                await apiRequest(`/api/rating/${ratingId}/review-decision`, 'POST', { action: action, note: note });
+                alert(action === 'approve' ? '已移除该评价，好评率已重新计算' : '已驳回申请，评价恢复显示');
+                await loadReviewManage();
             } catch (e) { alert(e.message); }
         }
 

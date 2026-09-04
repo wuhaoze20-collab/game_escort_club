@@ -4,10 +4,23 @@ from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import Order, PlayerInfo, PlayerRating, User
-from schemas import RatingCreateRequest, RatingReplyRequest, RatingResponse
+from schemas import RatingCreateRequest, RatingReplyRequest, ReviewDecisionRequest, ReviewRequest, RatingResponse
 from auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/rating", tags=["打手评价"])
+
+# 重新计算打手好评率（仅统计有效评价：normal状态，好评=4星及以上）
+def recalc_good_rate(db: Session, player_username: str):
+    player = db.query(PlayerInfo).filter(PlayerInfo.username == player_username).first()
+    if not player:
+        return
+    all_ratings = db.query(PlayerRating).filter(
+        PlayerRating.player_username == player_username,
+        PlayerRating.review_status == "normal"
+    ).all()
+    total = len(all_ratings)
+    good = sum(1 for r in all_ratings if r.rating >= 4)
+    player.good_rate = round(good / total * 100, 1) if total > 0 else 100.0
 
 # 老板对已完成的订单评价（一单一评）
 @router.post("/create", response_model=RatingResponse)
@@ -51,19 +64,14 @@ def create_rating(
     )
     db.add(rating)
     
-    # 重新计算该打手的好评率（好评=4星及以上 / 总评价数）
-    player = db.query(PlayerInfo).filter(PlayerInfo.username == order.player_username).first()
-    if player:
-        all_ratings = db.query(PlayerRating).filter(PlayerRating.player_username == player.username).all()
-        total = len(all_ratings)
-        good = sum(1 for r in all_ratings if r.rating >= 4)
-        player.good_rate = round(good / total * 100, 1) if total > 0 else 100.0
+    # 重新计算该打手的好评率
+    recalc_good_rate(db, order.player_username)
     
     db.commit()
     db.refresh(rating)
     return rating
 
-# 查询某打手的评价列表（所有登录用户可看）
+# 查询某打手的有效评价列表（所有登录用户可看，已移除的评价不显示）
 @router.get("/player/{player_username}", response_model=List[RatingResponse])
 def get_player_ratings(
     player_username: str,
@@ -76,7 +84,18 @@ def get_player_ratings(
         raise HTTPException(status_code=404, detail="打手不存在")
     
     return db.query(PlayerRating).filter(
-        PlayerRating.player_username == player_username
+        PlayerRating.player_username == player_username,
+        PlayerRating.review_status == "normal"
+    ).order_by(PlayerRating.created_at.desc()).all()
+
+# 打手查看自己的全部评价（含复查中/已移除状态）
+@router.get("/my-reviews", response_model=List[RatingResponse])
+def get_my_reviews(
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    return db.query(PlayerRating).filter(
+        PlayerRating.player_username == current_user.username
     ).order_by(PlayerRating.created_at.desc()).all()
 
 # 查询当前老板给自己的评价历史（老板可见自己评价过的记录）
@@ -107,6 +126,79 @@ def reply_rating(
     
     rating.reply = request.reply
     rating.reply_time = datetime.now()
+    db.commit()
+    db.refresh(rating)
+    return rating
+
+# 打手对评价提交复查申请（被移除的评价不能再次申请）
+@router.post("/{rating_id}/review-request", response_model=RatingResponse)
+def request_review(
+    rating_id: int,
+    request: ReviewRequest,
+    current_user: User = Depends(require_roles("player")),
+    db: Session = Depends(get_db)
+):
+    if not request.reason.strip():
+        raise HTTPException(status_code=400, detail="请填写复查申请理由")
+    
+    rating = db.query(PlayerRating).filter(PlayerRating.id == rating_id).first()
+    if not rating:
+        raise HTTPException(status_code=404, detail="评价不存在")
+    
+    # 只能申请自己被评价的记录
+    if rating.player_username != current_user.username:
+        raise HTTPException(status_code=403, detail="只能申请自己的评价")
+    
+    if rating.review_status == "reviewing":
+        raise HTTPException(status_code=400, detail="该评价已在复查中，请等待管理员审核")
+    if rating.review_status == "removed":
+        raise HTTPException(status_code=400, detail="该评价已被移除，不能重复申请")
+    
+    rating.review_status = "reviewing"
+    rating.review_reason = request.reason
+    rating.review_note = ""
+    rating.review_time = datetime.now()
+    db.commit()
+    db.refresh(rating)
+    return rating
+
+# 管理员/客服查看复查申请列表
+@router.get("/review-list", response_model=List[RatingResponse])
+def get_review_list(
+    current_user: User = Depends(require_roles("admin", "service")),
+    db: Session = Depends(get_db)
+):
+    return db.query(PlayerRating).filter(
+        PlayerRating.review_status == "reviewing"
+    ).order_by(PlayerRating.review_time.desc()).all()
+
+# 管理员审核复查：approve=移除评价 / reject=保留评价
+@router.post("/{rating_id}/review-decision", response_model=RatingResponse)
+def review_decision(
+    rating_id: int,
+    request: ReviewDecisionRequest,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    if request.action not in ["approve", "reject"]:
+        raise HTTPException(status_code=400, detail="无效的操作类型")
+    
+    rating = db.query(PlayerRating).filter(PlayerRating.id == rating_id).first()
+    if not rating:
+        raise HTTPException(status_code=404, detail="评价不存在")
+    if rating.review_status != "reviewing":
+        raise HTTPException(status_code=400, detail="该评价不在复查中")
+    
+    if request.action == "approve":
+        rating.review_status = "removed"
+    else:
+        rating.review_status = "normal"
+    rating.review_note = request.note
+    rating.review_time = datetime.now()
+    
+    # 重新计算打手好评率
+    recalc_good_rate(db, rating.player_username)
+    
     db.commit()
     db.refresh(rating)
     return rating

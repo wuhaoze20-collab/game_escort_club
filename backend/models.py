@@ -88,6 +88,10 @@ class PlayerRating(Base):
     comment = Column(Text, default="")  # 评价内容
     reply = Column(Text, default="")  # 打手回复
     reply_time = Column(DateTime, nullable=True)  # 回复时间
+    review_status = Column(String(20), default="normal")  # normal/reviewing/removed 复查状态
+    review_reason = Column(Text, default="")  # 打手复查申请理由
+    review_note = Column(Text, default="")  # 管理员审核备注
+    review_time = Column(DateTime, nullable=True)  # 审核时间
     created_at = Column(DateTime, default=datetime.now)
 
 # 打赏记录表（老板结单后打赏打手）
