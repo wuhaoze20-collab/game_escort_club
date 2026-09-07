@@ -1,3 +1,4 @@
+import os
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Optional
@@ -8,8 +9,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-# 配置（生产环境请修改为环境变量）
-SECRET_KEY = "your-secret-key-change-in-production"
+# 配置：生产环境务必通过环境变量 SECRET_KEY 覆盖（例如：set SECRET_KEY=随机长字符串）
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24小时有效期
 

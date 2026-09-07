@@ -28,10 +28,26 @@ def create_order(
     boss = db.query(BossInfo).filter(BossInfo.username == request.boss_username).first()
     if not boss:
         raise HTTPException(status_code=404, detail="老板账户不存在")
-    
+
+    # ---- 服务端参数校验（防止构造非法请求） ----
+    game_type = (request.game_type or "").strip()
+    if not game_type:
+        raise HTTPException(status_code=400, detail="请选择游戏类型")
+    if len(game_type) > 50:
+        raise HTTPException(status_code=400, detail="游戏类型不能超过50个字符")
+    if request.duration_min < 1:
+        raise HTTPException(status_code=400, detail="服务时长必须大于0分钟")
+    if request.duration_min > 1440:
+        raise HTTPException(status_code=400, detail="单笔订单服务时长不能超过24小时（1440分钟）")
+    if not isinstance(request.total_amount, int) or request.total_amount < 100:
+        raise HTTPException(status_code=400, detail="订单金额不能小于1元")
+    if request.total_amount > 5000000:
+        raise HTTPException(status_code=400, detail="单笔订单金额不能超过5万元")
     # 订单金额必须为整数元（1大狗币 = 1元）
     if request.total_amount % 100 != 0:
         raise HTTPException(status_code=400, detail="订单金额须为整数元（大狗币按1:1结算）")
+    if request.remark and len(request.remark) > 500:
+        raise HTTPException(status_code=400, detail="下单备注不能超过500个字符")
     coins_required = request.total_amount // 100
     
     # 检查大狗币余额是否足够
@@ -44,7 +60,7 @@ def create_order(
     order = Order(
         order_no=order_no,
         boss_username=request.boss_username,
-        game_type=request.game_type,
+        game_type=game_type,
         duration_min=request.duration_min,
         total_amount=request.total_amount,
         remark=request.remark,
@@ -86,6 +102,14 @@ def assign_player(
     player = db.query(PlayerInfo).filter(PlayerInfo.username == request.player_username).first()
     if not player:
         raise HTTPException(status_code=404, detail="打手账户不存在")
+    
+    # 打手拒单时金额已退回老板余额；再次派单需重新冻结，否则会产生"双倍退款/免费服务"资金漏洞
+    if order.status == "rejected":
+        coins_required = order.total_amount // 100
+        boss = db.query(BossInfo).filter(BossInfo.username == order.boss_username).first()
+        if not boss or boss.balance < coins_required:
+            raise HTTPException(status_code=400, detail=f"老板大狗币余额不足，无法重新派单，需要 {coins_required} 大狗币，请先充值")
+        boss.balance -= coins_required
     
     order.player_username = request.player_username
     order.status = "assigned"

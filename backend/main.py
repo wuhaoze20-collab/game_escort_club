@@ -1,3 +1,4 @@
+import os
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,13 +19,16 @@ from api.withdraw_api import router as withdraw_router
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.2.0")
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.3.0")
 
-# CORS配置（允许前端跨域访问）
+# CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
+# 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
+default_origins = os.getenv("CORS_ORIGINS", "*").split(",")
+allow_origins = [o.strip() for o in default_origins if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境请指定具体域名
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_origins != ["*"],  # 通配符时不能带 credentials，避免浏览器拒绝
     allow_methods=["*"],
     allow_headers=["*"],
 )

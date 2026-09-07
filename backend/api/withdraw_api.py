@@ -31,10 +31,11 @@ def calc_available_amount(db: Session, player_username: str) -> int:
     ).all()
     tip_total = sum(t.amount for t in matured_tips)
     
-    # 已批准提现的金额（含正在处理中的申请占位）
+    # 已批准 + 待审核中的提现金额都要占用可提现额度，
+    # 否则打手可在同一笔收入上并发提交多笔申请，突破30天冷却期
     withdrawn = db.query(WithdrawalRecord).filter(
         WithdrawalRecord.player_username == player_username,
-        WithdrawalRecord.status == "approved"
+        WithdrawalRecord.status.in_(["pending", "approved"])
     ).all()
     withdrawn_total = sum(w.amount for w in withdrawn)
     

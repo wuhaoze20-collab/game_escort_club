@@ -87,8 +87,10 @@ def create_rating(
         comment=request.comment
     )
     db.add(rating)
-    
-    # 重新计算该打手的好评率
+
+    # 先把新评价刷入会话，再重算好评率（Session autoflush=False，
+    # 若不 flush，重算查询看不到刚插入的记录，导致好评率滞后）
+    db.flush()
     recalc_good_rate(db, order.player_username)
     
     db.commit()
@@ -185,6 +187,11 @@ def request_review(
     rating.review_reason = request.reason
     rating.review_note = ""
     rating.review_time = datetime.now()
+
+    # 复查期间该评价从对外列表隐藏，好评率也应同步剔除（进入审核前计算一次）
+    db.flush()
+    recalc_good_rate(db, rating.player_username)
+
     db.commit()
     db.refresh(rating)
     return rating
@@ -223,8 +230,10 @@ def review_decision(
         rating.review_status = "normal"
     rating.review_note = request.note
     rating.review_time = datetime.now()
-    
-    # 重新计算打手好评率
+
+    # 先刷入新状态再重算好评率（autoflush=False 下不 flush 会读到旧状态，
+    # 导致"驳回保留"后好评率仍沿用审核期口径）
+    db.flush()
     recalc_good_rate(db, rating.player_username)
     
     db.commit()
