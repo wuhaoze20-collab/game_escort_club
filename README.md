@@ -10,56 +10,153 @@
 ## 项目目录结构
 ```
 game_escort_club/
-├── backend/                 # 后端服务
+├── backend/                 # 后端服务（FastAPI）
 │   ├── api/                 # 接口路由
 │   │   ├── __init__.py
-│   │   ├── auth_api.py      # 认证接口
-│   │   ├── content_api.py   # 内容管理接口
-│   │   ├── user_info_api.py # 用户信息接口
-│   │   ├── order_api.py     # 订单业务接口
-│   │   ├── rating_api.py    # 打手评价接口
-│   │   └── stats_api.py     # 盈利统计接口
-│   ├── database.py          # 数据库连接配置
+│   │   ├── auth_api.py      # 认证登录接口
+│   │   ├── content_api.py   # 公告/须知/价格/福利/支付方式等内容接口
+│   │   ├── user_info_api.py # 用户资料/昵称审核接口
+│   │   ├── order_api.py     # 点单/接单/结单/派单/统计等订单接口
+│   │   ├── rating_api.py    # 打手评价/回复/复查接口
+│   │   ├── stats_api.py     # 本月盈利统计接口
+│   │   ├── tip_api.py       # 打赏接口
+│   │   └── withdraw_api.py  # 打手提现接口
+│   ├── database.py          # SQLite 连接配置
 │   ├── models.py            # 数据库表模型
-│   ├── schemas.py           # 请求响应数据模型
-│   ├── auth.py              # 鉴权与权限校验
-│   ├── main.py              # 程序入口
-│   ├── requirements.txt     # 依赖清单
-│   └── game_club.db         # SQLite数据库文件（运行后自动生成）
-└── frontend/                # 前端页面
-    └── index.html           # 单页应用
+│   ├── schemas.py           # 请求/响应数据模型
+│   ├── auth.py              # JWT 鉴权与角色权限校验
+│   ├── main.py              # 程序入口（启动时自动建表+初始化默认数据）
+│   ├── requirements.txt     # Python 依赖清单
+│   ├── game_club.db         # SQLite 数据库文件（首次运行自动生成，可删除重建）
+│   └── venv/                # 虚拟环境（本机已创建，勿删除）
+├── frontend/                # 前端页面（原生单页应用）
+│   ├── index.html           # 单页入口
+│   └── avatars/             # 默认头像图片（系统按角色/等级自动分配）
+├── touxiangku/              # 原始头像素材库（仅供默认分配使用，任何人不可选用）
+├── CHANGELOG.md             # 版本更新日志
+└── README.md
 ```
 
-## 快速启动
+## 快速启动（详细环境配置）
 
-### 1. 创建虚拟环境并安装依赖（第一次）
-在 VSCode 中打开终端，进入 backend 目录：
+### 第 0 步：前置检查（只做一次）
+
+**要求**：Windows 系统 + Python 3.8 及以上（本项目本机实测使用 Python 3.11）。
+
+1. 确认 Python 已安装。打开 CMD 或 VSCode 终端，依次输入：
+   ```bash
+   python --version
+   ```
+   - 能输出版本号（如 `Python 3.11.x`）→ 继续第 1 步
+   - 提示 `'python' 不是内部或外部命令` → 说明 `python` 命令不在 PATH 中，改用以下任一方式：
+     - 用 Windows 官方启动器：`py --version`（可用则后续命令把 `python` 换成 `py`）
+     - 或使用 Python 安装目录的完整路径，例如本机：`C:\Program Files\Python311\python.exe --version`
+
+2. 确认已安装 Git（用于拉取/推送 Gitee 仓库）：
+   ```bash
+   git --version
+   ```
+
+### 第 1 步：创建虚拟环境（第一次才需要）
+
+在项目根目录打开终端，进入 `backend` 目录，创建虚拟环境：
+
 ```bash
-cd backend
-python -m venv venv          # 创建虚拟环境（Windows）
-venv\Scripts\activate        # 激活虚拟环境（Windows）
-pip install -r requirements.txt   # 安装依赖
+cd C:\Users\18642\game_escort_club\backend
+python -m venv venv
 ```
 
-### 2. 启动后端服务
+> 如果 `python` 命令不可用，用 `py -m venv venv` 或完整路径：
+> ```bash
+> "C:\Program Files\Python311\python.exe" -m venv venv
+> ```
+
+创建成功后会生成 `backend\venv\` 目录（本仓库已包含该目录，若存在可跳过此步）。
+
+### 第 2 步：安装依赖（第一次才需要）
+
+**方式一：激活虚拟环境后安装（推荐）**
+
 ```bash
-cd backend
-venv\Scripts\python main.py   # 使用虚拟环境的Python启动服务
+venv\Scripts\activate          # Windows 激活虚拟环境，出现 (venv) 前缀即成功
+pip install -r requirements.txt
 ```
-启动后后端运行在 `http://localhost:8000`，访问 `http://localhost:8000/docs` 可查看自动生成的接口文档。
 
-### 3. 启动前端页面
-在 VSCode 中右键 `frontend/index.html`，选择 **Open with Live Server**（需先安装 Live Server 插件），浏览器自动打开页面。
+**方式二：不激活，直接调用 venv 内的 pip（等价）**
 
-> 注意：前端默认请求 `http://localhost:8000`，如后端端口修改，请同步修改 `frontend/index.html` 顶部的 `API_BASE` 常量。
+```bash
+venv\Scripts\pip install -r requirements.txt
+```
+
+> **网络慢/安装失败时**：使用国内镜像源加速：
+> ```bash
+> pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+> ```
+
+**验证依赖是否装好**（关键一步，装完必须确认）：
+
+```bash
+venv\Scripts\python -c "import fastapi, uvicorn, sqlalchemy, jose, bcrypt; print('依赖OK')"
+```
+
+- 输出 `依赖OK` → 环境就绪，继续第 3 步
+- 报 `ModuleNotFoundError: No module named 'xxx'` → 说明对应依赖未装上，重新执行 `pip install -r requirements.txt`（或用镜像源重装）
+
+### 第 3 步：启动后端服务
+
+```bash
+cd C:\Users\18642\game_escort_club\backend
+venv\Scripts\python main.py
+```
+
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（10 个测试账号、公告/价格等默认内容、6 名打手）
+- 后端服务地址：`http://localhost:8000`
+- 在线接口文档（Swagger）：`http://localhost:8000/docs`
+
+**常见启动失败排查**：
+
+| 现象 | 原因 | 解决办法 |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'fastapi'` | 没用 venv 的 Python，或依赖没装 | 必须用 `venv\Scripts\python main.py` 启动，并先完成第 2 步 |
+| `[Errno 10048] ... address already in use` | 8000 端口被占用 | 方法一：`netstat -ano | findstr 8000` 查出 PID 后 `taskkill /F /PID <PID>` 结束占用进程；方法二：改 `main.py` 里的 `port=8000` 为其他端口 |
+| 启动无报错但页面连不上 | 后端没起来 / 前端 API 地址不对 | 确认终端停留在运行状态（不要关闭窗口）；确认 `frontend/index.html` 顶部 `API_BASE` 为 `http://localhost:8000` |
+
+**关闭后端**：在运行窗口按 `Ctrl + C`，或直接关闭该终端窗口。
+
+### 第 4 步：启动前端页面（二选一）
+
+**方式一：直接双击打开（最简单）**
+
+在文件资源管理器中双击 `frontend\index.html`，用浏览器打开即可正常使用（后端已开启 CORS，支持 file:// 协议直连）。
+
+**方式二：VSCode + Live Server（推荐开发用）**
+
+1. VSCode 扩展市场搜索安装 **Live Server** 插件
+2. 右键 `frontend\index.html` → **Open with Live Server**
+3. 浏览器自动打开 `http://127.0.0.1:5500` 页面
+
+> 前后端是分离的：前端页面（5500 或 file://）通过 HTTP 请求访问后端（8000），**两个服务都要开着**才能完整使用。
+
+### 第 5 步：重置数据库（可选）
+
+系统数据全部存在 `backend\game_club.db`。想恢复初始状态时：
+
+```bash
+cd C:\Users\18642\game_escort_club\backend
+del game_club.db                  # 删除数据库文件
+venv\Scripts\python main.py       # 重启后端，自动重建全新数据库
+```
+
+> 删除后重启会丢失所有业务数据（订单/评价/提现记录等），仅测试环境建议使用。
 
 ## 测试账号（统一密码：123456）
-| 账号 | 角色 | 权限说明 |
-|---|---|---|
-| guanliyuan | 管理员 | 全部权限，可查看所有信息、编辑内容、管理订单、查看本月盈利 |
-| kefu | 客服 | 可查看所有老板/打手信息，可编辑基础内容，可管理订单 |
-| laoban / laoban_02 / laoban_03 | 老板 | 可查看基础内容，可点单并直接指定打手、评价打手、查看自己的账户信息 |
-| dashou / dashou_02 / dashou_03 | 打手 | 可查看基础内容，可编辑自我介绍、接单/拒单、提交结单、申请评价复查、提现、查看自己的账户信息 |
+| 账号 | 角色 | 昵称 | 权限说明 |
+|---|---|---|---|
+| guanliyuan | 管理员 | 店长 | 全部权限，可查看所有信息、编辑内容、管理订单、查看本月盈利 |
+| kefu | 客服 | 客服小蜜 | 可查看所有老板/打手信息，可编辑基础内容，可人工派单、管理订单 |
+| laoban / laoban_02 / laoban_03 | 老板 | 老板阿昊 / 老板二狗 / 老板三少 | 可查看基础内容，可点单并直接指定打手、查看打手公开数据、评价打手、打赏、查看自己的账户信息 |
+| dashou / dashou_02 / dashou_03 | 打手 | 小达 / 阿岚 / 老猫 | 娱乐陪/技术陪，可编辑自我介绍、添加标签（审核后展示）、接单/拒单、提交结单、回复评价、申请评价复查、提现、查看自己的账户信息 |
+| dashou_04 / dashou_05 / dashou_06 | 打手 | 北冥 / 阿澈 / 星火 | 等级覆盖 985 / 211 / 大专 / 魔王护 / 明星护，其余权限同上 |
 
 ## 核心功能
 ### 1. 多角色权限体系
@@ -192,11 +289,31 @@ venv\Scripts\python main.py   # 使用虚拟环境的Python启动服务
 4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧CORS配置
 
 ## 常见问题
-### 1. 前端请求失败
-确认后端已启动，且前端 `API_BASE` 地址正确。后端CORS已放开。
+
+### 1. 前端请求失败 / 数据加载不出来
+1. 确认后端已启动且窗口保持运行：终端应显示 `Uvicorn running on http://127.0.0.1:8000`
+2. 确认前端 `API_BASE` 与后端端口一致：`frontend/index.html` 顶部默认为 `http://localhost:8000`
+3. 浏览器按 `F12` → Console 查看报错：若是 `Failed to fetch` / `ERR_CONNECTION_REFUSED`，说明后端没起来或端口不对
+4. 后端 CORS 已放开，file:// 直接打开和 Live Server 打开均可正常请求
 
 ### 2. 登录提示密码错误
 确认使用默认账号和密码 `123456`。若修改过数据库，删除 `game_club.db` 重启服务重新初始化。
 
 ### 3. 接口文档无法访问
-确认后端正常启动，访问 `http://localhost:8000/docs`。
+确认后端正常启动，访问 `http://localhost:8000/docs`（Swagger 在线接口文档）。
+
+### 4. `venv\Scripts\python` 不是内部或外部命令
+说明 `backend\venv` 目录不存在或被删了。按"第 1 步"重新创建虚拟环境并"第 2 步"安装依赖。
+
+### 5. 安装依赖时报错 / 超时
+网络问题，换国内镜像源重装：
+```bash
+venv\Scripts\pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 6. 后端启动提示端口被占用
+```bash
+netstat -ano | findstr 8000    # 查看占用8000端口的PID
+taskkill /F /PID <PID>         # 结束占用进程后重新启动
+```
+或修改 `backend/main.py` 中的 `port=8000` 为其他端口，并同步修改前端 `API_BASE`。
