@@ -13,6 +13,16 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: dict
 
+# 忘记密码重置请求（无需登录）
+class ResetPasswordRequest(BaseModel):
+    username: str
+    new_password: str
+
+# 修改密码请求（需登录）
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
 # 资料修改请求（昵称/头像提交审核）
 class ProfileUpdateRequest(BaseModel):
     nickname: Optional[str] = ""  # 新昵称（提交审核）

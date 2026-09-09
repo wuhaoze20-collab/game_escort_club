@@ -2,6 +2,7 @@ import os
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from database import engine, SessionLocal, Base
 from models import User, ContentConfig, BossInfo, PlayerInfo
 from auth import hash_password
@@ -19,7 +20,21 @@ from api.withdraw_api import router as withdraw_router
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.3.0")
+
+# 轻量迁移：旧库自动补充新增列（避免删除数据库丢失数据）
+def migrate_db():
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+        if "failed_attempts" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
+        if "lock_until" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
+        conn.commit()
+
+
+migrate_db()
+
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.4.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com

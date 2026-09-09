@@ -18,6 +18,8 @@ class User(Base):
     nickname_status = Column(String(20), default="approved")  # approved/pending
     avatar_status = Column(String(20), default="approved")  # approved/pending
     reject_reason = Column(String(255), default="")  # 头像/昵称打回原因
+    failed_attempts = Column(Integer, default=0)  # 连续输错密码次数（用于登录锁定）
+    lock_until = Column(DateTime, nullable=True)  # 登录锁定截止时间（None=未锁定）
     created_at = Column(DateTime, default=datetime.now)
 
 # 内容配置表（公告、须知、价格、充值、会员、支付方式统一存储）

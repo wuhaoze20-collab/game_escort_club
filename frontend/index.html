@@ -226,10 +226,40 @@
                     class="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
                     登录
                 </button>
+                <div class="text-center mt-3">
+                    <button id="forgot-password-btn" type="button" class="text-sm text-blue-500 hover:text-blue-700 hover:underline">忘记密码？</button>
+                </div>
             </div>
             <div class="mt-6 text-xs text-gray-400 text-center">
                 <p>测试账号：guanliyuan / kefu / laoban / dashou</p>
                 <p>统一密码：123456</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 忘记密码弹窗 ========== -->
+    <div id="reset-password-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 mx-4">
+            <h3 class="text-lg font-bold text-gray-800 mb-1">重置密码</h3>
+            <p class="text-xs text-gray-500 mb-4">输入账号与新密码，重置后请使用新密码登录</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">账号</label>
+                    <input id="reset-username" type="text" placeholder="请输入账号" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                    <input id="reset-new-password" type="password" placeholder="至少 6 位" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                    <input id="reset-confirm-password" type="password" placeholder="再次输入新密码" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+            </div>
+            <p id="reset-error" class="text-red-500 text-sm hidden mt-2"></p>
+            <div class="flex justify-end gap-2 mt-5">
+                <button id="reset-cancel-btn" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition">取消</button>
+                <button id="reset-submit-btn" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">重置密码</button>
             </div>
         </div>
     </div>
@@ -504,6 +534,28 @@
                         </div>
                     </div>
                     <div id="profile-content" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6"><div class="loading">加载中...</div></div>
+                    <!-- 修改密码 -->
+                    <div class="bg-gray-50 rounded-xl p-5 mb-4">
+                        <h3 class="text-base font-medium text-gray-800 mb-2">修改密码</h3>
+                        <p class="text-xs text-gray-500 mb-3">修改后下次登录请使用新密码</p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">原密码</label>
+                                <input id="pwd-old" type="password" placeholder="输入原密码" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">新密码</label>
+                                <input id="pwd-new" type="password" placeholder="至少 6 位" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-gray-600 mb-1">确认新密码</label>
+                                <input id="pwd-confirm" type="password" placeholder="再次输入新密码" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                        </div>
+                        <div class="flex justify-end">
+                            <button id="pwd-change-btn" class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition">修改密码</button>
+                        </div>
+                    </div>
                     <!-- 打手自我介绍编辑区 -->
                     <div id="player-intro-box" class="hidden bg-gray-50 rounded-xl p-5 mb-4">
                         <h3 class="text-base font-medium text-gray-800 mb-2">我的自我介绍</h3>
@@ -965,6 +1017,76 @@
         });
 
         // 退出登录
+        // ==================== 忘记密码（重置密码弹窗） ====================
+        const resetModal = document.getElementById('reset-password-modal');
+        const resetError = document.getElementById('reset-error');
+        document.getElementById('forgot-password-btn').addEventListener('click', () => {
+            resetError.classList.add('hidden');
+            resetModal.classList.remove('hidden');
+            document.getElementById('reset-username').value = '';
+            document.getElementById('reset-new-password').value = '';
+            document.getElementById('reset-confirm-password').value = '';
+        });
+        document.getElementById('reset-cancel-btn').addEventListener('click', () => {
+            resetModal.classList.add('hidden');
+        });
+        resetModal.addEventListener('click', (e) => {
+            if (e.target === resetModal) resetModal.classList.add('hidden');
+        });
+        document.getElementById('reset-submit-btn').addEventListener('click', async () => {
+            const username = document.getElementById('reset-username').value.trim();
+            const p1 = document.getElementById('reset-new-password').value;
+            const p2 = document.getElementById('reset-confirm-password').value;
+            if (!username || !p1 || !p2) {
+                resetError.textContent = '请填写账号与新密码';
+                resetError.classList.remove('hidden');
+                return;
+            }
+            if (p1 !== p2) {
+                resetError.textContent = '两次输入的新密码不一致';
+                resetError.classList.remove('hidden');
+                return;
+            }
+            if (p1.length < 6) {
+                resetError.textContent = '新密码长度不能少于 6 位';
+                resetError.classList.remove('hidden');
+                return;
+            }
+            try {
+                const res = await apiRequest('/api/reset-password', 'POST', { username, new_password: p1 });
+                alert(res.message);
+                resetModal.classList.add('hidden');
+            } catch (e) {
+                resetError.textContent = e.message;
+                resetError.classList.remove('hidden');
+            }
+        });
+
+        // ==================== 修改密码（我的账户） ====================
+        document.getElementById('pwd-change-btn').addEventListener('click', async () => {
+            const oldP = document.getElementById('pwd-old').value;
+            const newP = document.getElementById('pwd-new').value;
+            const confirmP = document.getElementById('pwd-confirm').value;
+            if (!oldP || !newP || !confirmP) { alert('请填写完整'); return; }
+            if (newP !== confirmP) { alert('两次输入的新密码不一致'); return; }
+            if (newP.length < 6) { alert('新密码长度不能少于 6 位'); return; }
+            try {
+                const res = await apiRequest('/api/change-password', 'POST', { old_password: oldP, new_password: newP });
+                alert(res.message + '，请重新登录');
+                document.getElementById('pwd-old').value = '';
+                document.getElementById('pwd-new').value = '';
+                document.getElementById('pwd-confirm').value = '';
+                // 安全为主：修改成功后退出登录
+                currentUser = null;
+                localStorage.removeItem('token');
+                localStorage.removeItem('currentUser');
+                document.getElementById('app-page').classList.add('hidden');
+                document.getElementById('login-page').classList.remove('hidden');
+                document.getElementById('login-username').value = '';
+                document.getElementById('login-password').value = '';
+            } catch (e) { alert(e.message); }
+        });
+
         document.getElementById('logout-btn').addEventListener('click', () => {
             currentUser = null;
             localStorage.removeItem('token');
