@@ -1,5 +1,7 @@
 import os
 import json
+import threading
+import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -12,7 +14,7 @@ from api.auth_api import router as auth_router
 from api.content_api import router as content_router
 from api.user_info_api import router as user_info_router
 from api.order_api import router as order_router
-from api.rating_api import router as rating_router
+from api.rating_api import router as rating_router, auto_default_rating
 from api.stats_api import router as stats_router
 from api.tip_api import router as tip_router
 from api.withdraw_api import router as withdraw_router
@@ -50,7 +52,7 @@ def migrate_db():
 
 migrate_db()
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.4.0")
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.7.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -190,6 +192,25 @@ def init_default_data():
         print("默认数据初始化完成")
     finally:
         db.close()
+
+# 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
+@app.on_event("startup")
+def start_auto_default_rating():
+    def _loop():
+        time.sleep(2)  # 等初始化完成后先跑一次
+        while True:
+            try:
+                db = SessionLocal()
+                try:
+                    auto_default_rating(db)
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"[auto_default_rating] 扫描异常: {e}")
+            time.sleep(300)
+    t = threading.Thread(target=_loop, daemon=True)
+    t.start()
+    print("自动默认好评后台任务已启动（每5分钟扫描一次）")
 
 # 启动时初始化数据
 init_default_data()

@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import Order, PlayerInfo, PlayerRating, User
-from schemas import RatingCreateRequest, RatingReplyRequest, ReviewDecisionRequest, ReviewRequest, RatingResponse
+from schemas import RatingCreateRequest, RatingReplyRequest, ReviewDecisionRequest, ReviewRequest, RatingResponse, ComplaintRequest
 from auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/rating", tags=["打手评价"])
@@ -44,7 +44,86 @@ def recalc_good_rate(db: Session, player_username: str):
     ).all()
     total = len(all_ratings)
     good = sum(1 for r in all_ratings if r.rating >= 4)
-    player.good_rate = round(good / total * 100, 1) if total > 0 else 100.0
+    # 无评价 → None（前端显示"-"）；有评价 → 好评比例
+    player.good_rate = round(good / total * 100, 1) if total > 0 else None
+
+# 结单后3天未评价的完成订单自动默认好评（后台线程定时调用）
+def auto_default_rating(db: Session):
+    cutoff = datetime.now() - timedelta(days=3)
+    orders = db.query(Order).filter(
+        Order.status == "completed",
+        Order.end_time.isnot(None),
+        Order.end_time <= cutoff
+    ).all()
+    added = 0
+    for o in orders:
+        exists = db.query(PlayerRating).filter(PlayerRating.order_id == o.id).first()
+        if exists:
+            continue
+        db.add(PlayerRating(
+            player_username=o.player_username,
+            boss_username=o.boss_username,
+            order_id=o.id,
+            rating=5,
+            comment="系统默认好评（结单3天未评价）",
+            review_status="normal",
+            created_at=o.end_time + timedelta(days=3)
+        ))
+        recalc_good_rate(db, o.player_username)
+        added += 1
+    if added:
+        db.commit()
+        print(f"[auto_default_rating] 已自动补 {added} 条默认好评")
+    return added
+
+# 老板投诉已结单订单：自动改为差评（打手可申诉，申诉成功则撤销）
+@router.post("/complaint", response_model=RatingResponse)
+def complaint_order(
+    request: ComplaintRequest,
+    current_user: User = Depends(require_roles("boss")),
+    db: Session = Depends(get_db)
+):
+    if not request.reason.strip():
+        raise HTTPException(status_code=400, detail="请填写投诉原因")
+    order = db.query(Order).filter(
+        Order.id == request.order_id,
+        Order.boss_username == current_user.username
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在或不属于当前老板")
+    if order.status != "completed":
+        raise HTTPException(status_code=400, detail="仅已结单订单可投诉")
+    if not order.player_username:
+        raise HTTPException(status_code=400, detail="订单未分配打手，无法投诉")
+
+    rating = db.query(PlayerRating).filter(PlayerRating.order_id == order.id).first()
+    if rating:
+        if rating.review_status == "removed":
+            raise HTTPException(status_code=400, detail="该订单评价已处理，无法投诉")
+        if rating.comment.startswith("【老板投诉】"):
+            raise HTTPException(status_code=400, detail="该订单已投诉过，请等待处理")
+        # 已有评价改为差评
+        rating.rating = 1
+        rating.comment = f"【老板投诉】{request.reason}（原评价：{rating.comment or '无'}）"
+    else:
+        rating = PlayerRating(
+            player_username=order.player_username,
+            boss_username=current_user.username,
+            order_id=order.id,
+            rating=1,
+            comment=f"【老板投诉】{request.reason}",
+            review_status="normal"
+        )
+        db.add(rating)
+    # 打手投诉次数 +1
+    player = db.query(PlayerInfo).filter(PlayerInfo.username == order.player_username).first()
+    if player:
+        player.complaint_count += 1
+    db.flush()
+    recalc_good_rate(db, order.player_username)
+    db.commit()
+    db.refresh(rating)
+    return rating
 
 # 老板对已完成的订单评价（一单一评）
 @router.post("/create", response_model=RatingResponse)
@@ -226,6 +305,11 @@ def review_decision(
     
     if request.action == "approve":
         rating.review_status = "removed"
+        # 申诉成功：撤销投诉差评，扣回打手投诉次数
+        if rating.comment.startswith("【老板投诉】"):
+            player = db.query(PlayerInfo).filter(PlayerInfo.username == rating.player_username).first()
+            if player and player.complaint_count > 0:
+                player.complaint_count -= 1
     else:
         rating.review_status = "normal"
     rating.review_note = request.note

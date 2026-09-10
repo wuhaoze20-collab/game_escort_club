@@ -57,7 +57,7 @@ class PlayerInfoResponse(BaseModel):
     avatar: str = ""
     order_count: int
     complaint_count: int
-    good_rate: float
+    good_rate: Optional[float] = None
     backend_amount: int
     intro: str = ""
     level_type: str = "娱乐陪"
@@ -73,7 +73,7 @@ class PlayerPublicInfo(BaseModel):
     avatar: str = ""
     order_count: int
     complaint_count: int
-    good_rate: float
+    good_rate: Optional[float] = None
     intro: str = ""
     level_type: str = "娱乐陪"
     tech_level: str = ""
@@ -154,6 +154,11 @@ class ReviewRequest(BaseModel):
 class ReviewDecisionRequest(BaseModel):
     action: str  # approve=移除评价 / reject=保留评价
     note: str = ""
+
+# 老板投诉订单请求
+class ComplaintRequest(BaseModel):
+    order_id: int
+    reason: str
 
 # 打赏请求
 class TipCreateRequest(BaseModel):
