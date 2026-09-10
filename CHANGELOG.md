@@ -1,5 +1,20 @@
 # 更新日志 CHANGELOG
 
+## [V2.5.0] 2026-09-10
+
+### 🗄 数据库迁移 SQLite → MySQL
+1. **后端接入 MySQL**：默认使用本机 MySQL 8（库 `game_escort_club`，账号 `game_escort`/`123456`），全部读写走 MySQL；表结构由 SQLAlchemy 自动创建并初始化默认演示数据
+2. **兼容回退**：设置环境变量 `DB_ENGINE=sqlite` 可回到原来的本地 SQLite 文件数据库，方便无 MySQL 环境
+3. **连接可配置**：`MYSQL_HOST`/`MYSQL_PORT`/`MYSQL_DB`/`MYSQL_USER`/`MYSQL_PASSWORD` 环境变量可覆盖连接参数
+4. **自动迁移**：`migrate_db()` 兼容 MySQL（information_schema 检测列），启动自动补列无需手动 ALTER
+5. **依赖**：新增 `pymysql` 驱动；requirements.txt 已更新
+
+### 📝 说明
+- 已创建 MySQL 库与专用账号（见 README「数据库配置」章节）；旧 SQLite 文件 `game_club.db` 保留未删除，可随时回退
+- 重置数据两种方式见 README「第 5 步：重置数据库」
+
+---
+
 ## [V2.4.0] 2026-09-09
 
 ### 🔐 账户安全升级

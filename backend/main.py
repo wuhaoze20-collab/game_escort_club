@@ -3,7 +3,7 @@ import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from database import engine, SessionLocal, Base
+from database import engine, SessionLocal, Base, DB_ENGINE
 from models import User, ContentConfig, BossInfo, PlayerInfo
 from auth import hash_password
 
@@ -24,12 +24,28 @@ Base.metadata.create_all(bind=engine)
 # 轻量迁移：旧库自动补充新增列（避免删除数据库丢失数据）
 def migrate_db():
     with engine.connect() as conn:
-        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
-        if "failed_attempts" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
-        if "lock_until" not in cols:
-            conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
-        conn.commit()
+        if DB_ENGINE == "mysql":
+            # MySQL：通过 information_schema 检查列是否存在
+            for col, ddl in (
+                ("failed_attempts", "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
+                ("lock_until", "ALTER TABLE users ADD COLUMN lock_until DATETIME NULL"),
+            ):
+                exists = conn.execute(
+                    text("SELECT COUNT(*) FROM information_schema.columns "
+                         "WHERE table_schema = DATABASE() AND table_name='users' AND column_name=:c"),
+                    {"c": col}
+                ).scalar()
+                if not exists:
+                    conn.execute(text(ddl))
+            conn.commit()
+        else:
+            # SQLite：通过 PRAGMA 检查列是否存在
+            cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
+            if "failed_attempts" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
+            if "lock_until" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
+            conn.commit()
 
 
 migrate_db()

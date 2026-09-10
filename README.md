@@ -3,7 +3,7 @@
 基于 FastAPI + SQLite + 原生前端的完整前后端分离管理系统，实现多角色权限、内容管理、订单全流程、工资结算、打手评价、盈利统计等功能。
 
 ## 技术栈
-- **后端**：Python 3.8+ / FastAPI / SQLAlchemy / SQLite / JWT鉴权 / bcrypt密码加密
+- **后端**：Python 3.8+ / FastAPI / SQLAlchemy / MySQL / JWT鉴权 / bcrypt密码加密
 - **前端**：原生HTML/CSS/JS + Tailwind CSS
 - **开发工具**：VSCode
 
@@ -21,7 +21,7 @@ game_escort_club/
 │   │   ├── stats_api.py     # 本月盈利统计接口
 │   │   ├── tip_api.py       # 打赏接口
 │   │   └── withdraw_api.py  # 打手提现接口
-│   ├── database.py          # SQLite 连接配置
+│   ├── database.py          # 数据库连接配置（默认 MySQL，可切换 SQLite）
 │   ├── models.py            # 数据库表模型
 │   ├── schemas.py           # 请求/响应数据模型
 │   ├── auth.py              # JWT 鉴权与角色权限校验
@@ -139,15 +139,20 @@ venv\Scripts\python main.py
 
 ### 第 5 步：重置数据库（可选）
 
-系统数据全部存在 `backend\game_club.db`。想恢复初始状态时：
+系统数据默认存放在 **MySQL**（库名 `game_escort_club`，账号 `game_escort` / 密码 `123456`）。
+想恢复初始状态时，清空业务数据后重启后端即可重新初始化：
 
 ```bash
-cd C:\Users\18642\game_escort_club\backend
-del game_club.db                  # 删除数据库文件
-venv\Scripts\python main.py       # 重启后端，自动重建全新数据库
+# 方式一：只清业务流水（订单/评价/工资/打赏/提现），保留用户与内容配置
+mysql -u game_escort -p123456 -e "USE game_escort_club; TRUNCATE TABLE orders; TRUNCATE TABLE player_ratings; TRUNCATE TABLE salary_records; TRUNCATE TABLE tip_records; TRUNCATE TABLE withdrawal_records;"
+venv\Scripts\python main.py       # 重启后端（订单等业务数据保持空，其余保留）
+
+# 方式二：彻底重置（清空全部表并重新初始化默认演示数据）
+mysql -u game_escort -p123456 -e "USE game_escort_club; SET FOREIGN_KEY_CHECKS=0; DROP TABLE IF EXISTS users, content_config, boss_info, player_info, player_tags, orders, salary_records, player_ratings, tip_records, withdrawal_records; SET FOREIGN_KEY_CHECKS=1;"
+venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始化默认数据
 ```
 
-> 删除后重启会丢失所有业务数据（订单/评价/提现记录等），仅测试环境建议使用。
+> 注意：两种方式都会丢失业务数据（订单/评价/提现记录等），仅测试环境建议使用。
 
 ## 测试账号（统一密码：123456）
 | 账号 | 角色 | 昵称 | 权限说明 |
@@ -291,6 +296,40 @@ venv\Scripts\python main.py       # 重启后端，自动重建全新数据库
 3. 俱乐部抽成比例在 `backend/api/order_api.py` 的 `CLUB_COMMISSION_RATE` 常量
 4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧CORS配置
 
+## 数据库配置（MySQL）
+
+系统默认使用本机 MySQL 8（`D:\MySQL`，root 密码 `123456`）。首次使用时执行以下命令初始化库和专用账号：
+
+```sql
+CREATE DATABASE IF NOT EXISTS game_escort_club CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'game_escort'@'localhost' IDENTIFIED BY '123456';
+CREATE USER IF NOT EXISTS 'game_escort'@'127.0.0.1' IDENTIFIED BY '123456';
+GRANT ALL PRIVILEGES ON game_escort_club.* TO 'game_escort'@'localhost';
+GRANT ALL PRIVILEGES ON game_escort_club.* TO 'game_escort'@'127.0.0.1';
+FLUSH PRIVILEGES;
+```
+
+后端通过环境变量控制连接（`backend/database.py`），默认值即为本机配置：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| DB_ENGINE | mysql | `mysql` 或 `sqlite`（回退本地文件数据库） |
+| MYSQL_HOST | localhost | MySQL 地址 |
+| MYSQL_PORT | 3306 | MySQL 端口 |
+| MYSQL_DB | game_escort_club | 数据库名 |
+| MYSQL_USER | game_escort | 数据库账号 |
+| MYSQL_PASSWORD | 123456 | 数据库密码 |
+
+示例（使用其他 MySQL）：
+```bash
+set MYSQL_HOST=192.168.1.10
+set MYSQL_USER=root
+set MYSQL_PASSWORD=mysecret
+venv\Scripts\python main.py
+```
+
+> 启动时自动建表并初始化默认数据；表结构变更通过 `main.py` 的 `migrate_db()` 自动补列，无需手动 ALTER。
+
 ## 常见问题
 
 ### 1. 前端请求失败 / 数据加载不出来
@@ -314,7 +353,13 @@ venv\Scripts\python main.py       # 重启后端，自动重建全新数据库
 venv\Scripts\pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-### 6. 后端启动提示端口被占用
+### 6. 后端无法连接 MySQL（Can't connect / Access denied）
+1. 确认本机 MySQL 服务已启动（`netstat -ano | findstr 3306` 应有监听）
+2. 确认数据库和账号存在：库 `game_escort_club`、用户 `game_escort`/`123456`（创建语句见下方"数据库配置"）
+3. 如使用其他账号/密码，通过环境变量覆盖：`MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DB`
+4. 不想用 MySQL 时，可用环境变量回退 SQLite：`set DB_ENGINE=sqlite` 后启动
+
+### 7. 后端启动提示端口被占用
 ```bash
 netstat -ano | findstr 8000    # 查看占用8000端口的PID
 taskkill /F /PID <PID>         # 结束占用进程后重新启动
