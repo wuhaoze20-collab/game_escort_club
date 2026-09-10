@@ -147,6 +147,9 @@
         aside {
             background: var(--bg-sidebar) !important;
             border-right: 1px solid var(--border-gold-light) !important;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         aside h1 {
             color: var(--gs-gold) !important;
@@ -454,6 +457,19 @@
         [data-theme="dark"] [id$="-modal"] .bg-amber-50 { background-color: #332a12 !important; }
         [data-theme="dark"] [id$="-modal"] .border-amber-400 { border-color: rgba(255, 70, 85, 0.55) !important; }
         [data-theme="dark"] .page-section .border-amber-400 { border-color: rgba(255, 70, 85, 0.55) !important; }
+
+        /* ==================== 侧边栏菜单独立滚动 ==================== */
+        #sidebar-menu {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 70, 85, 0.4) transparent;
+        }
+        #sidebar-menu::-webkit-scrollbar { width: 5px; }
+        #sidebar-menu::-webkit-scrollbar-track { background: transparent; }
+        [data-theme="dark"] #sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255, 70, 85, 0.4); border-radius: 3px; }
+        [data-theme="light"] #sidebar-menu::-webkit-scrollbar-thumb { background: rgba(60, 70, 80, 0.25); border-radius: 3px; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
