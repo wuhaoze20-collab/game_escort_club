@@ -11,73 +11,78 @@
         .loading { text-align: center; padding: 40px; color: #9ca3af; }
 
         /* ==================== 主题系统（暗色默认 / 明亮可选） ==================== */
-        :root, :root[data-theme="dark"] {
-            --gs-gold: #e8c47a;
-            --gs-gold-deep: #c9a063;
-            --gs-gold-text: #8a6d1d;
-            --gs-gold-soft: rgba(232, 196, 122, 0.12);
-            --bg-page: radial-gradient(ellipse at top, #24365c 0%, #14213d 40%, #0a1120 100%) fixed;
-            --bg-sidebar: linear-gradient(180deg, rgba(21, 35, 63, 0.97), rgba(9, 15, 30, 0.98));
-            --bg-header: rgba(13, 27, 46, 0.88);
-            --bg-card: rgba(255, 255, 255, 0.94);
-            --bg-modal: rgba(255, 255, 255, 0.98);
-            --bg-login: radial-gradient(ellipse at 30% 20%, #2c4170 0%, #132242 48%, #070d1c 100%);
-            --bg-login-card: rgba(255, 255, 255, 0.95);
-            --border-gold: rgba(232, 196, 122, 0.55);
-            --border-gold-light: rgba(232, 196, 122, 0.35);
-            --border-gold-lighter: rgba(232, 196, 122, 0.25);
-            --text-card: #1f2937;
-            --text-card-muted: #6b7280;
-            --text-card-title: #8a6d1d;
-            --text-sidebar: #c3cde4;
+                :root, :root[data-theme="dark"] {
+            --vt-red: #ff4655;
+            --vt-red-deep: #d63b49;
+            --vt-red-soft: rgba(255, 70, 85, 0.14);
+            --gs-gold: #ff4655;
+            --gs-gold-deep: #d63b49;
+            --gs-gold-text: #ffffff;
+            --gs-gold-soft: rgba(255, 70, 85, 0.14);
+            --bg-page: radial-gradient(ellipse at top, #16222e 0%, #0f1923 45%, #0a1017 100%) fixed;
+            --bg-sidebar: linear-gradient(180deg, #111c26, #0a121a);
+            --bg-header: rgba(15, 25, 35, 0.9);
+            --bg-card: rgba(31, 39, 51, 0.92);
+            --bg-modal: rgba(31, 39, 51, 0.98);
+            --bg-login: radial-gradient(ellipse at 30% 20%, #1a2836 0%, #0f1923 55%, #070d14 100%);
+            --bg-login-card: rgba(31, 39, 51, 0.94);
+            --border-gold: rgba(255, 70, 85, 0.5);
+            --border-gold-light: rgba(255, 70, 85, 0.3);
+            --border-gold-lighter: rgba(236, 232, 225, 0.15);
+            --text-card: #ece8e1;
+            --text-card-muted: #a3adb8;
+            --text-card-title: #ffffff;
+            --text-sidebar: #aeb9c6;
             --text-sidebar-hover: #ffffff;
-            --text-sidebar-sub: #aeb9d4;
-            --text-header: #c9d4e8;
-            --text-header-strong: #f0ead8;
-            --input-bg: rgba(255, 255, 255, 0.95);
-            --table-head: linear-gradient(90deg, #f6e9c8, #ecd9a8);
-            --table-head-text: #6b4e0a;
-            --row-hover: rgba(232, 196, 122, 0.07);
-            --divide: rgba(232, 196, 122, 0.25);
+            --text-sidebar-sub: #768079;
+            --text-header: #a3adb8;
+            --text-header-strong: #ece8e1;
+            --input-bg: rgba(15, 25, 35, 0.85);
+            --table-head: linear-gradient(90deg, #262f3d, #2b3444);
+            --table-head-text: #ece8e1;
+            --row-hover: rgba(255, 70, 85, 0.08);
+            --divide: rgba(236, 232, 225, 0.1);
             --star-display: block;
-            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(232, 196, 122, 0.06);
-            --btn-text: #241a05;
-            --theme-btn: rgba(255, 255, 255, 0.08);
-            --bg-overlay: rgba(5, 10, 25, 0.62);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --btn-text: #ffffff;
+            --theme-btn: rgba(255, 255, 255, 0.06);
+            --bg-overlay: rgba(8, 13, 20, 0.66);
         }
         :root[data-theme="light"] {
-            --gs-gold: #c9a063;
-            --gs-gold-deep: #b08d4f;
-            --gs-gold-text: #7a5d15;
-            --gs-gold-soft: rgba(201, 160, 99, 0.14);
-            --bg-page: linear-gradient(180deg, #faf8f3 0%, #f0eadd 100%) fixed;
-            --bg-sidebar: linear-gradient(180deg, #ffffff, #f6f1e5);
-            --bg-header: rgba(255, 255, 255, 0.94);
+            --vt-red: #e63b49;
+            --vt-red-deep: #c93440;
+            --gs-gold: #e63b49;
+            --gs-gold-deep: #c93440;
+            --gs-gold-text: #b32330;
+            --gs-gold-soft: rgba(230, 59, 73, 0.12);
+            --bg-page: linear-gradient(180deg, #ece8e1 0%, #ddd8ce 100%) fixed;
+            --bg-sidebar: linear-gradient(180deg, #f5f2ec, #e7e2d9);
+            --bg-header: rgba(255, 255, 255, 0.92);
             --bg-card: #ffffff;
             --bg-modal: #ffffff;
-            --bg-login: linear-gradient(135deg, #f6f2e8 0%, #e8e0cc 100%);
+            --bg-login: linear-gradient(135deg, #ece8e1 0%, #d8d2c6 100%);
             --bg-login-card: #ffffff;
-            --border-gold: rgba(201, 160, 99, 0.6);
-            --border-gold-light: rgba(201, 160, 99, 0.35);
-            --border-gold-lighter: rgba(201, 160, 99, 0.22);
-            --text-card: #374151;
-            --text-card-muted: #6b7280;
-            --text-card-title: #7a5d15;
-            --text-sidebar: #4b5563;
-            --text-sidebar-hover: #1f2937;
-            --text-sidebar-sub: #9ca3af;
-            --text-header: #6b7280;
-            --text-header-strong: #374151;
+            --border-gold: rgba(200, 50, 60, 0.45);
+            --border-gold-light: rgba(200, 50, 60, 0.28);
+            --border-gold-lighter: rgba(60, 70, 80, 0.15);
+            --text-card: #1f2733;
+            --text-card-muted: #5a6572;
+            --text-card-title: #b32330;
+            --text-sidebar: #3a4552;
+            --text-sidebar-hover: #0f1923;
+            --text-sidebar-sub: #7a8490;
+            --text-header: #5a6572;
+            --text-header-strong: #1f2733;
             --input-bg: #ffffff;
-            --table-head: linear-gradient(90deg, #f8f1de, #f2e6c8);
-            --table-head-text: #7a5d15;
-            --row-hover: rgba(201, 160, 99, 0.08);
-            --divide: rgba(201, 160, 99, 0.2);
+            --table-head: linear-gradient(90deg, #e3ded4, #d8d2c6);
+            --table-head-text: #3a4552;
+            --row-hover: rgba(200, 50, 60, 0.06);
+            --divide: rgba(60, 70, 80, 0.15);
             --star-display: none;
-            --shadow-card: 0 2px 14px rgba(120, 95, 40, 0.1);
-            --btn-text: #4a3205;
+            --shadow-card: 0 2px 12px rgba(30, 40, 50, 0.08);
+            --btn-text: #ffffff;
             --theme-btn: rgba(0, 0, 0, 0.05);
-            --bg-overlay: rgba(250, 248, 243, 0.72);
+            --bg-overlay: rgba(236, 232, 225, 0.75);
         }
 
         /* 页面背景：暗色=星空深蓝，明亮=米白 */
@@ -90,16 +95,16 @@
             position: fixed; inset: 0; z-index: -1; pointer-events: none;
             display: var(--star-display);
             background-image:
-                radial-gradient(1.2px 1.2px at 18% 25%, rgba(255,255,255,0.7), transparent),
-                radial-gradient(1px 1px at 72% 18%, rgba(255,255,255,0.5), transparent),
-                radial-gradient(1.6px 1.6px at 42% 68%, rgba(232,196,122,0.65), transparent),
-                radial-gradient(1px 1px at 86% 55%, rgba(255,255,255,0.5), transparent),
-                radial-gradient(1px 1px at 9% 78%, rgba(232,196,122,0.5), transparent),
-                radial-gradient(1.6px 1.6px at 55% 38%, rgba(255,255,255,0.4), transparent),
-                radial-gradient(1px 1px at 93% 88%, rgba(255,255,255,0.5), transparent),
-                radial-gradient(1.2px 1.2px at 30% 50%, rgba(255,255,255,0.35), transparent),
-                radial-gradient(1px 1px at 64% 75%, rgba(255,255,255,0.4), transparent),
-                radial-gradient(1.4px 1.4px at 78% 33%, rgba(232,196,122,0.45), transparent);
+                radial-gradient(1.2px 1.2px at 18% 25%, rgba(255,255,255,0.55), transparent),
+                radial-gradient(1px 1px at 72% 18%, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1.6px 1.6px at 42% 68%, rgba(255,70,85,0.5), transparent),
+                radial-gradient(1px 1px at 86% 55%, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1px 1px at 9% 78%, rgba(255,70,85,0.4), transparent),
+                radial-gradient(1.6px 1.6px at 55% 38%, rgba(255,255,255,0.3), transparent),
+                radial-gradient(1px 1px at 93% 88%, rgba(255,255,255,0.4), transparent),
+                radial-gradient(1.2px 1.2px at 30% 50%, rgba(255,255,255,0.25), transparent),
+                radial-gradient(1px 1px at 64% 75%, rgba(255,255,255,0.3), transparent),
+                radial-gradient(1.4px 1.4px at 78% 33%, rgba(255,70,85,0.35), transparent);
         }
 
         /* 主内容卡片：玻璃质感 + 鎏金边框 */
@@ -107,17 +112,23 @@
             background: var(--bg-card) !important;
             border: 1px solid var(--border-gold);
             box-shadow: var(--shadow-card);
-            border-radius: 16px;
+            border-radius: 2px;
+            clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
             position: relative;
         }
         .page-section h2 {
             color: var(--text-card-title);
-            letter-spacing: 2px;
-            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+            letter-spacing: 3px;
+            font-weight: 800;
+            position: relative;
+            padding-left: 14px;
         }
         .page-section h2::before {
-            content: "✦ ";
-            color: var(--gs-gold-deep);
+            content: "";
+            position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+            width: 6px; height: 72%;
+            background: linear-gradient(180deg, var(--vt-red), var(--vt-red-deep));
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 30% 50%);
         }
         .page-section h3 {
             color: var(--text-card-title);
@@ -171,11 +182,12 @@
             color: var(--text-sidebar-hover) !important;
         }
         .sidebar-link.active {
-            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: var(--btn-text) !important;
-            font-weight: 600;
+            background: linear-gradient(135deg, var(--vt-red), var(--vt-red-deep)) !important;
+            color: #ffffff !important;
+            font-weight: 700;
             border-left-color: #fff;
-            box-shadow: 0 2px 10px rgba(232, 196, 122, 0.4);
+            box-shadow: 0 0 14px rgba(255, 70, 85, 0.3);
+            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
         }
 
         /* 顶部栏 */
@@ -203,14 +215,16 @@
 
         /* 主按钮：鎏金渐变 */
         button.bg-blue-500, button.bg-blue-600 {
-            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: var(--btn-text) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 2px 10px rgba(232, 196, 122, 0.35);
-            font-weight: 600;
+            background: linear-gradient(135deg, var(--vt-red), var(--vt-red-deep)) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow: 0 2px 10px rgba(255, 70, 85, 0.3);
+            font-weight: 700;
+            letter-spacing: 1px;
+            clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
         }
         button.hover\:bg-blue-600:hover {
-            background: linear-gradient(135deg, #f2d690, #d4ab6b) !important;
+            background: linear-gradient(135deg, #ff5d6a, #e04551) !important;
         }
         /* 红色/绿色/橙色/黄色操作按钮保留原色但统一质感 */
         button.bg-red-400, button.bg-red-500, button.bg-orange-500, button.bg-yellow-500, button.bg-green-500 {
@@ -239,7 +253,7 @@
         }
         input:focus, select:focus, textarea:focus {
             border-color: var(--gs-gold) !important;
-            box-shadow: 0 0 0 3px rgba(232, 196, 122, 0.25) !important;
+            box-shadow: 0 0 0 3px rgba(255, 70, 85, 0.22) !important;
         }
         input::placeholder { color: #9ca3af !important; }
 
@@ -255,7 +269,7 @@
         #login-page::after {
             content: "";
             position: absolute; inset: 0; z-index: 1;
-            background: rgba(5, 10, 25, 0.45);
+            background: rgba(8, 13, 20, 0.5);
             pointer-events: none;
         }
         #login-page > div {
@@ -279,33 +293,56 @@
         #login-page > div {
             background: var(--bg-login-card) !important;
             border: 1px solid var(--gs-gold);
-            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), 0 0 70px rgba(232, 196, 122, 0.18) !important;
-            border-radius: 20px;
+            box-shadow: none;
+            border-radius: 2px;
+            margin-left: 36%;
+            clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+            filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.5));
         }
         #login-page h1 {
-            color: var(--gs-gold-text);
-            letter-spacing: 3px;
-            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+            color: var(--text-card-title);
+            letter-spacing: 6px;
+            font-weight: 800;
+            text-shadow: 0 0 24px rgba(255, 70, 85, 0.35);
         }
-        #login-page button {
-            background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: var(--btn-text) !important;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            box-shadow: 0 4px 14px rgba(201, 160, 99, 0.45);
+        #login-page #login-btn {
+            background: linear-gradient(135deg, var(--vt-red), var(--vt-red-deep)) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow: 0 4px 14px rgba(255, 70, 85, 0.35);
             font-weight: 700;
-            letter-spacing: 4px;
+            letter-spacing: 5px;
+            clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+        }
+        #login-page #forgot-password-btn, #login-page #register-btn {
+            color: var(--gs-gold) !important;
+            background: none !important;
+            box-shadow: none !important;
+            border: none !important;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        #login-page #toggle-password {
+            background: none !important;
+            color: #768079 !important;
+            box-shadow: none !important;
+            border: none !important;
+            letter-spacing: 0;
+            font-weight: 400;
         }
         #login-page .text-gray-700 { color: var(--text-card) !important; }
         #login-page .text-gray-500 { color: var(--text-card-muted) !important; }
 
         /* 弹窗鎏金边框 */
-        #edit-modal > div > div, #rating-modal > div > div, #complaint-modal > div > div, #tip-modal > div > div,
-        #reply-modal > div > div, #review-modal > div > div, #recharge-modal > div > div,
-        #register-modal > div > div, #reset-password-modal > div > div, #avatar-view-modal > div > div {
+        #edit-modal > div:not(.modal-overlay), #rating-modal > div:not(.modal-overlay), #complaint-modal > div:not(.modal-overlay), #tip-modal > div:not(.modal-overlay),
+        #reply-modal > div:not(.modal-overlay), #review-modal > div:not(.modal-overlay), #recharge-modal > div:not(.modal-overlay),
+        #register-modal > div:not(.modal-overlay), #reset-password-modal > div:not(.modal-overlay), #avatar-view-modal > div:not(.modal-overlay) {
             background: var(--bg-modal) !important;
             border: 1px solid var(--gs-gold);
-            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55) !important;
-            border-radius: 16px !important;
+            box-shadow: none !important;
+            border-radius: 2px !important;
+            clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+            filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.55));
         }
         .modal-overlay { background-color: rgba(5, 10, 25, 0.7) !important; }
         #reset-password-modal, #register-modal { background-color: rgba(5, 10, 25, 0.7) !important; }
@@ -317,7 +354,50 @@
         }
 
         /* 状态徽章统一圆角 */
-        .text-xs { border-radius: 4px; }
+        .text-xs { border-radius: 2px; }
+        @media (max-width: 700px) {
+            #login-page > div { margin-left: 0 !important; }
+        }
+
+        /* ==================== Valorant 暗色面板文字/背景适配 ==================== */
+        [data-theme="dark"] .page-section .bg-white { background-color: #1a222d !important; }
+        [data-theme="dark"] .page-section .text-gray-800, [data-theme="dark"] .page-section .text-gray-900 { color: #ece8e1 !important; }
+        [data-theme="dark"] .page-section .text-gray-700 { color: #d5d9de !important; }
+        [data-theme="dark"] .page-section .text-gray-600 { color: #a3adb8 !important; }
+        [data-theme="dark"] .page-section .text-gray-500 { color: #a3adb8 !important; }
+        [data-theme="dark"] .page-section .text-gray-400 { color: #768079 !important; }
+        [data-theme="dark"] .page-section .border-gray-200, [data-theme="dark"] .page-section .border-gray-300 { border-color: #2c3644 !important; }
+        [data-theme="dark"] .page-section .bg-gray-50, [data-theme="dark"] .page-section .bg-gray-100 { background-color: #161e28 !important; }
+        [data-theme="dark"] .page-section .text-red-500 { color: #ff6b78 !important; }
+        [data-theme="dark"] .page-section .text-green-500 { color: #7fd8a4 !important; }
+        [data-theme="dark"] .page-section .text-yellow-500, [data-theme="dark"] .page-section .text-yellow-600, [data-theme="dark"] .page-section .text-amber-500 { color: #f2c879 !important; }
+        [data-theme="dark"] .page-section .text-blue-500 { color: #6fb5ff !important; }
+        [data-theme="dark"] .page-section .text-orange-500 { color: #ffa25e !important; }
+        [data-theme="dark"] .page-section .bg-blue-50, [data-theme="dark"] .page-section .bg-blue-100 { background-color: #16222e !important; }
+
+        [data-theme="dark"] [id$="-modal"] .bg-white { background-color: #1a222d !important; }
+        [data-theme="dark"] [id$="-modal"] .text-gray-800, [data-theme="dark"] [id$="-modal"] .text-gray-900 { color: #ece8e1 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-gray-700 { color: #d5d9de !important; }
+        [data-theme="dark"] [id$="-modal"] .text-gray-600, [data-theme="dark"] [id$="-modal"] .text-gray-500 { color: #a3adb8 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-gray-400 { color: #768079 !important; }
+        [data-theme="dark"] [id$="-modal"] .border-gray-200, [data-theme="dark"] [id$="-modal"] .border-gray-300 { border-color: #2c3644 !important; }
+        [data-theme="dark"] [id$="-modal"] .border-b, [data-theme="dark"] [id$="-modal"] .border-t { border-color: #2c3644 !important; }
+        [data-theme="dark"] [id$="-modal"] .bg-gray-50, [data-theme="dark"] [id$="-modal"] .bg-gray-100 { background-color: #161e28 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-red-500 { color: #ff6b78 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-green-500 { color: #7fd8a4 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-yellow-500, [data-theme="dark"] [id$="-modal"] .text-yellow-600, [data-theme="dark"] [id$="-modal"] .text-amber-500 { color: #f2c879 !important; }
+        [data-theme="dark"] [id$="-modal"] .text-blue-500 { color: #6fb5ff !important; }
+
+        [data-theme="dark"] #login-page .text-gray-800, [data-theme="dark"] #login-page .text-gray-700 { color: #ece8e1 !important; }
+        [data-theme="dark"] #login-page .text-gray-500 { color: #a3adb8 !important; }
+        [data-theme="dark"] #login-page .text-gray-400 { color: #768079 !important; }
+        [data-theme="dark"] #login-page .text-blue-500 { color: #ff4655 !important; }
+        [data-theme="dark"] #login-page input {
+            background-color: var(--input-bg) !important;
+            color: #ece8e1 !important;
+            border-color: #3a4552 !important;
+        }
+        [data-theme="dark"] #login-page input::placeholder { color: #5a6572 !important; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
