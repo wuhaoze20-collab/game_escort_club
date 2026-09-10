@@ -43,6 +43,7 @@
             --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(232, 196, 122, 0.06);
             --btn-text: #241a05;
             --theme-btn: rgba(255, 255, 255, 0.08);
+            --bg-overlay: rgba(5, 10, 25, 0.62);
         }
         :root[data-theme="light"] {
             --gs-gold: #c9a063;
@@ -76,6 +77,7 @@
             --shadow-card: 0 2px 14px rgba(120, 95, 40, 0.1);
             --btn-text: #4a3205;
             --theme-btn: rgba(0, 0, 0, 0.05);
+            --bg-overlay: rgba(250, 248, 243, 0.72);
         }
 
         /* 页面背景：暗色=星空深蓝，明亮=米白 */
@@ -241,6 +243,35 @@
         }
         input::placeholder { color: #9ca3af !important; }
 
+        /* 登录页视频背景 */
+        #login-page {
+            background: var(--bg-login) !important;
+            overflow: hidden;
+        }
+        #login-bg-video {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 0;
+        }
+        #login-page::after {
+            content: "";
+            position: absolute; inset: 0; z-index: 1;
+            background: rgba(5, 10, 25, 0.45);
+            pointer-events: none;
+        }
+        #login-page > div {
+            position: relative; z-index: 2;
+        }
+        /* 主界面视频背景 */
+        #app-bg-video {
+            position: fixed; inset: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: -2;
+        }
+        #app-bg-overlay {
+            position: fixed; inset: 0; z-index: -1;
+            background: var(--bg-overlay);
+            pointer-events: none;
+        }
+
         /* 登录页 */
         #login-page {
             background: var(--bg-login) !important;
@@ -293,6 +324,7 @@
 
     <!-- ========== 登录页面 ========== -->
     <div id="login-page" class="fixed inset-0 bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center z-50">
+        <video id="login-bg-video" src="../bizhiku/登录背景.mp4" autoplay muted loop playsinline preload="auto"></video>
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
             <div class="text-center mb-8">
                 <h1 class="text-2xl font-bold text-gray-800">✦ 大狗嚼电竞 ✦</h1>
@@ -442,6 +474,8 @@
 
     <!-- ========== 主应用页面 ========== -->
     <div id="app-page" class="hidden">
+        <video id="app-bg-video" src="../bizhiku/背景.mp4" autoplay muted loop playsinline preload="auto"></video>
+        <div id="app-bg-overlay"></div>
         <!-- 侧边导航 -->
         <aside class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-10">
             <div class="p-6 border-b border-white/10">
@@ -1440,6 +1474,10 @@
                 localStorage.removeItem('currentUser');
                 document.getElementById('app-page').classList.add('hidden');
                 document.getElementById('login-page').classList.remove('hidden');
+                const appV = document.getElementById('app-bg-video');
+                const loginV = document.getElementById('login-bg-video');
+                if (appV) appV.pause();
+                if (loginV) loginV.play().catch(() => {});
                 document.getElementById('login-username').value = '';
                 document.getElementById('login-password').value = '';
             } catch (e) { alert(e.message); }
@@ -1451,6 +1489,10 @@
             localStorage.removeItem('currentUser');
             appPage.classList.add('hidden');
             loginPage.classList.remove('hidden');
+            const appV = document.getElementById('app-bg-video');
+            const loginV = document.getElementById('login-bg-video');
+            if (appV) appV.pause();
+            if (loginV) loginV.play().catch(() => {});
             document.getElementById('login-username').value = '';
             document.getElementById('login-password').value = '';
         });
@@ -1495,6 +1537,11 @@
         async function initApp() {
             loginPage.classList.add('hidden');
             appPage.classList.remove('hidden');
+            // 播放主界面背景视频，暂停登录页视频
+            const appV = document.getElementById('app-bg-video');
+            const loginV = document.getElementById('login-bg-video');
+            if (appV) appV.play().catch(() => {});
+            if (loginV) loginV.pause();
 
             document.getElementById('current-user').textContent = `${currentUser.nickname || currentUser.username}（账号：${currentUser.username}）`;
             document.getElementById('user-role-tip').textContent = currentUser.role_name;

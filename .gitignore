@@ -24,3 +24,6 @@ pip_install_log*
 
 # MySQL 备份文件（本地保留，不上传）
 backups/
+
+# 壁纸视频(体积大,不上传仓库)
+bizhiku/
