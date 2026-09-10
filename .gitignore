@@ -21,3 +21,6 @@ __pycache__/
 Thumbs.db
 *.log
 pip_install_log*
+
+# MySQL 备份文件（本地保留，不上传）
+backups/

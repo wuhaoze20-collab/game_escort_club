@@ -1,5 +1,19 @@
 # 更新日志 CHANGELOG
 
+## [V2.6.0] 2026-09-10
+
+### 🎨 演示数据与备份工具
+1. **演示数据填充脚本** `backend/seed_demo_data.py`：新增 6 名打手（dashou_07~12，覆盖 985/211/大专/魔王护/明星护/娱乐陪，带昵称/自我介绍/已审核标签）；为 3 位老板生成 32 笔历史订单（29 完成 + 3 进行中），联动生成工资记录、评价（含打手回复）、打赏、提现记录，好评率按评价数据统一重算
+2. **MySQL 备份脚本** `backend/backup_db.py`：mysqldump 导出到 `backups/` 目录（文件名带时间戳），自动清理仅保留最近 7 份（`BACKUP_KEEP` 可调），密码通过环境变量传递不落命令行
+3. **演示数据口径**：与真实业务逻辑一致（30% 抽成、好评=4星+、打赏≤订单 30%、30 天提现冷却）；`orders` 表有数据时脚本自动跳过，幂等安全
+
+### 📝 说明
+- 本月盈利页已有真实统计（6 单 / 总盈利 ¥186.6）
+- 备份目录 `backups/` 已加入 .gitignore（本地保留，不上传 Gitee）
+- 定时备份可配置计划任务：`schtasks /create /tn "game_club_backup" /tr "C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\backup_db.py" /sc daily /st 03:00`
+
+---
+
 ## [V2.5.0] 2026-09-10
 
 ### 🗄 数据库迁移 SQLite → MySQL

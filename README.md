@@ -330,6 +330,34 @@ venv\Scripts\python main.py
 
 > 启动时自动建表并初始化默认数据；表结构变更通过 `main.py` 的 `migrate_db()` 自动补列，无需手动 ALTER。
 
+## 工具脚本
+
+### 1. 填充演示数据（体验完整功能）
+```bash
+cd C:\Users\18642\game_escort_club\backend
+venv\Scripts\python seed_demo_data.py
+```
+- 新增 6 名打手（覆盖全部等级、带自我介绍与已审核标签）
+- 生成约 30 笔历史订单 + 工资/评价/打赏/提现记录
+- 幂等：orders 表已有数据时自动跳过
+
+### 2. 备份数据库（MySQL）
+```bash
+venv\Scripts\python backup_db.py
+```
+- 备份到 `backups/game_escort_club_时间戳.sql`，默认保留最近 7 份
+- 可选环境变量：`MYSQLDUMP_PATH`（mysqldump 路径）、`BACKUP_KEEP`（保留份数）
+
+**定时自动备份**（Windows 计划任务，每天凌晨 3 点）：
+```bash
+schtasks /create /tn "game_club_backup" /tr "C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\backup_db.py" /sc daily /st 03:00
+```
+
+**恢复备份**：
+```bash
+"D:\MYsql\bin\mysql.exe" -u game_escort -p123456 game_escort_club < backups\游戏备份文件名.sql
+```
+
 ## 常见问题
 
 ### 1. 前端请求失败 / 数据加载不出来
