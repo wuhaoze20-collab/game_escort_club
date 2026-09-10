@@ -6,29 +6,87 @@
     <title>游戏护航俱乐部管理系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .sidebar-link.active { background-color: #3b82f6; color: white; }
-        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
         .page-section { display: none; }
         .page-section.active { display: block; }
         .loading { text-align: center; padding: 40px; color: #9ca3af; }
 
-        /* ==================== 原神主题美化 ==================== */
-        :root {
+        /* ==================== 主题系统（暗色默认 / 明亮可选） ==================== */
+        :root, :root[data-theme="dark"] {
             --gs-gold: #e8c47a;
             --gs-gold-deep: #c9a063;
             --gs-gold-text: #8a6d1d;
-            --gs-navy: #0d1b2e;
-            --gs-card: rgba(255, 255, 255, 0.94);
+            --gs-gold-soft: rgba(232, 196, 122, 0.12);
+            --bg-page: radial-gradient(ellipse at top, #24365c 0%, #14213d 40%, #0a1120 100%) fixed;
+            --bg-sidebar: linear-gradient(180deg, rgba(21, 35, 63, 0.97), rgba(9, 15, 30, 0.98));
+            --bg-header: rgba(13, 27, 46, 0.88);
+            --bg-card: rgba(255, 255, 255, 0.94);
+            --bg-modal: rgba(255, 255, 255, 0.98);
+            --bg-login: radial-gradient(ellipse at 30% 20%, #2c4170 0%, #132242 48%, #070d1c 100%);
+            --bg-login-card: rgba(255, 255, 255, 0.95);
+            --border-gold: rgba(232, 196, 122, 0.55);
+            --border-gold-light: rgba(232, 196, 122, 0.35);
+            --border-gold-lighter: rgba(232, 196, 122, 0.25);
+            --text-card: #1f2937;
+            --text-card-muted: #6b7280;
+            --text-card-title: #8a6d1d;
+            --text-sidebar: #c3cde4;
+            --text-sidebar-hover: #ffffff;
+            --text-sidebar-sub: #aeb9d4;
+            --text-header: #c9d4e8;
+            --text-header-strong: #f0ead8;
+            --input-bg: rgba(255, 255, 255, 0.95);
+            --table-head: linear-gradient(90deg, #f6e9c8, #ecd9a8);
+            --table-head-text: #6b4e0a;
+            --row-hover: rgba(232, 196, 122, 0.07);
+            --divide: rgba(232, 196, 122, 0.25);
+            --star-display: block;
+            --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(232, 196, 122, 0.06);
+            --btn-text: #241a05;
+            --theme-btn: rgba(255, 255, 255, 0.08);
+        }
+        :root[data-theme="light"] {
+            --gs-gold: #c9a063;
+            --gs-gold-deep: #b08d4f;
+            --gs-gold-text: #7a5d15;
+            --gs-gold-soft: rgba(201, 160, 99, 0.14);
+            --bg-page: linear-gradient(180deg, #faf8f3 0%, #f0eadd 100%) fixed;
+            --bg-sidebar: linear-gradient(180deg, #ffffff, #f6f1e5);
+            --bg-header: rgba(255, 255, 255, 0.94);
+            --bg-card: #ffffff;
+            --bg-modal: #ffffff;
+            --bg-login: linear-gradient(135deg, #f6f2e8 0%, #e8e0cc 100%);
+            --bg-login-card: #ffffff;
+            --border-gold: rgba(201, 160, 99, 0.6);
+            --border-gold-light: rgba(201, 160, 99, 0.35);
+            --border-gold-lighter: rgba(201, 160, 99, 0.22);
+            --text-card: #374151;
+            --text-card-muted: #6b7280;
+            --text-card-title: #7a5d15;
+            --text-sidebar: #4b5563;
+            --text-sidebar-hover: #1f2937;
+            --text-sidebar-sub: #9ca3af;
+            --text-header: #6b7280;
+            --text-header-strong: #374151;
+            --input-bg: #ffffff;
+            --table-head: linear-gradient(90deg, #f8f1de, #f2e6c8);
+            --table-head-text: #7a5d15;
+            --row-hover: rgba(201, 160, 99, 0.08);
+            --divide: rgba(201, 160, 99, 0.2);
+            --star-display: none;
+            --shadow-card: 0 2px 14px rgba(120, 95, 40, 0.1);
+            --btn-text: #4a3205;
+            --theme-btn: rgba(0, 0, 0, 0.05);
         }
 
-        /* 星空背景 */
+        /* 页面背景：暗色=星空深蓝，明亮=米白 */
         body {
-            background: radial-gradient(ellipse at top, #24365c 0%, #14213d 40%, #0a1120 100%) fixed;
+            background: var(--bg-page);
             font-family: "Microsoft YaHei", "PingFang SC", "Noto Serif SC", serif;
         }
         body::before {
             content: "";
             position: fixed; inset: 0; z-index: -1; pointer-events: none;
+            display: var(--star-display);
             background-image:
                 radial-gradient(1.2px 1.2px at 18% 25%, rgba(255,255,255,0.7), transparent),
                 radial-gradient(1px 1px at 72% 18%, rgba(255,255,255,0.5), transparent),
@@ -44,14 +102,14 @@
 
         /* 主内容卡片：玻璃质感 + 鎏金边框 */
         .page-section {
-            background: var(--gs-card) !important;
-            border: 1px solid rgba(232, 196, 122, 0.55);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35), inset 0 0 24px rgba(232, 196, 122, 0.06);
+            background: var(--bg-card) !important;
+            border: 1px solid var(--border-gold);
+            box-shadow: var(--shadow-card);
             border-radius: 16px;
             position: relative;
         }
         .page-section h2 {
-            color: var(--gs-gold-text);
+            color: var(--text-card-title);
             letter-spacing: 2px;
             text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
         }
@@ -60,13 +118,20 @@
             color: var(--gs-gold-deep);
         }
         .page-section h3 {
-            color: #6b4e0a;
+            color: var(--text-card-title);
         }
+        /* 卡片内 Tailwind 文字色统一走主题变量 */
+        .page-section .text-gray-800, .page-section .text-gray-900 { color: var(--text-card) !important; }
+        .page-section .text-gray-700 { color: var(--text-card) !important; }
+        .page-section .text-gray-600 { color: var(--text-card-muted) !important; }
+        .page-section .text-gray-500 { color: var(--text-card-muted) !important; }
+        .page-section .text-gray-400 { color: #9ca3af !important; }
+        .page-section .bg-gray-50, .page-section .bg-gray-100 { background-color: var(--row-hover) !important; }
 
-        /* 侧边栏：星空深蓝 + 金色点缀 */
+        /* 侧边栏：左树分组 */
         aside {
-            background: linear-gradient(180deg, rgba(21, 35, 63, 0.97), rgba(9, 15, 30, 0.98)) !important;
-            border-right: 1px solid rgba(232, 196, 122, 0.4) !important;
+            background: var(--bg-sidebar) !important;
+            border-right: 1px solid var(--border-gold-light) !important;
         }
         aside h1 {
             color: var(--gs-gold) !important;
@@ -74,19 +139,38 @@
             letter-spacing: 2px;
         }
         aside h1::before { content: "✦ "; }
-        aside p { color: #aeb9d4 !important; }
+        aside p { color: var(--text-sidebar-sub) !important; }
+        .sidebar-group-title {
+            color: var(--text-sidebar-sub);
+            font-size: 12px;
+            letter-spacing: 2px;
+            padding: 12px 12px 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .sidebar-group-title:hover { color: var(--gs-gold); }
+        .sidebar-group-title .arrow {
+            transition: transform .2s;
+            font-size: 10px;
+            opacity: .8;
+        }
+        .sidebar-group-title.collapsed .arrow { transform: rotate(-90deg); }
+        .sidebar-group-items.collapsed { display: none; }
         .sidebar-link {
-            color: #c3cde4 !important;
+            color: var(--text-sidebar) !important;
             border-left: 2px solid transparent;
             transition: all .2s;
         }
         .sidebar-link:hover {
-            background: rgba(232, 196, 122, 0.12) !important;
-            color: #fff !important;
+            background: var(--gs-gold-soft) !important;
+            color: var(--text-sidebar-hover) !important;
         }
         .sidebar-link.active {
             background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: #241a05 !important;
+            color: var(--btn-text) !important;
             font-weight: 600;
             border-left-color: #fff;
             box-shadow: 0 2px 10px rgba(232, 196, 122, 0.4);
@@ -94,18 +178,31 @@
 
         /* 顶部栏 */
         header {
-            background: rgba(13, 27, 46, 0.88) !important;
-            border-bottom: 1px solid rgba(232, 196, 122, 0.35) !important;
+            background: var(--bg-header) !important;
+            border-bottom: 1px solid var(--border-gold-light) !important;
             backdrop-filter: blur(6px);
         }
-        header .text-gray-600 { color: #c9d4e8 !important; }
-        header .text-gray-700 { color: #f0ead8 !important; }
+        header .text-gray-600 { color: var(--text-header) !important; }
+        header .text-gray-700 { color: var(--text-header-strong) !important; }
         header #logout-btn { color: #e8a0a0 !important; }
+        header #page-title { color: var(--text-header) !important; }
+
+        /* 主题切换按钮（右上角） */
+        #theme-toggle {
+            color: var(--gs-gold) !important;
+            background: var(--theme-btn);
+            border: 1px solid var(--border-gold-lighter);
+            transition: all .2s;
+        }
+        #theme-toggle:hover {
+            background: var(--gs-gold-soft) !important;
+            transform: rotate(20deg);
+        }
 
         /* 主按钮：鎏金渐变 */
         button.bg-blue-500, button.bg-blue-600 {
             background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: #241a05 !important;
+            color: var(--btn-text) !important;
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 2px 10px rgba(232, 196, 122, 0.35);
             font-weight: 600;
@@ -120,34 +217,36 @@
             font-weight: 600;
         }
 
-        /* 表格鎏金表头 */
+        /* 表格鎏金表头（右表） */
         thead {
-            background: linear-gradient(90deg, #f6e9c8, #ecd9a8) !important;
+            background: var(--table-head) !important;
         }
         thead th {
-            color: #6b4e0a !important;
+            color: var(--table-head-text) !important;
             font-weight: 700 !important;
             letter-spacing: 1px;
         }
-        tbody tr:hover { background: rgba(232, 196, 122, 0.07) !important; }
-        .divide-y > * + * { border-color: rgba(232, 196, 122, 0.25) !important; }
+        tbody tr:hover { background: var(--row-hover) !important; }
+        .divide-y > * + * { border-color: var(--divide) !important; }
 
         /* 输入框金色聚焦 */
         input, select, textarea {
-            border-color: #d4c08a !important;
-            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-color: var(--gs-gold-deep) !important;
+            background-color: var(--input-bg) !important;
+            color: var(--text-card) !important;
         }
         input:focus, select:focus, textarea:focus {
             border-color: var(--gs-gold) !important;
             box-shadow: 0 0 0 3px rgba(232, 196, 122, 0.25) !important;
         }
+        input::placeholder { color: #9ca3af !important; }
 
-        /* 登录页：原神星空 */
+        /* 登录页 */
         #login-page {
-            background: radial-gradient(ellipse at 30% 20%, #2c4170 0%, #132242 48%, #070d1c 100%) !important;
+            background: var(--bg-login) !important;
         }
         #login-page > div {
-            background: rgba(255, 255, 255, 0.95) !important;
+            background: var(--bg-login-card) !important;
             border: 1px solid var(--gs-gold);
             box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), 0 0 70px rgba(232, 196, 122, 0.18) !important;
             border-radius: 20px;
@@ -159,22 +258,26 @@
         }
         #login-page button {
             background: linear-gradient(135deg, #e8c47a, #c9a063) !important;
-            color: #241a05 !important;
+            color: var(--btn-text) !important;
             border: 1px solid rgba(255, 255, 255, 0.3);
             box-shadow: 0 4px 14px rgba(201, 160, 99, 0.45);
             font-weight: 700;
             letter-spacing: 4px;
         }
+        #login-page .text-gray-700 { color: var(--text-card) !important; }
+        #login-page .text-gray-500 { color: var(--text-card-muted) !important; }
 
         /* 弹窗鎏金边框 */
         #edit-modal > div > div, #rating-modal > div > div, #complaint-modal > div > div, #tip-modal > div > div,
-        #reply-modal > div > div, #review-modal > div > div, #recharge-modal > div > div {
-            background: rgba(255, 255, 255, 0.98) !important;
+        #reply-modal > div > div, #review-modal > div > div, #recharge-modal > div > div,
+        #register-modal > div > div, #reset-password-modal > div > div, #avatar-view-modal > div > div {
+            background: var(--bg-modal) !important;
             border: 1px solid var(--gs-gold);
             box-shadow: 0 12px 48px rgba(0, 0, 0, 0.55) !important;
             border-radius: 16px !important;
         }
         .modal-overlay { background-color: rgba(5, 10, 25, 0.7) !important; }
+        #reset-password-modal, #register-modal { background-color: rgba(5, 10, 25, 0.7) !important; }
 
         /* 打手卡片 */
         #public-players > div:hover {
@@ -358,8 +461,16 @@
 
         <!-- 顶部栏 -->
         <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
-            <div class="text-gray-600">欢迎使用管理系统</div>
+            <div id="page-title" class="text-gray-600 text-sm tracking-wider">欢迎使用管理系统</div>
             <div class="flex items-center gap-4">
+                <button id="theme-toggle" class="w-9 h-9 rounded-full flex items-center justify-center transition" title="切换主题（暗色/明亮）" aria-label="切换主题">
+                    <svg id="theme-icon-dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                    </svg>
+                    <svg id="theme-icon-light" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                </button>
                 <img id="topbar-avatar" src="" alt="头像" onclick="viewAvatar(document.getElementById('topbar-avatar').src)" class="w-8 h-8 rounded-full object-cover border border-gray-200 bg-gray-100 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                 <span id="current-user" class="text-sm text-gray-700">昵称（账号：guanliyuan）</span>
                 <button id="logout-btn" class="text-sm text-red-500 hover:text-red-600">退出登录</button>
@@ -1033,6 +1144,13 @@
     </div>
 
     <script>
+        // ==================== 主题初始化（暗色/明亮，记忆选择） ====================
+        (function () {
+            var t = 'dark';
+            try { t = localStorage.getItem('theme') || 'dark'; } catch (e) {}
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+
         // 后端API地址
         const API_BASE = 'http://localhost:8000';
         
@@ -1337,6 +1455,21 @@
             document.getElementById('login-password').value = '';
         });
 
+        // ==================== 主题切换（右上角按钮） ====================
+        function applyTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            try { localStorage.setItem('theme', theme); } catch (e) {}
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+            if (darkIcon) darkIcon.classList.toggle('hidden', theme === 'light');
+            if (lightIcon) lightIcon.classList.toggle('hidden', theme === 'dark');
+        }
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const cur = document.documentElement.getAttribute('data-theme');
+            applyTheme(cur === 'light' ? 'dark' : 'light');
+        });
+        applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+
         // ==================== 应用初始化 ====================
         // 渲染侧边栏与顶栏的用户头像/昵称
         function renderUserArea() {
@@ -1410,96 +1543,151 @@
             });
 
             // 默认显示第一个菜单
-            switchPage(menuConfig[currentUser.role][0].key);
+            switchPage(menuConfig[currentUser.role][0].items[0].key);
         }
 
-        // 菜单配置
+        // 菜单配置（左树分组）
         const menuConfig = {
             admin: [
-                { key: 'notice', label: '店铺公告' },
-                { key: 'order-guide', label: '下单须知' },
-                { key: 'price', label: '价格预览' },
-                { key: 'recharge', label: '充值福利' },
-                { key: 'member', label: '会员福利' },
-                { key: 'payment', label: '支付方式' },
-                { key: 'punishment', label: '处罚通告' },
-                { key: 'profit', label: '本月盈利' },
-                { key: 'order-manage', label: '订单管理' },
-                { key: 'withdraw-manage', label: '提现审核' },
-                { key: 'review-manage', label: '评价复查' },
-                { key: 'tag-review', label: '标签审核' },
-                { key: 'profile-review', label: '头像昵称审核' },
-                { key: 'registration-review', label: '注册审核' },
-                { key: 'boss', label: '老板管理' },
-                { key: 'player', label: '打手管理' },
-                { key: 'profile', label: '我的账户' }
+                { group: '店铺运营', items: [
+                    { key: 'notice', label: '店铺公告' },
+                    { key: 'order-guide', label: '下单须知' },
+                    { key: 'price', label: '价格预览' },
+                    { key: 'recharge', label: '充值福利' },
+                    { key: 'member', label: '会员福利' },
+                    { key: 'payment', label: '支付方式' },
+                    { key: 'punishment', label: '处罚通告' }
+                ]},
+                { group: '订单财务', items: [
+                    { key: 'profit', label: '本月盈利' },
+                    { key: 'order-manage', label: '订单管理' },
+                    { key: 'withdraw-manage', label: '提现审核' }
+                ]},
+                { group: '审核管理', items: [
+                    { key: 'review-manage', label: '评价复查' },
+                    { key: 'tag-review', label: '标签审核' },
+                    { key: 'profile-review', label: '头像昵称审核' },
+                    { key: 'registration-review', label: '注册审核' }
+                ]},
+                { group: '人员管理', items: [
+                    { key: 'boss', label: '老板管理' },
+                    { key: 'player', label: '打手管理' }
+                ]},
+                { group: '个人中心', items: [
+                    { key: 'profile', label: '我的账户' }
+                ]}
             ],
             service: [
-                { key: 'notice', label: '店铺公告' },
-                { key: 'order-guide', label: '下单须知' },
-                { key: 'price', label: '价格预览' },
-                { key: 'recharge', label: '充值福利' },
-                { key: 'member', label: '会员福利' },
-                { key: 'payment', label: '支付方式' },
-                { key: 'punishment', label: '处罚通告' },
-                { key: 'order-manage', label: '订单管理' },
-                { key: 'withdraw-manage', label: '提现审核' },
-                { key: 'tag-review', label: '标签审核' },
-                { key: 'profile-review', label: '头像昵称审核' },
-                { key: 'boss', label: '老板信息' },
-                { key: 'player', label: '打手信息' },
-                { key: 'profile', label: '我的账户' }
+                { group: '店铺运营', items: [
+                    { key: 'notice', label: '店铺公告' },
+                    { key: 'order-guide', label: '下单须知' },
+                    { key: 'price', label: '价格预览' },
+                    { key: 'recharge', label: '充值福利' },
+                    { key: 'member', label: '会员福利' },
+                    { key: 'payment', label: '支付方式' },
+                    { key: 'punishment', label: '处罚通告' }
+                ]},
+                { group: '订单财务', items: [
+                    { key: 'order-manage', label: '订单管理' },
+                    { key: 'withdraw-manage', label: '提现审核' }
+                ]},
+                { group: '审核管理', items: [
+                    { key: 'tag-review', label: '标签审核' },
+                    { key: 'profile-review', label: '头像昵称审核' }
+                ]},
+                { group: '人员管理', items: [
+                    { key: 'boss', label: '老板信息' },
+                    { key: 'player', label: '打手信息' }
+                ]},
+                { group: '个人中心', items: [
+                    { key: 'profile', label: '我的账户' }
+                ]}
             ],
             boss: [
-                { key: 'notice', label: '店铺公告' },
-                { key: 'order-guide', label: '下单须知' },
-                { key: 'price', label: '价格预览' },
-                { key: 'recharge', label: '充值中心' },
-                { key: 'member', label: '会员福利' },
-                { key: 'punishment', label: '处罚通告' },
-                { key: 'order', label: '点单中心' },
-                { key: 'profile', label: '我的账户' }
+                { group: '店铺运营', items: [
+                    { key: 'notice', label: '店铺公告' },
+                    { key: 'order-guide', label: '下单须知' },
+                    { key: 'price', label: '价格预览' },
+                    { key: 'recharge', label: '充值中心' },
+                    { key: 'member', label: '会员福利' },
+                    { key: 'punishment', label: '处罚通告' }
+                ]},
+                { group: '我的点单', items: [
+                    { key: 'order', label: '点单中心' }
+                ]},
+                { group: '个人中心', items: [
+                    { key: 'profile', label: '我的账户' }
+                ]}
             ],
             player: [
-                { key: 'notice', label: '店铺公告' },
-                { key: 'order-guide', label: '下单须知' },
-                { key: 'price', label: '价格预览' },
-                { key: 'member', label: '会员福利' },
-                { key: 'punishment', label: '处罚通告' },
-                { key: 'player-orders', label: '我的订单' },
-                { key: 'player-ratings', label: '我的评价' },
-                { key: 'withdraw', label: '提现中心' },
-                { key: 'profile', label: '我的账户' }
+                { group: '店铺运营', items: [
+                    { key: 'notice', label: '店铺公告' },
+                    { key: 'order-guide', label: '下单须知' },
+                    { key: 'price', label: '价格预览' },
+                    { key: 'member', label: '会员福利' },
+                    { key: 'punishment', label: '处罚通告' }
+                ]},
+                { group: '我的工作', items: [
+                    { key: 'player-orders', label: '我的订单' },
+                    { key: 'player-ratings', label: '我的评价' },
+                    { key: 'withdraw', label: '提现中心' }
+                ]},
+                { group: '个人中心', items: [
+                    { key: 'profile', label: '我的账户' }
+                ]}
             ]
         };
 
-        // 渲染侧边栏
+        // 渲染侧边栏（左树：分组标题 + 子菜单，点击分组可折叠）
         function renderSidebar() {
-            const menu = menuConfig[currentUser.role];
+            const groups = menuConfig[currentUser.role];
             const sidebar = document.getElementById('sidebar-menu');
             sidebar.innerHTML = '';
-            menu.forEach(item => {
-                const a = document.createElement('a');
-                a.href = 'javascript:;';
-                a.className = 'sidebar-link block px-4 py-2 rounded-lg text-gray-700 hover:bg-blue-50 transition';
-                a.textContent = item.label;
-                a.dataset.key = item.key;
-                a.addEventListener('click', () => switchPage(item.key));
-                sidebar.appendChild(a);
+            groups.forEach(g => {
+                const title = document.createElement('div');
+                title.className = 'sidebar-group-title';
+                title.innerHTML = '<span>' + g.group + '</span><span class="arrow">\u25be</span>';
+                const wrap = document.createElement('div');
+                wrap.className = 'sidebar-group-items';
+                g.items.forEach(item => {
+                    const a = document.createElement('a');
+                    a.href = 'javascript:;';
+                    a.className = 'sidebar-link block px-4 py-2 rounded-lg text-gray-700 hover:bg-blue-50 transition';
+                    a.textContent = item.label;
+                    a.dataset.key = item.key;
+                    a.addEventListener('click', () => switchPage(item.key));
+                    wrap.appendChild(a);
+                });
+                title.addEventListener('click', () => {
+                    wrap.classList.toggle('collapsed');
+                    title.classList.toggle('collapsed');
+                });
+                sidebar.appendChild(title);
+                sidebar.appendChild(wrap);
             });
         }
 
         // 切换页面
         function switchPage(key) {
-            const hasPermission = menuConfig[currentUser.role].some(item => item.key === key);
+            const groups = menuConfig[currentUser.role];
+            const hasPermission = groups.some(g => g.items.some(item => item.key === key));
             if (!hasPermission) return;
 
             document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`page-${key}`).classList.add('active');
-            
+            document.getElementById('page-' + key).classList.add('active');
+
             document.querySelectorAll('.sidebar-link').forEach(link => {
                 link.classList.toggle('active', link.dataset.key === key);
             });
+
+            // 顶部面包屑：分组 / 页面
+            for (const g of groups) {
+                const item = g.items.find(i => i.key === key);
+                if (item) {
+                    document.getElementById('page-title').textContent = g.group + ' / ' + item.label;
+                    break;
+                }
+            }
         }
 
         // ==================== 内容加载与渲染 ====================
