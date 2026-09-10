@@ -31,6 +31,7 @@ def migrate_db():
             for col, ddl in (
                 ("failed_attempts", "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
                 ("lock_until", "ALTER TABLE users ADD COLUMN lock_until DATETIME NULL"),
+                ("account_status", "ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"),
             ):
                 exists = conn.execute(
                     text("SELECT COUNT(*) FROM information_schema.columns "
@@ -47,12 +48,14 @@ def migrate_db():
                 conn.execute(text("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
             if "lock_until" not in cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
+            if "account_status" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"))
             conn.commit()
 
 
 migrate_db()
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.7.0")
+app = FastAPI(title="游戏护航俱乐部管理系统", version="2.8.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com

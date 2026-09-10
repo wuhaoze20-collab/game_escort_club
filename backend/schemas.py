@@ -155,6 +155,22 @@ class ReviewDecisionRequest(BaseModel):
     action: str  # approve=移除评价 / reject=保留评价
     note: str = ""
 
+# 注册请求
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    role: str  # boss/player/service
+    nickname: str = ""
+    intro: str = ""  # 打手自我介绍
+    level_type: str = "娱乐陪"  # 娱乐陪/技术陪
+    tech_level: str = ""  # 985/211/大专/魔王护/明星护
+
+# 注册审核决策请求
+class RegistrationDecisionRequest(BaseModel):
+    user_id: int
+    action: str  # approve/reject
+    note: str = ""
+
 # 老板投诉订单请求
 class ComplaintRequest(BaseModel):
     order_id: int

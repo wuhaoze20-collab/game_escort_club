@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from database import get_db
-from models import User
-from schemas import LoginRequest, LoginResponse, ResetPasswordRequest, ChangePasswordRequest
-from auth import verify_password, hash_password, create_access_token, get_current_user, ACCESS_TOKEN_EXPIRE_MINUTES
+from models import User, BossInfo, PlayerInfo
+from schemas import LoginRequest, LoginResponse, ResetPasswordRequest, ChangePasswordRequest, RegisterRequest, RegistrationDecisionRequest
+from auth import verify_password, hash_password, create_access_token, get_current_user, require_roles, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/api", tags=["认证"])
 
@@ -58,6 +58,18 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         user.lock_until = None
         db.commit()
 
+    # 注册审核状态检查
+    if user.account_status == "pending":
+        raise HTTPException(
+            status_code=403,
+            detail="账号审核中，请等待管理员审核通过后登录"
+        )
+    if user.account_status == "rejected":
+        raise HTTPException(
+            status_code=403,
+            detail="账号审核未通过，无法登录"
+        )
+
     # 生成令牌
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
@@ -76,6 +88,114 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             "avatar": user.avatar
         }
     )
+
+
+# ============ 注册功能 ============
+# 老板注册直接生效；打手/客服注册需管理员审核通过后才能登录
+ROLE_NAMES = {"boss": "老板", "player": "打手", "service": "客服"}
+ROLE_AVATARS = {"boss": "avatar_boss.png", "player": "avatar_yule.jpg", "service": "avatar_service.png"}
+TECH_LEVELS = ("985", "211", "大专", "魔王护", "明星护")
+
+
+@router.post("/register")
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    username = request.username.strip()
+    password = request.password
+    role = request.role.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="请输入账号")
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="账号长度不能少于 3 位")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于 6 位")
+    if role not in ROLE_NAMES:
+        raise HTTPException(status_code=400, detail="无效的注册角色")
+    if db.query(User).filter(User.username == username).first():
+        raise HTTPException(status_code=400, detail="该账号已被注册")
+
+    nickname = request.nickname.strip() or username
+    avatar = ROLE_AVATARS[role]
+    needs_review = role in ("player", "service")
+
+    # 打手等级校验
+    if role == "player":
+        level_type = request.level_type.strip() or "娱乐陪"
+        tech_level = request.tech_level.strip()
+        if level_type == "技术陪" and tech_level not in TECH_LEVELS:
+            raise HTTPException(status_code=400, detail="技术陪等级须为：985 / 211 / 大专 / 魔王护 / 明星护")
+
+    user = User(
+        username=username,
+        password_hash=hash_password(password),
+        role=role,
+        role_name=ROLE_NAMES[role],
+        nickname=nickname,
+        avatar=avatar,
+        account_status="pending" if needs_review else "approved",
+    )
+    db.add(user)
+    db.flush()
+
+    if role == "boss":
+        db.add(BossInfo(username=username))
+    elif role == "player":
+        db.add(PlayerInfo(
+            username=username,
+            intro=request.intro.strip(),
+            level_type=level_type,
+            tech_level=tech_level if level_type == "技术陪" else "",
+        ))
+    db.commit()
+
+    if needs_review:
+        return {"message": "注册成功！账号已提交审核，请等待管理员审核通过后登录", "status": "pending"}
+    return {"message": "注册成功！请使用新账号登录", "status": "approved"}
+
+
+# 注册审核列表（仅管理员）
+@router.get("/admin/registration-list")
+def registration_list(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    users = db.query(User).filter(User.account_status == "pending").order_by(User.created_at.desc()).all()
+    result = []
+    for u in users:
+        item = {
+            "id": u.id, "username": u.username, "role": u.role, "role_name": u.role_name,
+            "nickname": u.nickname, "avatar": u.avatar, "created_at": u.created_at,
+        }
+        if u.role == "player":
+            pi = db.query(PlayerInfo).filter(PlayerInfo.username == u.username).first()
+            item["intro"] = pi.intro if pi else ""
+            item["level_type"] = pi.level_type if pi else "娱乐陪"
+            item["tech_level"] = pi.tech_level if pi else ""
+        result.append(item)
+    return result
+
+
+# 注册审核决策（仅管理员）：approve=通过 / reject=驳回
+@router.post("/admin/registration-decision")
+def registration_decision(
+    request: RegistrationDecisionRequest,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    if request.action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="无效的操作类型")
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.account_status != "pending":
+        raise HTTPException(status_code=400, detail="该账号不在审核中")
+    if request.action == "approve":
+        user.account_status = "approved"
+        msg = f"已通过 {user.username} 的注册审核"
+    else:
+        user.account_status = "rejected"
+        msg = f"已驳回 {user.username} 的注册申请"
+    db.commit()
+    return {"message": msg}
 
 
 # 忘记密码：通过账号直接重置密码（演示环境做法；生产环境应接入短信/邮箱验证码）

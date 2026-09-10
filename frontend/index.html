@@ -226,8 +226,9 @@
                     class="w-full py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
                     登录
                 </button>
-                <div class="text-center mt-3">
+                <div class="text-center mt-3 flex justify-center gap-5">
                     <button id="forgot-password-btn" type="button" class="text-sm text-blue-500 hover:text-blue-700 hover:underline">忘记密码？</button>
+                    <button id="register-btn" type="button" class="text-sm text-blue-500 hover:text-blue-700 hover:underline">注册账号</button>
                 </div>
             </div>
             <div class="mt-6 text-xs text-gray-400 text-center">
@@ -260,6 +261,78 @@
             <div class="flex justify-end gap-2 mt-5">
                 <button id="reset-cancel-btn" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition">取消</button>
                 <button id="reset-submit-btn" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">重置密码</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 注册弹窗 ========== -->
+    <div id="register-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+        <div class="bg-white rounded-2xl w-full max-w-md p-6 mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold text-gray-800 mb-1">注册账号</h3>
+            <p class="text-xs text-gray-500 mb-4">老板注册后可直接登录；打手/客服注册需管理员审核通过</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">账号</label>
+                    <input id="reg-username" type="text" placeholder="至少 3 位" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <input id="reg-password" type="password" placeholder="至少 6 位" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+                    <input id="reg-confirm-password" type="password" placeholder="再次输入密码" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">注册身份</label>
+                    <div class="flex gap-3">
+                        <label class="flex-1 border border-gray-300 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition" id="reg-role-boss">
+                            <input type="radio" name="reg-role" value="boss" checked class="accent-blue-500"> <span class="text-sm font-medium">老板</span>
+                            <p class="text-xs text-gray-400 mt-1">点单消费，注册即生效</p>
+                        </label>
+                        <label class="flex-1 border border-gray-300 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition" id="reg-role-player">
+                            <input type="radio" name="reg-role" value="player" class="accent-blue-500"> <span class="text-sm font-medium">打手</span>
+                            <p class="text-xs text-gray-400 mt-1">接单服务，需审核</p>
+                        </label>
+                        <label class="flex-1 border border-gray-300 rounded-lg p-3 cursor-pointer hover:border-blue-400 transition" id="reg-role-service">
+                            <input type="radio" name="reg-role" value="service" class="accent-blue-500"> <span class="text-sm font-medium">客服</span>
+                            <p class="text-xs text-gray-400 mt-1">运营管理，需审核</p>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">昵称（可选）</label>
+                    <input id="reg-nickname" type="text" placeholder="不填则使用账号名" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <!-- 打手专属：等级 + 自我介绍 -->
+                <div id="reg-player-fields" class="hidden space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">陪玩等级</label>
+                        <div class="flex gap-2">
+                            <select id="reg-level-type" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="娱乐陪">娱乐陪</option>
+                                <option value="技术陪">技术陪</option>
+                            </select>
+                            <select id="reg-tech-level" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg">
+                                <option value="">无（娱乐陪）</option>
+                                <option value="985">985</option>
+                                <option value="211">211</option>
+                                <option value="大专">大专</option>
+                                <option value="魔王护">魔王护</option>
+                                <option value="明星护">明星护</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">自我介绍（可选）</label>
+                        <textarea id="reg-intro" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="介绍你的擅长游戏、段位、服务风格..."></textarea>
+                    </div>
+                </div>
+            </div>
+            <p id="reg-error" class="text-red-500 text-sm hidden mt-2"></p>
+            <div class="flex justify-end gap-2 mt-5">
+                <button id="reg-cancel-btn" class="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition">取消</button>
+                <button id="reg-submit-btn" class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">提交注册</button>
             </div>
         </div>
     </div>
@@ -727,7 +800,31 @@
                     </div>
                 </section>
 
-                <!-- 16.5 评价复查审核（管理员） -->
+                <!-- 16.4.5 注册审核（管理员） -->
+            <section id="page-registration-review" class="page-section bg-white rounded-xl shadow-sm p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-semibold text-gray-800">注册审核</h2>
+                    <button onclick="loadRegistrationList()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                </div>
+                <div id="registration-review-empty" class="text-center text-gray-400 py-8 hidden">暂无待审核的注册申请</div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 text-left text-gray-500">
+                                <th class="px-4 py-2">账号</th>
+                                <th class="px-4 py-2">身份</th>
+                                <th class="px-4 py-2">昵称</th>
+                                <th class="px-4 py-2">打手信息</th>
+                                <th class="px-4 py-2">注册时间</th>
+                                <th class="px-4 py-2">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="registration-review-list" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 16.5 评价复查审核（管理员） -->
                 <section id="page-review-manage" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-lg font-semibold text-gray-800">评价复查审核</h2>
@@ -1038,6 +1135,128 @@
         });
 
         // 退出登录
+        // ==================== 注册功能 ====================
+        const registerModal = document.getElementById('register-modal');
+        const regError = document.getElementById('reg-error');
+
+        function setRegRole(role) {
+            document.querySelectorAll('input[name="reg-role"]').forEach(r => {
+                const box = r.closest('label');
+                box.classList.toggle('border-blue-500', r.value === role && r.checked);
+                box.classList.toggle('bg-blue-50', r.value === role && r.checked);
+            });
+            document.getElementById('reg-player-fields').classList.toggle('hidden', role !== 'player');
+            document.getElementById('reg-tech-level').closest('div').querySelector('select').value = '';
+        }
+        document.querySelectorAll('input[name="reg-role"]').forEach(r => {
+            r.addEventListener('change', () => setRegRole(r.value));
+        });
+        document.getElementById('reg-level-type').addEventListener('change', function () {
+            document.getElementById('reg-tech-level').disabled = this.value !== '技术陪';
+            if (this.value !== '技术陪') document.getElementById('reg-tech-level').value = '';
+        });
+
+        document.getElementById('register-btn').addEventListener('click', () => {
+            regError.classList.add('hidden');
+            document.getElementById('reg-username').value = '';
+            document.getElementById('reg-password').value = '';
+            document.getElementById('reg-confirm-password').value = '';
+            document.getElementById('reg-nickname').value = '';
+            document.getElementById('reg-intro').value = '';
+            document.getElementById('reg-level-type').value = '娱乐陪';
+            document.getElementById('reg-tech-level').value = '';
+            document.getElementById('reg-tech-level').disabled = true;
+            document.querySelector('input[name="reg-role"][value="boss"]').checked = true;
+            setRegRole('boss');
+            registerModal.classList.remove('hidden');
+        });
+        document.getElementById('reg-cancel-btn').addEventListener('click', () => {
+            registerModal.classList.add('hidden');
+        });
+        registerModal.addEventListener('click', (e) => {
+            if (e.target === registerModal) registerModal.classList.add('hidden');
+        });
+        document.getElementById('reg-submit-btn').addEventListener('click', async () => {
+            const username = document.getElementById('reg-username').value.trim();
+            const p1 = document.getElementById('reg-password').value;
+            const p2 = document.getElementById('reg-confirm-password').value;
+            const role = document.querySelector('input[name="reg-role"]:checked').value;
+            const nickname = document.getElementById('reg-nickname').value.trim();
+            if (!username || !p1 || !p2) {
+                regError.textContent = '请填写账号与密码';
+                regError.classList.remove('hidden');
+                return;
+            }
+            if (username.length < 3) {
+                regError.textContent = '账号长度不能少于 3 位';
+                regError.classList.remove('hidden');
+                return;
+            }
+            if (p1.length < 6) {
+                regError.textContent = '密码长度不能少于 6 位';
+                regError.classList.remove('hidden');
+                return;
+            }
+            if (p1 !== p2) {
+                regError.textContent = '两次输入的密码不一致';
+                regError.classList.remove('hidden');
+                return;
+            }
+            const body = { username, password: p1, role, nickname };
+            if (role === 'player') {
+                body.level_type = document.getElementById('reg-level-type').value;
+                body.tech_level = document.getElementById('reg-tech-level').value;
+                body.intro = document.getElementById('reg-intro').value.trim();
+            }
+            try {
+                const res = await apiRequest('/api/register', 'POST', body);
+                alert(res.message);
+                registerModal.classList.add('hidden');
+            } catch (e) {
+                regError.textContent = e.message;
+                regError.classList.remove('hidden');
+            }
+        });
+
+        // ==================== 管理员注册审核 ====================
+        async function loadRegistrationList() {
+            try {
+                const list = await apiRequest('/api/admin/registration-list');
+                const tbody = document.getElementById('registration-review-list');
+                const empty = document.getElementById('registration-review-empty');
+                empty.classList.toggle('hidden', list.length > 0);
+                const roleMap = { boss: '老板', player: '打手', service: '客服' };
+                const levelDesc = (it) => it.level_type === '技术陪' ? `技术陪·${it.tech_level}` : '娱乐陪';
+                tbody.innerHTML = list.map(u => `
+                    <tr>
+                        <td class="px-4 py-2 font-mono text-xs">${escapeHtml(u.username)}</td>
+                        <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs ${u.role === 'boss' ? 'bg-blue-100 text-blue-700' : u.role === 'player' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">${roleMap[u.role] || u.role}</span></td>
+                        <td class="px-4 py-2">${escapeHtml(u.nickname || u.username)}</td>
+                        <td class="px-4 py-2 text-xs text-gray-500">
+                            ${u.role === 'player' ? `<div>${levelDesc(u)}</div><div class="max-w-[200px] truncate" title="${escapeHtml(u.intro)}">${escapeHtml(u.intro || '无自我介绍')}</div>` : '<span class="text-gray-300">—</span>'}
+                        </td>
+                        <td class="px-4 py-2 text-xs text-gray-500">${new Date(u.created_at).toLocaleString()}</td>
+                        <td class="px-4 py-2">
+                            <div class="flex gap-1">
+                                <button onclick="reviewRegistration(${u.id}, 'approve')" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition">通过</button>
+                                <button onclick="reviewRegistration(${u.id}, 'reject')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition">驳回</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { console.error('加载注册审核失败', e); }
+        }
+
+        async function reviewRegistration(userId, action) {
+            const tip = action === 'approve' ? '确认通过该注册申请？通过后对方可立即登录。' : '确认驳回该注册申请？对方将无法登录。';
+            if (!confirm(tip)) return;
+            try {
+                const res = await apiRequest('/api/admin/registration-decision', 'POST', { user_id: userId, action });
+                alert(res.message);
+                await loadRegistrationList();
+            } catch (e) { alert(e.message); }
+        }
+
         // ==================== 忘记密码（重置密码弹窗） ====================
         const resetModal = document.getElementById('reset-password-modal');
         const resetError = document.getElementById('reset-error');
@@ -1177,10 +1396,11 @@
                 await loadWithdrawInfo();
             }
 
-            // 管理员加载本月盈利和复查审核
+            // 管理员加载本月盈利、复查审核与注册审核
             if (currentUser.role === 'admin') {
                 await loadProfit();
                 await loadReviewManage();
+                await loadRegistrationList();
             }
 
             // 控制编辑按钮显示：仅管理员和客服可见
@@ -1209,6 +1429,7 @@
                 { key: 'review-manage', label: '评价复查' },
                 { key: 'tag-review', label: '标签审核' },
                 { key: 'profile-review', label: '头像昵称审核' },
+                { key: 'registration-review', label: '注册审核' },
                 { key: 'boss', label: '老板管理' },
                 { key: 'player', label: '打手管理' },
                 { key: 'profile', label: '我的账户' }
