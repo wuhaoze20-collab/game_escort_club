@@ -55,7 +55,7 @@ def migrate_db():
 
 migrate_db()
 
-app = FastAPI(title="游戏护航俱乐部管理系统", version="2.8.0")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.0.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -139,7 +139,7 @@ def init_default_data():
         # 初始化默认内容配置
         default_content = {
             "notice": {
-                "title": "欢迎来到XX游戏护航俱乐部",
+                "title": "欢迎来到大狗嚼电竞",
                 "content": "我们提供专业的游戏陪玩、上分护航服务，全天24小时在线。\n近期活动：新用户首单立减20%，充值满100送20余额。\n客服微信：xxxxxx",
                 "updateTime": "2024-01-15 10:00"
             },
@@ -220,7 +220,7 @@ init_default_data()
 
 @app.get("/")
 def root():
-    return {"message": "游戏护航俱乐部管理系统API", "docs": "/docs"}
+    return {"message": "大狗嚼电竞管理系统API", "docs": "/docs"}
 
 if __name__ == "__main__":
     import uvicorn
