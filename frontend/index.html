@@ -20,12 +20,12 @@
             --gs-gold-text: #ffffff;
             --gs-gold-soft: rgba(255, 70, 85, 0.14);
             --bg-page: radial-gradient(ellipse at top, #16222e 0%, #0f1923 45%, #0a1017 100%) fixed;
-            --bg-sidebar: linear-gradient(180deg, #111c26, #0a121a);
-            --bg-header: rgba(15, 25, 35, 0.9);
-            --bg-card: rgba(31, 39, 51, 0.92);
-            --bg-modal: rgba(31, 39, 51, 0.98);
+            --bg-sidebar: linear-gradient(180deg, rgba(13, 19, 28, 0.62), rgba(9, 14, 21, 0.58));
+            --bg-header: rgba(13, 20, 29, 0.55);
+            --bg-card: rgba(28, 36, 48, 0.52);
+            --bg-modal: rgba(24, 32, 43, 0.6);
             --bg-login: radial-gradient(ellipse at 30% 20%, #1a2836 0%, #0f1923 55%, #070d14 100%);
-            --bg-login-card: rgba(31, 39, 51, 0.94);
+            --bg-login-card: rgba(16, 22, 32, 0.5);
             --border-gold: rgba(255, 70, 85, 0.5);
             --border-gold-light: rgba(255, 70, 85, 0.3);
             --border-gold-lighter: rgba(236, 232, 225, 0.15);
@@ -56,12 +56,12 @@
             --gs-gold-text: #b32330;
             --gs-gold-soft: rgba(230, 59, 73, 0.12);
             --bg-page: linear-gradient(180deg, #ece8e1 0%, #ddd8ce 100%) fixed;
-            --bg-sidebar: linear-gradient(180deg, #f5f2ec, #e7e2d9);
-            --bg-header: rgba(255, 255, 255, 0.92);
-            --bg-card: #ffffff;
-            --bg-modal: #ffffff;
+            --bg-sidebar: linear-gradient(180deg, rgba(245, 242, 236, 0.68), rgba(231, 226, 217, 0.64));
+            --bg-header: rgba(255, 255, 255, 0.6);
+            --bg-card: rgba(255, 255, 255, 0.6);
+            --bg-modal: rgba(255, 255, 255, 0.72);
             --bg-login: linear-gradient(135deg, #ece8e1 0%, #d8d2c6 100%);
-            --bg-login-card: #ffffff;
+            --bg-login-card: rgba(255, 255, 255, 0.55);
             --border-gold: rgba(200, 50, 60, 0.45);
             --border-gold-light: rgba(200, 50, 60, 0.28);
             --border-gold-lighter: rgba(60, 70, 80, 0.15);
@@ -110,10 +110,12 @@
         /* 主内容卡片：玻璃质感 + 鎏金边框 */
         .page-section {
             background: var(--bg-card) !important;
-            border: 1px solid var(--border-gold);
-            box-shadow: var(--shadow-card);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), inset 0 -1px 0 rgba(255, 255, 255, 0.04), var(--shadow-card);
             border-radius: 2px;
             clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+            backdrop-filter: blur(22px) saturate(170%);
+            -webkit-backdrop-filter: blur(22px) saturate(170%);
             position: relative;
         }
         .page-section h2 {
@@ -292,11 +294,13 @@
         }
         #login-page > div {
             background: var(--bg-login-card) !important;
-            border: 1px solid var(--gs-gold);
-            box-shadow: none;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
             border-radius: 2px;
-            margin-left: 36%;
+            margin-left: 44%;
             clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+            backdrop-filter: blur(28px) saturate(180%);
+            -webkit-backdrop-filter: blur(28px) saturate(180%);
             filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.5));
         }
         #login-page h1 {
@@ -338,10 +342,12 @@
         #reply-modal > div:not(.modal-overlay), #review-modal > div:not(.modal-overlay), #recharge-modal > div:not(.modal-overlay),
         #register-modal > div:not(.modal-overlay), #reset-password-modal > div:not(.modal-overlay), #avatar-view-modal > div:not(.modal-overlay) {
             background: var(--bg-modal) !important;
-            border: 1px solid var(--gs-gold);
-            box-shadow: none !important;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
             border-radius: 2px !important;
             clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+            backdrop-filter: blur(26px) saturate(170%);
+            -webkit-backdrop-filter: blur(26px) saturate(170%);
             filter: drop-shadow(0 12px 40px rgba(0, 0, 0, 0.55));
         }
         .modal-overlay { background-color: rgba(5, 10, 25, 0.7) !important; }
@@ -360,7 +366,7 @@
         }
 
         /* ==================== Valorant 暗色面板文字/背景适配 ==================== */
-        [data-theme="dark"] .page-section .bg-white { background-color: #1a222d !important; }
+        [data-theme="dark"] .page-section .bg-white { background-color: rgba(255, 255, 255, 0.05) !important; }
         [data-theme="dark"] .page-section .text-gray-800, [data-theme="dark"] .page-section .text-gray-900 { color: #ece8e1 !important; }
         [data-theme="dark"] .page-section .text-gray-700 { color: #d5d9de !important; }
         [data-theme="dark"] .page-section .text-gray-600 { color: #a3adb8 !important; }
@@ -375,7 +381,7 @@
         [data-theme="dark"] .page-section .text-orange-500 { color: #ffa25e !important; }
         [data-theme="dark"] .page-section .bg-blue-50, [data-theme="dark"] .page-section .bg-blue-100 { background-color: #16222e !important; }
 
-        [data-theme="dark"] [id$="-modal"] .bg-white { background-color: #1a222d !important; }
+        [data-theme="dark"] [id$="-modal"] .bg-white { background-color: rgba(255, 255, 255, 0.05) !important; }
         [data-theme="dark"] [id$="-modal"] .text-gray-800, [data-theme="dark"] [id$="-modal"] .text-gray-900 { color: #ece8e1 !important; }
         [data-theme="dark"] [id$="-modal"] .text-gray-700 { color: #d5d9de !important; }
         [data-theme="dark"] [id$="-modal"] .text-gray-600, [data-theme="dark"] [id$="-modal"] .text-gray-500 { color: #a3adb8 !important; }
@@ -398,6 +404,46 @@
             border-color: #3a4552 !important;
         }
         [data-theme="dark"] #login-page input::placeholder { color: #5a6572 !important; }
+
+        /* ==================== V3.2.1 亚克力侧栏/顶栏 ==================== */
+        aside {
+            backdrop-filter: blur(20px) saturate(160%);
+            -webkit-backdrop-filter: blur(20px) saturate(160%);
+        }
+        header {
+            backdrop-filter: blur(14px) saturate(160%);
+            -webkit-backdrop-filter: blur(14px) saturate(160%);
+        }
+
+        /* ==================== V3.2.1 暗色文字继承 + 语义色提亮 ==================== */
+        [data-theme="dark"] .page-section,
+        [data-theme="dark"] [id$="-modal"],
+        [data-theme="dark"] #login-page { color: #ece8e1 !important; }
+
+        [data-theme="dark"] .page-section .text-blue-500, [data-theme="dark"] .page-section .text-blue-600, [data-theme="dark"] .page-section .text-blue-700,
+        [data-theme="dark"] [id$="-modal"] .text-blue-500, [data-theme="dark"] [id$="-modal"] .text-blue-600, [data-theme="dark"] [id$="-modal"] .text-blue-700 { color: #6fb5ff !important; }
+        [data-theme="dark"] .page-section .text-red-400, [data-theme="dark"] .page-section .text-red-600,
+        [data-theme="dark"] [id$="-modal"] .text-red-400, [data-theme="dark"] [id$="-modal"] .text-red-600 { color: #ff6b78 !important; }
+        [data-theme="dark"] .page-section .text-green-400, [data-theme="dark"] .page-section .text-green-600,
+        [data-theme="dark"] [id$="-modal"] .text-green-400, [data-theme="dark"] [id$="-modal"] .text-green-600 { color: #7fd8a4 !important; }
+        [data-theme="dark"] .page-section .text-orange-400, [data-theme="dark"] .page-section .text-orange-500, [data-theme="dark"] .page-section .text-orange-600,
+        [data-theme="dark"] [id$="-modal"] .text-orange-400, [data-theme="dark"] [id$="-modal"] .text-orange-500, [data-theme="dark"] [id$="-modal"] .text-orange-600 { color: #ffa25e !important; }
+        [data-theme="dark"] .page-section .bg-orange-100, [data-theme="dark"] [id$="-modal"] .bg-orange-100 { background-color: #332314 !important; }
+        [data-theme="dark"] button.bg-amber-500 { background-color: #b45309 !important; }
+        [data-theme="dark"] .page-section .text-yellow-400, [data-theme="dark"] .page-section .text-yellow-700,
+        [data-theme="dark"] [id$="-modal"] .text-yellow-400, [data-theme="dark"] [id$="-modal"] .text-yellow-700 { color: #f2c879 !important; }
+
+        [data-theme="dark"] .page-section .bg-yellow-100, [data-theme="dark"] [id$="-modal"] .bg-yellow-100 { background-color: #3a2f14 !important; }
+        [data-theme="dark"] .page-section .bg-green-100, [data-theme="dark"] [id$="-modal"] .bg-green-100 { background-color: #14301f !important; }
+        [data-theme="dark"] .page-section .bg-green-50, [data-theme="dark"] [id$="-modal"] .bg-green-50 { background-color: #0e2417 !important; }
+        [data-theme="dark"] button.bg-green-500 { background-color: #15803d !important; }
+        [data-theme="dark"] .page-section .bg-red-100, [data-theme="dark"] [id$="-modal"] .bg-red-100 { background-color: #33141a !important; }
+        [data-theme="dark"] .page-section .bg-blue-100, [data-theme="dark"] [id$="-modal"] .bg-blue-100 { background-color: #14283a !important; }
+        [data-theme="dark"] .page-section .bg-gray-200, [data-theme="dark"] [id$="-modal"] .bg-gray-200 { background-color: #232d3a !important; }
+        [data-theme="dark"] .page-section .border-gray-400, [data-theme="dark"] [id$="-modal"] .border-gray-400 { border-color: #3a4552 !important; }
+        [data-theme="dark"] .page-section td, [data-theme="dark"] .page-section th,
+        [data-theme="dark"] [id$="-modal"] td, [data-theme="dark"] [id$="-modal"] th { border-color: rgba(236, 232, 225, 0.12) !important; }
+        [data-theme="dark"] .page-section input::placeholder, [data-theme="dark"] [id$="-modal"] input::placeholder { color: #5a6572 !important; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
