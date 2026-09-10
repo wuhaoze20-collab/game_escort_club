@@ -1,5 +1,18 @@
 # 更新日志 CHANGELOG
 
+## [V2.9.0] 2026-09-10
+
+### 🧹 代码与文件清理
+1. **删除冗余 import**：models.py（Boolean）、seed_demo_data.py（sys）、rating_api.py（List）、tip_api.py（get_current_user）
+2. **删除残留文件**：6 个运行日志（server.log / _server.log 等）、PyCharm 配置目录 .idea、无依赖的空虚拟环境 .venv（13.5MB）
+3. **保留项**：旧 SQLite 数据库 game_club.db（可回退）、backups 备份目录（自动备份产物）、touxiangku 头像素材库
+
+### ✅ 验证
+- 静态分析：96 个前端 JS 函数全部被引用、无重复 id、无大段注释死代码；后端无未使用函数
+- 清理后重启：登录/内容/打手列表/订单/本月盈利/注册审核/提现 7 项接口全部通过
+
+---
+
 ## [V2.8.0] 2026-09-10
 
 ### 🆕 登录页注册功能

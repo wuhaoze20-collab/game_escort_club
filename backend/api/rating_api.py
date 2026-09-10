@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from database import get_db
 from models import Order, PlayerInfo, PlayerRating, User
 from schemas import RatingCreateRequest, RatingReplyRequest, ReviewDecisionRequest, ReviewRequest, RatingResponse, ComplaintRequest

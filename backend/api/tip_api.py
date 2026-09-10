@@ -4,7 +4,7 @@ from typing import List
 from database import get_db
 from models import BossInfo, Order, PlayerInfo, TipRecord, User
 from schemas import TipCreateRequest, TipResponse
-from auth import get_current_user, require_roles
+from auth import require_roles
 
 router = APIRouter(prefix="/api/tip", tags=["打赏管理"])
 

@@ -8,7 +8,6 @@
 用法：venv\Scripts\python seed_demo_data.py
 """
 import random
-import sys
 from datetime import datetime, timedelta
 
 from database import SessionLocal
