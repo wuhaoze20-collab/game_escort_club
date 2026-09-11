@@ -770,15 +770,15 @@
                     </div>
                     <p id="recharge-tip" class="text-sm text-gray-500 mb-4">选择充值金额，到账大狗币（1元 = 1大狗币），点单与打赏将消耗大狗币</p>
                     <div id="recharge-content" class="grid grid-cols-1 md:grid-cols-4 gap-4"><div class="loading">加载中...</div></div>
-                </section>
 
-                <!-- 5. 会员福利 -->
-                <section id="page-member" class="page-section bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-gray-800">会员福利</h2>
-                        <button onclick="openEditModal('member')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                    <!-- 会员福利（并入充值中心） -->
+                    <div class="mt-8">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-base font-medium text-gray-700">会员福利</h3>
+                            <button onclick="openEditModal('member')" class="edit-btn px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">编辑</button>
+                        </div>
+                        <div id="member-content" class="overflow-x-auto"><div class="loading">加载中...</div></div>
                     </div>
-                    <div id="member-content" class="overflow-x-auto"><div class="loading">加载中...</div></div>
                 </section>
 
                 <!-- 6. 支付方式 -->
@@ -1937,8 +1937,7 @@
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
                     { key: 'price', label: '价格预览' },
-                    { key: 'recharge', label: '充值福利' },
-                    { key: 'member', label: '会员福利' },
+                    { key: 'recharge', label: '充值中心' },
                     { key: 'payment', label: '支付方式' },
                     { key: 'matches', label: '赛事专栏' },
                     { key: 'punishment', label: '处罚通告' }
@@ -1967,8 +1966,7 @@
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
                     { key: 'price', label: '价格预览' },
-                    { key: 'recharge', label: '充值福利' },
-                    { key: 'member', label: '会员福利' },
+                    { key: 'recharge', label: '充值中心' },
                     { key: 'payment', label: '支付方式' },
                     { key: 'matches', label: '赛事专栏' },
                     { key: 'punishment', label: '处罚通告' }
@@ -1995,7 +1993,6 @@
                     { key: 'order-guide', label: '下单须知' },
                     { key: 'price', label: '价格预览' },
                     { key: 'recharge', label: '充值中心' },
-                    { key: 'member', label: '会员福利' },
                     { key: 'matches', label: '赛事专栏' },
                     { key: 'punishment', label: '处罚通告' }
                 ]},
@@ -2011,7 +2008,7 @@
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
                     { key: 'price', label: '价格预览' },
-                    { key: 'member', label: '会员福利' },
+                    { key: 'recharge', label: '充值中心' },
                     { key: 'matches', label: '赛事专栏' },
                     { key: 'punishment', label: '处罚通告' }
                 ]},
@@ -2074,7 +2071,9 @@
             srcEl.style.opacity = '0';
             setTimeout(() => {
                 textEl.textContent = '「' + q.text + '」';
-                srcEl.textContent = '—— ' + q.source;
+                // 只显示游戏名（《...》部分），不显示角色/人物
+                const m = q.source.match(/《([^》]+)》/);
+                srcEl.textContent = m ? '—— 《' + m[1] + '》' : '—— ' + q.source;
                 textEl.style.opacity = '1';
                 srcEl.style.opacity = '1';
             }, 480);
