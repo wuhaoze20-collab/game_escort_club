@@ -14,10 +14,8 @@
                 :root, :root[data-theme="dark"] {
             --vt-red: #ff4655;
             --vt-red-deep: #d63b49;
-            --vt-red-soft: rgba(255, 70, 85, 0.14);
             --gs-gold: #ff4655;
             --gs-gold-deep: #d63b49;
-            --gs-gold-text: #ffffff;
             --gs-gold-soft: rgba(255, 70, 85, 0.14);
             --bg-page: radial-gradient(ellipse at top, #16222e 0%, #0f1923 45%, #0a1017 100%) fixed;
             --bg-sidebar: linear-gradient(180deg, rgba(13, 19, 28, 0.62), rgba(9, 14, 21, 0.58));
@@ -26,7 +24,6 @@
             --bg-modal: rgba(24, 32, 43, 0.42);
             --bg-login: radial-gradient(ellipse at 30% 20%, #1a2836 0%, #0f1923 55%, #070d14 100%);
             --bg-login-card: rgba(16, 22, 32, 0.5);
-            --border-gold: rgba(255, 70, 85, 0.5);
             --border-gold-light: rgba(255, 70, 85, 0.3);
             --border-gold-lighter: rgba(236, 232, 225, 0.22);
             --text-card: #f0f2f5;
@@ -44,7 +41,6 @@
             --divide: rgba(236, 232, 225, 0.15);
             --star-display: block;
             --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
-            --btn-text: #ffffff;
             --theme-btn: rgba(255, 255, 255, 0.06);
             --bg-overlay: rgba(8, 13, 20, 0.66);
         }
@@ -53,7 +49,6 @@
             --vt-red-deep: #c93440;
             --gs-gold: #e63b49;
             --gs-gold-deep: #c93440;
-            --gs-gold-text: #b32330;
             --gs-gold-soft: rgba(230, 59, 73, 0.12);
             --bg-page: linear-gradient(180deg, #ece8e1 0%, #ddd8ce 100%) fixed;
             --bg-sidebar: linear-gradient(180deg, rgba(245, 242, 236, 0.68), rgba(231, 226, 217, 0.64));
@@ -62,7 +57,6 @@
             --bg-modal: rgba(255, 255, 255, 0.5);
             --bg-login: linear-gradient(135deg, #ece8e1 0%, #d8d2c6 100%);
             --bg-login-card: rgba(255, 255, 255, 0.55);
-            --border-gold: rgba(200, 50, 60, 0.45);
             --border-gold-light: rgba(200, 50, 60, 0.28);
             --border-gold-lighter: rgba(60, 70, 80, 0.15);
             --text-card: #111827;
@@ -80,7 +74,6 @@
             --divide: rgba(60, 70, 80, 0.15);
             --star-display: none;
             --shadow-card: 0 2px 12px rgba(30, 40, 50, 0.08);
-            --btn-text: #ffffff;
             --theme-btn: rgba(0, 0, 0, 0.05);
             --bg-overlay: rgba(236, 232, 225, 0.75);
         }
@@ -790,7 +783,6 @@
                     <div id="payment-content" class="grid grid-cols-1 md:grid-cols-2 gap-4"><div class="loading">加载中...</div></div>
                 </section>
 
-                <!-- 7. 处罚通告 -->
                 <!-- 7.5 赛事专栏 -->
                 <section id="page-matches" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -886,7 +878,6 @@
                 <section id="page-order" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-6">
                         <h2 class="text-lg font-semibold text-gray-800">点单中心</h2>
-                        <div id="order-boss-balance" class="text-sm text-gray-500"></div>
                     </div>
 
                     <!-- 打手选择区 -->
@@ -984,12 +975,6 @@
                             <div>
                                 <label class="block text-sm text-gray-600 mb-1">新昵称</label>
                                 <input id="profile-nickname-input" type="text" maxlength="20" placeholder="请输入新昵称（20字以内）" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                            </div>
-                            <div class="hidden">
-                                <label class="block text-sm text-gray-600 mb-1">选择新头像</label>
-                                <p class="text-xs text-gray-400 mb-1">点击下方图库图片即可选中</p>
-                                <input id="profile-avatar-input" type="hidden">
-                                <div id="profile-avatar-select" class="flex flex-wrap gap-2"></div>
                             </div>
                         </div>
                         <div class="flex justify-end">
@@ -1436,9 +1421,6 @@
         </div>
     </div>
 
-    <!-- 弹窗通知（顶部弹出） -->
-    <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
-
     <script>
         // ==================== 主题初始化（暗色/明亮，记忆选择） ====================
         (function () {
@@ -1548,7 +1530,6 @@
             }
         });
 
-        // 退出登录
         // ==================== 注册功能 ====================
         const registerModal = document.getElementById('register-modal');
         const regError = document.getElementById('reg-error');
@@ -2052,7 +2033,6 @@
             });
         }
 
-        // 切换页面
         // ==================== 顶部台词栏（切页随机 + 10秒轮换） ====================
         const QUOTES = [{"text":"我于杀戮之中绽放，亦如黎明中的花朵。","source":"《英雄联盟》"},{"text":"万物皆虚，万事皆允。","source":"《刺客信条》"},{"text":"直到我的膝盖中了一箭。","source":"《上古卷轴5：天际》"},{"text":"午时已到。","source":"《守望先锋》"},{"text":"战争，从未改变。","source":"《辐射》"},{"text":"要保持淡定，就算输掉了比赛，你还有人生。","source":"《DOTA2》"},{"text":"敬梦想。是梦想让我们远离疯狂。","source":"《赛博朋克2077》"},{"text":"总会有地上的生灵，敢于直面雷霆的威光。","source":"《原神》"},{"text":"愿此行，终抵群星。","source":"《崩坏：星穹铁道》"},{"text":"没有撤退可言。","source":"《英雄联盟》"},{"text":"我终有一天会死，但不是今天。","source":"《魔兽世界》"},{"text":"优雅永不过时。","source":"《英雄联盟》"},{"text":"蛋糕是谎言。","source":"《传送门 Portal》"},{"text":"强者的道路，由自己开辟。","source":"《无畏契约》"},{"text":"未来的事情谁也不知道。正因为如此，未来才有无限的可能。","source":"《命运石之门》"},{"text":"就算失败，也要摆出豪迈的姿态。","source":"《王者荣耀》"},{"text":"人们向往天堂，可天堂没有你想象的美好。","source":"《守望先锋》"},{"text":"三眼五显仙人，魈，听召，前来守护。","source":"《原神》"},{"text":"你对力量一无所知。","source":"《魔兽世界》"},{"text":"并非我自视甚高，而是我本就如此。","source":"《无畏契约》"},{"text":"死亡如风，常伴吾身。","source":"《英雄联盟》"},{"text":"真正的大师，永远怀着一颗学徒的心。","source":"《英雄联盟》"},{"text":"协议三：保护铁驭。","source":"《泰坦陨落2》"},{"text":"胜败乃兵家常事，大侠请重新来过。","source":"《仙剑奇侠传》"},{"text":"时间不在于你拥有多少，而在于你怎样使用。","source":"《英雄联盟》"},{"text":"失败总是贯穿人生始终，这就是人生。","source":"ShowMaker"},{"text":"敌军还有30秒到达战场。","source":"《英雄联盟》"},{"text":"永失吾爱，举目破败。","source":"《英雄联盟》"},{"text":"猎魔人没有休息可言。","source":"《巫师3：狂猎》"},{"text":"前路漫漫，唯有前行。","source":"《只狼：影逝二度》"},{"text":"勇者独自踏上旅途，拿好这份礼物。","source":"《塞尔达传说》"},{"text":"自立自主，总胜过俯首为奴。","source":"《英雄联盟》"},{"text":"我已经看到了未来，而你不在其中。","source":"《DOTA2》"},{"text":"当太阳升起，就把昨天忘掉。","source":"Bin"},{"text":"万般苦痛，自有力量化解。","source":"《英雄联盟》"},{"text":"生于黑暗，仍向光明。","source":"《第五人格》"},{"text":"要么名垂青史，要么即刻陨落。","source":"《炉石传说》"},{"text":"我此生仅有的机会。","source":"ShowMaker"},{"text":"利刃在手，制裁八方。","source":"《英雄联盟》"},{"text":"无需畏惧前路未知。","source":"《魔兽世界》"},{"text":"失败意味着你努力过了，亲爱的。","source":"《Apex英雄》地平线"},{"text":"狩猎，开始了。","source":"《Apex英雄》寻血猎犬"},{"text":"速度就是一切。","source":"《Apex英雄》动力小子"},{"text":"逃跑很容易，但你会一无所获。","source":"《Apex英雄》动力小子"},{"text":"在众神面前，证明你的力量。","source":"《Apex英雄》寻血猎犬"},{"text":"生死一线间，我就在那条线上。","source":"《Apex英雄》恶灵"},{"text":"我曾从宇宙的黑暗之中幸存。","source":"《Apex英雄》地平线"},{"text":"输了可不好玩，所以我从来不会输。","source":"《Apex英雄》暴雷"},{"text":"你的心里有个空洞，那是我安置的。","source":"《Apex英雄》恶灵"},{"text":"只需要一点火星，就足够了。","source":"《Apex英雄》沃特森"},{"text":"今天的胜利，早已命中注定。","source":"《Apex英雄》寻血猎犬"},{"text":"替我向死神，问声好。","source":"《Apex英雄》恶灵"},{"text":"我会护住你的后背，兄弟。","source":"《Apex英雄》直布罗陀"},{"text":"猎物已标记，准备狩猎。","source":"《Apex英雄》万蒂奇"},{"text":"尽量别眨眼，你会跟丢我的。","source":"《Apex英雄》恶灵"},{"text":"机会只会留给敢出手的人。","source":"《Apex英雄》万蒂奇"},{"text":"不必畏惧未知，未知才是乐趣所在。","source":"《Apex英雄》暴雷"},{"text":"战斗的意义，在于超越昨日的自己。","source":"《Apex英雄》瓦尔基里"},{"text":"胜负未定，一切皆有可能。","source":"《Apex英雄》纽卡斯尔"},{"text":"别挡我的路！","source":"《无畏契约》捷风"},{"text":"这是我的决斗。","source":"《无畏契约》壹决"},{"text":"你的使命还没结束！","source":"《无畏契约》贤者"},{"text":"好戏才刚刚开场。","source":"《无畏契约》尚勃勒"},{"text":"开始狩猎。","source":"《无畏契约》芮娜"},{"text":"接受平庸，就是失败的第一步。","source":"《彩虹六号》Kali"},{"text":"保护他人，是发自内心的使命感。","source":"《彩虹六号》莹"},{"text":"别在交易的时候，亮出你的底牌。","source":"《彩虹六号》Alibi"},{"text":"我会护住你的后背，继续前进。","source":"《彩虹六号》莹"},{"text":"我们不是来寻求死亡，而是夺取胜利。","source":"《CS2》"},{"text":"团结一心，我们便无可阻挡。","source":"《CS2》"},{"text":"梦想不在于你是什么，而在于你想成为什么。","source":"《星际战甲》莲花"},{"text":"没有干净的胜利，只有幸存者。","source":"《星际战甲》"},{"text":"每一个选择，都自有其代价。","source":"《星际战甲》莲花"},{"text":"长路漫漫，唯有战斗不息。","source":"《永劫无间》"},{"text":"一念成刃，一念为仁。","source":"《永劫无间》"},{"text":"纵使前路万丈深渊，下去，也是前程万里。","source":"《黑神话：悟空》"},{"text":"众生各有执念，执念便是枷锁。","source":"《黑神话：悟空》"},{"text":"别怕，故事才刚刚开始。","source":"《黑神话：悟空》"},{"text":"凡有所相，皆是虚妄。","source":"《黑神话：悟空》"},{"text":"山高水远，江湖再见。","source":"《武林外传 游戏版》"},{"text":"江湖不大，狭路相逢便是缘。","source":"《剑网3》"},{"text":"我自横刀向天笑，快意恩仇走一遭。","source":"《剑网3》"},{"text":"一入江湖，身不由己。","source":"《剑网3》"},{"text":"以手中剑，护身边人。","source":"《逆水寒》"},{"text":"人间烟火，最抚人心。","source":"《逆水寒》"},{"text":"天下风云出我辈，一入江湖岁月催。","source":"《逆水寒》"},{"text":"生死由命，胜负在人。","source":"《永劫无间》"},{"text":"刀无眼，人有情。","source":"《永劫无间》"},{"text":"风沙不息，战斗不止。","source":"《永劫无间》"},{"text":"一念起，万水千山；一念灭，沧海桑田。","source":"《古剑奇谭》"},{"text":"愿以残躯，守护人间岁岁平安。","source":"《古剑奇谭》"},{"text":"岁月漫长，终有相逢之日。","source":"《仙剑奇侠传三》"},{"text":"既不回头，何必不忘。","source":"《仙剑奇侠传》"},{"text":"魔非魔，道非道，善恶在人心。","source":"《仙剑奇侠传》"},{"text":"梦魂所至，即是归途。","source":"《仙剑奇侠传七》"},{"text":"我的目标，是成为海贼王。","source":"《海贼王：无尽世界R》"},{"text":"苦难不会没完没了，当然幸运也不会永远持续。","source":"《海贼王 游戏》"},{"text":"人的梦想，是不会终结的。","source":"《海贼王：燃烧之血》"},{"text":"活下去，本身就是一场战斗。","source":"《只狼：影逝二度》"},{"text":"犹豫，就会败北。","source":"《只狼：影逝二度》"},{"text":"不死的诅咒，终会迎来终结。","source":"《只狼：影逝二度》"},{"text":"火焰，净化一切罪孽。","source":"《艾尔登法环》"},{"text":"群星之中，自有你的命运。","source":"《艾尔登法环》"},{"text":"褪色者，去夺回属于你的大卢恩。","source":"《艾尔登法环》"},{"text":"世界本就残破，你要做的是继续前行。","source":"《艾尔登法环》"},{"text":"战火熄灭之时，方见真正和平。","source":"《战地》"},{"text":"战场上没有英雄，只有幸存者。","source":"《战地》"},{"text":"任务高于一切。","source":"《使命召唤》"},{"text":"保持警惕，危险无处不在。","source":"《使命召唤》"},{"text":"我们的牺牲，会被世人铭记。","source":"《使命召唤》"},{"text":"信息，就是最强的武器。","source":"《看门狗》"},{"text":"城市由代码编织，而我掌控代码。","source":"《看门狗》"},{"text":"规则是给弱者准备的。","source":"《看门狗2》"},{"text":"自由，需要付出代价。","source":"《荒野大镖客2》"},{"text":"人终有一死，重要的是活着的方式。","source":"《荒野大镖客2》"},{"text":"复仇之路，只会吞噬你自己。","source":"《荒野大镖客2》"},{"text":"这片荒野，包容所有流浪之人。","source":"《荒野大镖客2》"},{"text":"黑夜降临，猎杀开启。","source":"《黎明杀机》"},{"text":"希望，是绝境里最后的光。","source":"《黎明杀机》"},{"text":"不要相信黑暗里传来的声音。","source":"《黎明杀机》"},{"text":"生存，就是唯一的目标。","source":"《绝地求生》"},{"text":"百炼成钢，胜者为王。","source":"《绝地求生》"},{"text":"伏地不是怯懦，是等待时机。","source":"《绝地求生》"},{"text":"安全区会缩小，但机会不会消失。","source":"《绝地求生》"},{"text":"智慧，远比蛮力更有力量。","source":"《文明6》"},{"text":"文明的火种，永不熄灭。","source":"《文明6》"},{"text":"时代更迭，而传奇永存。","source":"《文明6》"},{"text":"每一座城市，都是人类的诗篇。","source":"《文明6》"},{"text":"在废墟之上，重建家园。","source":"《辐射4》"},{"text":"战争改变一切，人性永不消亡。","source":"《辐射4》"},{"text":"在废土之中，守住心中善意。","source":"《辐射4》"},{"text":"抉择没有对错，只有结果。","source":"《奇异人生》"},{"text":"时间可以倒流，但遗憾无法抹去。","source":"《奇异人生》"},{"text":"微小的选择，足以改变整个世界。","source":"《奇异人生》"},{"text":"家，不是地点，是陪伴你的人。","source":"《奇异人生》"},{"text":"世界是巨大的谜题，等你来解开。","source":"《传送门2》"},{"text":"思考，比速度更加重要。","source":"《传送门2》"},{"text":"不要相信所有听到的承诺。","source":"《传送门2》"},{"text":"科学没有温度，但使用者有。","source":"《传送门2》"},{"text":"森林会记住所有发生的故事。","source":"《森林》"},{"text":"恐惧源于未知，勇气战胜恐惧。","source":"《森林》"},{"text":"活下去，找到你所追寻的人。","source":"《森林》"},{"text":"大海广阔无垠，藏着无数秘密。","source":"《深海迷航》"},{"text":"深海令人恐惧，也藏着奇迹。","source":"《深海迷航》"},{"text":"孤身漂泊，也不要放弃希望。","source":"《深海迷航》"},{"text":"星球的命运，握在你的手中。","source":"《无人深空》"},{"text":"宇宙浩瀚，永远有未探索之地。","source":"《无人深空》"},{"text":"每一颗星辰，都在等待旅人。","source":"《无人深空》"},{"text":"探索，是人类永恒的本能。","source":"《无人深空》"},{"text":"音乐不会消亡，灵魂永远歌唱。","source":"《吉他英雄》"},{"text":"跟着节奏，点燃全场。","source":"《节奏光剑》"},{"text":"光影流转，随心而动。","source":"《节奏光剑》"},{"text":"指尖起落，即是战场。","source":"《拳皇》"},{"text":"格斗的真谛，是超越自我。","source":"《拳皇》"},{"text":"胜负一瞬，热血永存。","source":"《拳皇》"},{"text":"强者从不抱怨环境。","source":"《街头霸王》"},{"text":"每一次交手，都是一次修行。","source":"《街头霸王》"},{"text":"拳头可以分出胜负，无法衡量信念。","source":"《街头霸王》"},{"text":"钢铁铸就身躯，信念守护人类。","source":"《守望先锋》"},{"text":"这个世界，需要更多英雄。","source":"《守望先锋》"},{"text":"团结，才能战胜危机。","source":"《守望先锋》"},{"text":"就算世界崩塌，也要守住信念。","source":"《守望先锋》"},{"text":"星辰大海，征途永不停歇。","source":"《EVE星战前夜》"},{"text":"宇宙没有法律，只有生存法则。","source":"《EVE星战前夜》"},{"text":"战舰穿梭星海，梦想跨越光年。","source":"《EVE星战前夜》"},{"text":"舰队的荣光，由我们共同守护。","source":"《EVE星战前夜》"},{"text":"卡牌之内，暗藏乾坤。","source":"《炉石传说》"},{"text":"运气只是辅助，策略决定胜负。","source":"《炉石传说》"},{"text":"一局结束，新的对局即将开启。","source":"《炉石传说》"},{"text":"万物有灵，自然即是力量。","source":"《魔兽世界》"},{"text":"荣耀存于心，而非流于形。","source":"《魔兽世界》"},{"text":"光明与黑暗，永远相伴相生。","source":"《魔兽世界》"},{"text":"战友同行，不惧远征。","source":"《魔兽世界》"},{"text":"棋盘方寸，谋略万千。","source":"《自走棋》"},{"text":"步步谋划，静待翻盘。","source":"《自走棋》"},{"text":"不到最后一刻，不知谁是赢家。","source":"《自走棋》"},{"text":"谋略不止纸面，战局瞬息万变。","source":"《自走棋》"},{"text":"城市的夜晚，藏着无数故事。","source":"《赛博朋克2077》"},{"text":"在霓虹之下，守住你自己。","source":"《赛博朋克2077》"},{"text":"生命的价值，不由芯片定义。","source":"《赛博朋克2077》"},{"text":"梦想哪怕渺小，也值得去追逐。","source":"《赛博朋克2077》"},{"text":"怪物遍布世界，但希望从未消失。","source":"《消逝的光芒》"},{"text":"白昼躲藏，夜晚奔跑。","source":"《消逝的光芒》"},{"text":"绝境之中，人性依旧闪光。","source":"《消逝的光芒》"},{"text":"跑，活下去就是胜利。","source":"《消逝的光芒》"},{"text":"猎魔之路，永无止境。","source":"《巫师3：狂猎》"},{"text":"怪物可怕，但人心更难揣测。","source":"《巫师3：狂猎》"},{"text":"选择不分好坏，只是承担代价。","source":"《巫师3：狂猎》"},{"text":"刀剑可以斩魔物，斩不断人心。","source":"《巫师3：狂猎》"},{"text":"机甲轰鸣，奔赴战场。","source":"《泰坦陨落2》"},{"text":"铁驭与机甲，彼此唯一依靠。","source":"《泰坦陨落2》"},{"text":"即使孤军奋战，也绝不退缩。","source":"《泰坦陨落2》"},{"text":"重力束缚不了勇敢的灵魂。","source":"《泰坦陨落2》"},{"text":"古堡幽暗，真相藏于阴影。","source":"《生化危机》"},{"text":"灾难来袭，守住最后的防线。","source":"《生化危机》"},{"text":"危险潜伏角落，时刻保持冷静。","source":"《生化危机》"},{"text":"黑暗再浓重，光也能穿透。","source":"《生化危机》"},{"text":"岛屿之上，危机四伏。","source":"《孤岛惊魂》"},{"text":"强权可以统治土地，无法禁锢思想。","source":"《孤岛惊魂》"},{"text":"反抗之火，永不熄灭。","source":"《孤岛惊魂》"},{"text":"疯狂的世界，保持清醒最难。","source":"《孤岛惊魂》"},{"text":"战车轰鸣，炮火见证荣耀。","source":"《坦克世界》"},{"text":"钢铁巨兽，冲锋向前。","source":"《坦克世界》"},{"text":"阵地之上，没有撤退选项。","source":"《坦克世界》"},{"text":"瞄准、等待，一击制胜。","source":"《坦克世界》"},{"text":"扬帆起航，征服海洋。","source":"《盗贼之海》"},{"text":"大海喜怒无常，海盗永不投降。","source":"《盗贼之海》"},{"text":"宝藏不是一切，冒险才是乐趣。","source":"《盗贼之海》"},{"text":"同船伙伴，共渡风浪。","source":"《盗贼之海》"},{"text":"小小国度，大有可为。","source":"《星露谷物语》"},{"text":"日出而作，日落而息，生活自有温柔。","source":"《星露谷物语》"},{"text":"耕耘土地，也耕耘希望。","source":"《星露谷物语》"},{"text":"平凡日子，也能开出繁花。","source":"《星露谷物语》"},{"text":"在废墟小镇，重建新生活。","source":"《环世界》"},{"text":"生存、建造，抵御所有灾难。","source":"《环世界》"},{"text":"资源有限，智慧无限。","source":"《环世界》"},{"text":"天灾来袭，团结方能存续。","source":"《环世界》"},{"text":"方块之内，创造无限世界。","source":"《我的世界》"},{"text":"没有规则，想象力就是边界。","source":"《我的世界》"},{"text":"亲手搭建，属于自己的天地。","source":"《我的世界》"},{"text":"长夜降临，庇护所守护你。","source":"《我的世界》"},{"text":"每一张照片，都是一段回忆。","source":"《奇异人生：风暴前夕》"},{"text":"青春短暂，勇敢去做自己。","source":"《奇异人生：风暴前夕》"},{"text":"朋友相伴，不惧风雨。","source":"《奇异人生：风暴前夕》"},{"text":"告别很难，但成长总要前行。","source":"《奇异人生：风暴前夕》"},{"text":"迷雾笼罩小镇，真相等待发掘。","source":"《心灵杀手》"},{"text":"故事拥有力量，文字改变现实。","source":"《心灵杀手》"},{"text":"黑暗会吞噬一切，信念抵抗黑暗。","source":"《心灵杀手》"},{"text":"书写故事，对抗梦魇。","source":"《心灵杀手》"},{"text":"飞船远航，寻找新家园。","source":"《家园》"},{"text":"故土沦陷，族人永不屈服。","source":"《家园》"},{"text":"穿越星云，只为寻一处安身之所。","source":"《家园》"},{"text":"舰队集结，踏上漫长归途。","source":"《家园》"},{"text":"赛场之上，分秒定胜负。","source":"《F1赛车系列》"},{"text":"油门踩到底，追逐风的速度。","source":"《地平线：赛车》"},{"text":"道路无尽，热爱永不降温。","source":"《地平线：赛车》"},{"text":"弯道之中，决定成败。","source":"《F1赛车系列》"},{"text":"怪兽肆虐，人类奋起反抗。","source":"《噬血代码》"},{"text":"血脉之中，藏着力量与诅咒。","source":"《噬血代码》"},{"text":"痛苦是枷锁，也能化为力量。","source":"《噬血代码》"},{"text":"就算世界崩坏，也要寻找同伴。","source":"《噬血代码》"},{"text":"列车穿行废土，承载最后的文明。","source":"《地铁》"},{"text":"地下黑暗，但火种未曾熄灭。","source":"《地铁》"},{"text":"辐射笼罩大地，人性依旧闪光。","source":"《地铁》"},{"text":"微光虽小，足以驱散长夜。","source":"《地铁》"},{"text":"梦境与现实，边界早已模糊。","source":"《控制》"},{"text":"规则可以被改写，力量源于内心。","source":"《控制》"},{"text":"未知不是恐惧，是新的开始。","source":"《控制》"},{"text":"掌控自我，方能掌控力量。","source":"《控制》"},{"text":"小小细胞，演化万千生命。","source":"《孢子》"},{"text":"从单细胞起步，征服整个星球。","source":"《孢子》"},{"text":"生命不断演化，冒险永不停歇。","source":"《孢子》"},{"text":"适者生存，创造属于你的种族。","source":"《孢子》"},{"text":"乱世之中，招募英雄，平定天下。","source":"《全面战争》"},{"text":"千军万马，阵前一决雌雄。","source":"《全面战争》"},{"text":"王朝起落，英雄故事代代流传。","source":"《全面战争》"},{"text":"谋略与兵力，缺一不可。","source":"《全面战争》"},{"text":"岛屿沉没，幸存者寻找出路。","source":"《饥荒》"},{"text":"荒野无情，学会与自然共存。","source":"《饥荒》"},{"text":"黑夜将至，备好篝火与食物。","source":"《饥荒》"},{"text":"生存不易，也要保持一丝幽默。","source":"《饥荒》"},{"text":"特工潜行，于无声处完成任务。","source":"《杀手》"},{"text":"完美的计划，需要耐心等待。","source":"《杀手》"},{"text":"藏于人群，无人察觉你的存在。","source":"《杀手》"},{"text":"万事皆有破绽，等待最佳时机。","source":"《杀手》"},{"text":"魔法世界，咒语改写现实。","source":"《霍格沃茨之遗》"},{"text":"古老城堡，藏着千年秘密。","source":"《霍格沃茨之遗》"},{"text":"魔杖在手，探索魔法的奥秘。","source":"《霍格沃茨之遗》"},{"text":"善恶由心，魔法不分正邪。","source":"《霍格沃茨之遗》"},{"text":"废墟都市，机甲守护人类。","source":"《装甲核心6》"},{"text":"战场之上，只有任务，没有怜悯。","source":"《装甲核心6》"},{"text":"钢铁外壳之下，藏着你的意志。","source":"《装甲核心6》"},{"text":"为了目标，一往无前。","source":"《装甲核心6》"},{"text":"故事终有结尾，但冒险永不落幕。","source":"《风之大陆》"},{"text":"无论去往何方，保持心中热爱。","source":"《风之大陆》"},{"text":"我来同你玩。","source":"《三角洲行动》威龙"},{"text":"有我在，天就塌不下来！","source":"《三角洲行动》威龙"},{"text":"掉皮掉肉不掉队。","source":"《三角洲行动》威龙"},{"text":"有实力才能讲道理。","source":"《三角洲行动》威龙"},{"text":"承父辈星火，守此界苍穹。","source":"《三角洲行动》威龙"},{"text":"仗还没打完，继续作战。","source":"《三角洲行动》威龙"},{"text":"逃避是没有用的，所以我回来了。","source":"《三角洲行动》无名"},{"text":"最黑暗的时刻，就是黎明到来之前。","source":"《三角洲行动》深蓝"},{"text":"进步，是无法被阻止的。","source":"《三角洲行动》德穆兰"},{"text":"有时候慢了，比错了更让人后悔。","source":"《三角洲行动》红狼"},{"text":"要么终结恐惧，要么被恐惧终结。","source":"《三角洲行动》"},{"text":"战场瞬息万变，时刻保持戒备。","source":"《三角洲行动》"},{"text":"目标锁定，准备行动。","source":"《三角洲行动》"},{"text":"任务在前，无畏前行。","source":"《三角洲行动》"},{"text":"软弱时要坚强，恐惧时勇敢！胜利时要谦逊。","source":"《Apex英雄》寻血猎犬"}];
 
@@ -2407,36 +2387,6 @@
         }
 
         // ==================== 头像与昵称（所有角色可编辑，管理员审核） ====================
-        // 可选头像图库（与 backend/user_info_api.py 的 AVATAR_LIBRARY 保持一致）
-        const AVATAR_LIBRARY = [
-            'avatar_985_1.jpg', 'avatar_985_2.jpg',
-            'avatar_211_1.jpg', 'avatar_211_2.jpg',
-            'avatar_dazhuan.png', 'avatar_yule.jpg',
-            'avatar_mingxing.jpg', 'avatar_mowanghu.jpg',
-            'avatar_admin.jpg', 'avatar_service.png'
-        ];
-
-        // 渲染头像选择图库
-        function renderAvatarSelect(selected) {
-            const box = document.getElementById('profile-avatar-select');
-            box.innerHTML = AVATAR_LIBRARY.map(name => `
-                <img src="avatars/${name}" data-name="${name}"
-                    onclick="selectAvatar(this)"
-                    class="w-14 h-14 rounded-full object-cover cursor-pointer border-2 ${name === selected ? 'border-amber-500 ring-2 ring-amber-300' : 'border-gray-200 hover:border-amber-300'} transition">
-            `).join('');
-        }
-
-        // 选择头像
-        function selectAvatar(img) {
-            document.querySelectorAll('#profile-avatar-select img').forEach(i => {
-                i.classList.remove('border-amber-500', 'ring-2', 'ring-amber-300');
-                i.classList.add('border-gray-200');
-            });
-            img.classList.remove('border-gray-200');
-            img.classList.add('border-amber-500', 'ring-2', 'ring-amber-300');
-            document.getElementById('profile-avatar-input').value = img.dataset.name;
-        }
-
         // 加载昵称编辑区（头像由系统按角色/等级默认分配，任何人不可选用图库）
         async function loadProfileEditor() {
             let info = null;
@@ -2451,10 +2401,6 @@
             document.getElementById('profile-nickname-current').textContent = nick;
             document.getElementById('profile-avatar-preview').src = av ? `avatars/${av}` : 'avatars/avatar_yule.jpg';
             document.getElementById('profile-nickname-input').value = '';
-
-            // 隐藏头像选择端口：图库仅作系统默认分配，任何人不可选用
-            const avatarSelectBox = document.getElementById('profile-avatar-select').parentElement;
-            avatarSelectBox.classList.add('hidden');
 
             // 审核状态徽章（仅昵称）
             const statusBox = document.getElementById('profile-review-status');

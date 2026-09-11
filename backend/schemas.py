@@ -214,15 +214,6 @@ class WithdrawResponse(BaseModel):
 class WithdrawProcessRequest(BaseModel):
     note: str = ""
 
-# 本月盈利统计响应
-class MonthlyProfitResponse(BaseModel):
-    month: str  # 如 2026-09
-    total_profit: int  # 本月俱乐部抽成总额（分）
-    order_count: int  # 本月完成订单数
-    total_amount: int  # 本月订单总额（分）
-    player_payout: int  # 本月打手发放总额（分）
-    records: list = []  # 盈利明细
-
 # 创建订单请求
 class CreateOrderRequest(BaseModel):
     boss_username: str

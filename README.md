@@ -10,32 +10,91 @@
 ## 项目目录结构
 ```
 game_escort_club/
-├── backend/                 # 后端服务（FastAPI）
-│   ├── api/                 # 接口路由
+├── backend/                     # 后端服务（FastAPI）
+│   ├── api/                     # 接口路由（共 60 个接口）
 │   │   ├── __init__.py
-│   │   ├── auth_api.py      # 认证登录接口
-│   │   ├── content_api.py   # 公告/须知/价格/福利/支付方式等内容接口
-│   │   ├── user_info_api.py # 用户资料/昵称审核接口
-│   │   ├── order_api.py     # 点单/接单/结单/派单/统计等订单接口
-│   │   ├── rating_api.py    # 打手评价/回复/复查接口
-│   │   ├── stats_api.py     # 本月盈利统计接口
-│   │   ├── tip_api.py       # 打赏接口
-│   │   └── withdraw_api.py  # 打手提现接口
-│   ├── database.py          # 数据库连接配置（默认 MySQL，可切换 SQLite）
-│   ├── models.py            # 数据库表模型
-│   ├── schemas.py           # 请求/响应数据模型
-│   ├── auth.py              # JWT 鉴权与角色权限校验
-│   ├── main.py              # 程序入口（启动时自动建表+初始化默认数据）
-│   ├── requirements.txt     # Python 依赖清单
-│   ├── game_club.db         # SQLite 数据库文件（首次运行自动生成，可删除重建）
-│   └── venv/                # 虚拟环境（本机已创建，勿删除）
-├── frontend/                # 前端页面（原生单页应用）
-│   ├── index.html           # 单页入口
-│   └── avatars/             # 默认头像图片（系统按角色/等级自动分配）
-├── touxiangku/              # 原始头像素材库（仅供默认分配使用，任何人不可选用）
-├── CHANGELOG.md             # 版本更新日志
+│   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
+│   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
+│   │   ├── user_info_api.py     # 用户资料/昵称审核/等级/标签/充值/封禁/公司账户
+│   │   ├── order_api.py         # 点单/派单/接单/结单/确认结算/取消/工资记录
+│   │   ├── rating_api.py        # 评价/投诉/回复/复查申请与审核
+│   │   ├── stats_api.py         # 本月盈利统计
+│   │   ├── tip_api.py           # 打赏接口
+│   │   ├── withdraw_api.py      # 提现申请与审核
+│   │   └── notification_api.py  # 站内消息通知
+│   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
+│   ├── models.py                # 数据库表模型（11 张表）
+│   ├── schemas.py               # 请求/响应数据模型
+│   ├── auth.py                  # JWT 鉴权与角色权限校验
+│   ├── main.py                  # 程序入口（建表 + 自动补列 + 挂载路由与静态目录）
+│   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
+│   ├── seed_demo_data.py        # 演示数据填充脚本（可选，手动执行）
+│   ├── backup_db.py             # MySQL 备份脚本（mysqldump，默认保留最近 7 份）
+│   ├── requirements.txt         # Python 依赖清单
+│   └── venv/                    # 虚拟环境（本机已创建，勿删除）
+├── frontend/                    # 前端页面（原生单页应用）
+│   ├── index.html               # 单页入口（HTML + CSS + JS 全部在这一个文件内）
+│   └── avatars/                 # 实际对外提供的头像（后端 /avatars 挂载此目录）
+├── touxiangku/                  # 头像素材源（内容与 frontend/avatars 相同，供人工替换素材）
+├── bizhiku/                     # 背景视频（已被 .gitignore 忽略，克隆后需自行放入）
+├── backups/                     # MySQL 备份产物（*.sql，随仓库分发以同步页面内容）
+├── CHANGELOG.md                 # 版本更新日志
 └── README.md
 ```
+
+> **两个容易踩坑的点**
+> 1. 前端是**单文件**应用：`frontend/index.html` 内含全部 CSS 与 JS，没有构建步骤，改完刷新即生效。
+> 2. `bizhiku/` 被 `.gitignore` 忽略，但 `index.html` 引用了其中的 `登录背景.mp4` 与 `背景.mp4`。**新克隆的仓库必须自己放入这两个视频**，否则页面背景静默 404（不影响其它功能）。头像则已随仓库提交（`frontend/avatars/`）。
+
+## 架构说明
+
+### 数据模型（11 张表）
+
+| 表 | 作用 | 关键字段与状态 |
+|---|---|---|
+| `users` | 四种角色统一存储 | `role`(admin/service/boss/player)；`account_status`(注册审核 pending/approved/rejected)；`failed_attempts` + `lock_until`(登录锁定)；`pending_nickname`/`pending_avatar` + `nickname_status`(资料审核) |
+| `content_config` | 页面内容（共 8 个模块） | `config_key` 唯一，`config_value` 存 JSON；**改页面内容 = 改这张表**，无需动代码。白名单见 `content_api.py` 的 `VALID_CONFIG_KEYS` |
+| `boss_info` | 老板业务数据 | `consume_amount`(累计消费)、`balance`(大狗币余额)、`order_count` |
+| `player_info` | 打手业务数据 | `backend_amount`(后台金额)、`good_rate`(好评率，无评价时为空)、`complaint_count`、`level_type` + `tech_level`(等级) |
+| `player_tags` | 打手标签（需审核） | `status`：pending/approved/rejected |
+| `orders` | 订单主表 | `order_no` 唯一；`status` 见下方状态机；`total_amount`、`service_note`(业务量)、`remark`(老板备注) |
+| `salary_records` | 结单工资结算 | `order_id` 唯一（一单一结）；`order_total` = `club_commission` + `player_income` |
+| `player_ratings` | 评价（一单一评） | `order_id` 唯一；`rating`(1-5)；`reply`(打手回复)；`review_status`：normal/reviewing/removed |
+| `tip_records` | 打赏记录 | 关联订单；累计不超过订单金额的 30% |
+| `withdrawal_records` | 提现申请 | `status`：pending/approved/rejected |
+| `notifications` | 站内消息 | `user_id` 外键；`is_read` |
+
+> **金额单位统一为「分」（整数）**，避免浮点误差。仅 `boss_info.balance`（大狗币，1 大狗币 = 1 元）、`player_info.backend_amount`、`good_rate` 使用小数。
+
+> **`content_config` 是复用表**：除 8 个页面内容模块外，它还存了两个**内部键** `company_balance`（公司账户余额）与 `company_records`（封禁资金流水）。这两个键不在 `VALID_CONFIG_KEYS` 白名单内，因此不会出现在 `/api/content/all` 里，也不能通过内容接口读写——**直接清空/重建这张表会连带清掉公司账户余额**。
+
+### 订单状态机
+
+```
+create ─┬─ 未指定打手 ─→ pending(待派单) ─────┐
+        └─ 指定打手 ──→ pending_accept(待打手确认)
+                              ├─ accept ──→ assigned ──→ processing ──→ pending_settlement ──→ completed
+                              └─ reject ──→ rejected ──(重新派单)──→ assigned
+pending / pending_accept / assigned ──cancel──→ cancelled
+processing / pending_settlement ──(管理员直接完成)──→ completed
+```
+
+对应实现见 `backend/api/order_api.py`，状态流转的合法前置条件由每个接口显式校验（非法状态返回 400）。
+
+### 资金流转（大狗币 1:1 人民币）
+
+1. **充值** → 老板 `balance` 增加（`/api/boss/recharge`）
+2. **下单** → 校验并扣除老板大狗币，订单进入 `pending` / `pending_accept`
+3. **拒单 / 取消** → 大狗币原路退回老板
+4. **打手提交结单** → `processing` → `pending_settlement`，**此时资金尚未到打手账户**（保障老板资金安全）
+5. **老板确认结单** → 写 `salary_records`：`club_commission`(30%，`CLUB_COMMISSION_RATE`) 归俱乐部 + `player_income`(70%) 计入打手 `backend_amount`
+6. **打赏** → 老板额外打赏（≤订单 30%），直接计入打手后台金额
+7. **提现** → 打手后台金额**入账满 30 天**（`COOLDOWN_DAYS`）后才可申请 → 管理员/客服审核 → 批准后扣除
+
+### 鉴权与权限
+
+- 登录签发 JWT（`auth.py`，`SECRET_KEY` 环境变量可覆盖，默认 24 小时有效）
+- 接口级权限用 `Depends(require_roles("admin", ...))` 校验，越权返回 403；前端再按角色隐藏菜单与按钮（**前端隐藏只是体验，真正的边界在后端**）
 
 ## 快速启动（详细环境配置）
 
@@ -123,7 +182,7 @@ cd C:\Users\18642\game_escort_club\backend
 venv\Scripts\python main.py
 ```
 
-- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（10 个测试账号、公告/价格等默认内容、6 名打手）
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手）
 - 后端服务地址：`http://localhost:8000`
 - 在线接口文档（Swagger）：`http://localhost:8000/docs`
 
@@ -186,7 +245,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 - 账户安全：连续输错密码 5 次锁定 10 分钟；支持忘记密码重置与"我的账户"修改密码
 
 ### 2. 内容管理
-- 店铺公告、下单须知、价格预览、充值福利、会员福利、支付方式6个模块
+- 共 **8 个**内容模块：店铺公告、下单须知、价格预览、充值福利、会员福利、支付方式、处罚通告、赛事专栏
 - 所有登录用户可查看，仅管理员和客服可编辑
 - 内容存储在数据库，修改实时生效
 
@@ -256,6 +315,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ### 11. 处罚通告
 - 第7个内容模块：违规处罚公示，所有登录用户可查询，仅管理员和客服可编辑
+- 第8个内容模块为「赛事专栏」（`matches`）：游戏赛事直播链接列表，字段为 game/title/url
 
 ### 12. 本月盈利（管理员专属）
 - 本月总盈利（俱乐部抽成合计）、完成订单数、订单总额、打手发放总额
@@ -267,52 +327,114 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 - 打手只能查看自己的工资记录
 
 ## 接口列表
+
+共 **60 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+
+### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | POST | /api/login | 登录获取令牌（连续错5次锁定10分钟） | 所有人 |
-| POST | /api/reset-password | 忘记密码重置（输入账号+新密码） | 所有人 |
+| POST | /api/register | 注册账号（老板即刻生效，打手/客服需审核） | 所有人 |
+| GET | /api/admin/registration-list | 注册审核列表 | 管理员 |
+| POST | /api/admin/registration-decision | 注册审核通过 / 驳回 | 管理员 |
+| POST | /api/reset-password | 忘记密码重置（重置后自动解锁） | 所有人 |
 | POST | /api/change-password | 修改密码（校验原密码） | 所有登录用户 |
+
+### 内容配置（3）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | GET | /api/content/all | 获取所有内容配置 | 所有登录用户 |
-| GET | /api/content/{key} | 获取单个内容配置 | 所有登录用户 |
-| PUT | /api/content/{key} | 更新内容配置 | 管理员/客服 |
+| GET | /api/content/{config_key} | 获取单个内容配置 | 所有登录用户 |
+| PUT | /api/content/{config_key} | 更新内容配置 | 管理员/客服 |
+
+### 站内通知（4）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/notification/list | 获取通知列表 | 所有登录用户 |
+| GET | /api/notification/unread-count | 未读数量 | 所有登录用户 |
+| POST | /api/notification/{notification_id}/read | 标记单条已读 | 所有登录用户 |
+| POST | /api/notification/read-all | 全部标记已读 | 所有登录用户 |
+
+### 用户资料 / 标签 / 账户（18）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | GET | /api/boss/list | 获取老板列表 | 管理员/客服 |
 | GET | /api/player/list | 获取打手列表(含敏感数据) | 管理员/客服 |
 | GET | /api/player/public | 获取打手公开列表(不含敏感数据) | 所有登录用户 |
 | GET | /api/boss/me | 获取当前老板信息 | 老板 |
 | GET | /api/player/me | 获取当前打手信息 | 打手 |
+| PUT | /api/profile | 修改昵称（提交审核） | 所有登录用户 |
+| GET | /api/profile/review | 昵称审核列表 | 管理员/客服 |
+| POST | /api/profile/review/{username} | 昵称审核通过 / 打回 | 管理员/客服 |
 | PUT | /api/player/intro | 更新打手自我介绍 | 打手本人 |
+| PUT | /api/player/level | 修改打手等级 | 打手本人 |
+| GET | /api/player/tags | 查询我的标签 | 打手本人 |
+| POST | /api/player/tags | 添加标签（提交审核） | 打手本人 |
+| DELETE | /api/player/tags/{tag_id} | 删除我的标签 | 打手本人 |
+| GET | /api/player/tags/review | 标签审核列表 | 管理员/客服 |
+| POST | /api/player/tags/{tag_id}/decision | 标签审核通过 / 驳回 | 管理员/客服 |
+| POST | /api/boss/recharge | 老板充值大狗币 | 老板 |
+| POST | /api/admin/ban/{username} | 拉黑老板/打手（后台金额转入公司账户） | 管理员 |
+| GET | /api/admin/company-balance | 查询公司后台余额 | 管理员 |
+
+### 订单与工资（11）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | POST | /api/order/create | 创建订单(可指定打手,带备注) | 管理员/客服/老板 |
-| POST | /api/order/{id}/assign | 人工派单 | 管理员/客服 |
-| POST | /api/order/{id}/accept | 打手接受订单 | 打手本人 |
-| POST | /api/order/{id}/reject | 打手拒绝订单 | 打手本人 |
-| POST | /api/order/{id}/start | 开始服务 | 管理员/客服/打手 |
-| POST | /api/order/{id}/complete | 完成订单并结算 | 管理员/客服 |
-| POST | /api/order/{id}/cancel | 取消订单 | 管理员/客服/老板 |
+| POST | /api/order/{order_id}/assign | 人工派单 | 管理员/客服 |
+| POST | /api/order/{order_id}/accept | 打手接受订单 | 打手本人 |
+| POST | /api/order/{order_id}/reject | 打手拒绝订单（金额退回老板） | 打手本人 |
+| POST | /api/order/{order_id}/start | 开始服务 | 管理员/客服/打手 |
+| POST | /api/order/{order_id}/submit-settlement | 打手提交结单 | 打手本人 |
+| POST | /api/order/{order_id}/confirm-settlement | 老板确认结单（金额入账） | 管理员/客服/老板 |
+| POST | /api/order/{order_id}/complete | 直接完成订单并结算 | 管理员/客服 |
+| POST | /api/order/{order_id}/cancel | 取消订单 | 管理员/客服/老板 |
 | GET | /api/order/list | 获取订单列表 | 所有登录用户(按角色过滤) |
 | GET | /api/order/salary/list | 获取工资记录 | 管理员/客服/打手 |
+
+### 评价 / 投诉 / 复查（9）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | POST | /api/rating/create | 评价打手 | 老板 |
-| GET | /api/rating/player/{name} | 查询打手评价列表 | 所有登录用户 |
-| PUT | /api/rating/{id}/reply | 打手回复评价 | 打手本人 |
-| GET | /api/rating/my | 查询我的评价记录 | 老板 |
+| POST | /api/rating/complaint | 投诉打手（该订单记为★1差评） | 老板 |
+| GET | /api/rating/player/{player_username} | 查询打手评价列表 | 所有登录用户 |
+| GET | /api/rating/my | 查询我发出的评价 | 老板 |
+| GET | /api/rating/my-reviews | 查询我收到的评价 | 打手本人 |
+| PUT | /api/rating/{rating_id}/reply | 打手回复评价 | 打手本人 |
+| POST | /api/rating/{rating_id}/review-request | 申请评价复查 | 打手本人 |
+| GET | /api/rating/review-list | 复查审核列表 | 管理员/客服 |
+| POST | /api/rating/{rating_id}/review-decision | 复查裁决（移除 / 保留） | 管理员 |
+
+### 打赏（2）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | POST | /api/tip/create | 打赏打手(≤订单30%) | 老板 |
 | GET | /api/tip/player/me | 查询我的打赏记录 | 打手 |
+
+### 提现（6）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | GET | /api/withdraw/available | 查询可提现金额(30天冷却) | 打手 |
 | POST | /api/withdraw/create | 发起提现申请 | 打手 |
 | GET | /api/withdraw/my | 查询我的提现记录 | 打手 |
 | GET | /api/withdraw/list | 查询所有提现申请 | 管理员/客服 |
-| POST | /api/withdraw/{id}/approve | 批准提现 | 管理员/客服 |
-| POST | /api/withdraw/{id}/reject | 拒绝提现 | 管理员/客服 |
+| POST | /api/withdraw/{withdraw_id}/approve | 批准提现 | 管理员/客服 |
+| POST | /api/withdraw/{withdraw_id}/reject | 拒绝提现 | 管理员/客服 |
+
+### 数据统计（1）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
 | GET | /api/stats/monthly-profit | 本月盈利统计 | 管理员 |
 
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`，修改后删除 `game_club.db` 重启服务会自动重建
-2. 默认数据初始化在 `backend/main.py` 的 `init_default_data()`
-3. 俱乐部抽成比例在 `backend/api/order_api.py` 的 `CLUB_COMMISSION_RATE` 常量
-4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧CORS配置
+1. 数据库表结构在 `backend/models.py`（11 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`（`main.py` 启动时幂等调用，**已存在的数据不会被覆盖**）
+3. 俱乐部抽成比例在 `backend/api/order_api.py` 的 `CLUB_COMMISSION_RATE` 常量（当前 `0.3`，即抽成 30%）；`seed_demo_data.py` 的 `COMMISSION` 需与其保持一致
+4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧 CORS 配置
 
 ## 数据库配置（MySQL）
 
-系统默认使用本机 MySQL 8（`D:\MySQL`，root 密码 `123456`）。首次使用时执行以下命令初始化库和专用账号：
+系统默认使用本机 MySQL 8（安装目录 `D:\MYsql`，客户端在 `D:\MYsql\bin\mysql.exe`，root 密码 `123456`）。首次使用时执行以下命令初始化库和专用账号：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS game_escort_club CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -343,6 +465,8 @@ venv\Scripts\python main.py
 ```
 
 > 启动时自动建表并初始化默认数据；表结构变更通过 `main.py` 的 `migrate_db()` 自动补列，无需手动 ALTER。
+
+> ⚠️ **关于 `DB_ENGINE=sqlite` 回退**：该分支只在「本机没有 MySQL」时才有意义。SQLite 与 MySQL 是两套**完全独立**的数据，切换后不会自动同步——后端会在 `backend/` 下新建一个空的 `game_club.db`，页面数据看起来像是"被清空了"（实际 MySQL 里的数据仍在，切回去即可）。日常开发请勿设置该变量。
 
 ## 工具脚本
 
@@ -397,7 +521,7 @@ schtasks /create /tn "game_club_backup" /tr "C:\Users\18642\game_escort_club\bac
 4. 后端 CORS 已放开，file:// 直接打开和 Live Server 打开均可正常请求
 
 ### 2. 登录提示密码错误 / 账户被锁定
-确认使用默认账号和密码 `123456`。连续输错 5 次会锁定 10 分钟；忘记密码可点击登录页"忘记密码？"直接重置（重置后自动解锁）。若修改过数据库，删除 `game_club.db` 重启服务重新初始化。
+确认使用默认账号和密码 `123456`。连续输错 5 次会锁定 10 分钟；忘记密码可点击登录页"忘记密码？"直接重置（重置后自动解锁）。若要恢复初始数据，见上文「第 6 步：重置数据库」（MySQL 清库后重启即可重新初始化）。
 
 ### 3. 接口文档无法访问
 确认后端正常启动，访问 `http://localhost:8000/docs`（Swagger 在线接口文档）。

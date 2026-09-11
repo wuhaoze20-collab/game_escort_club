@@ -42,14 +42,6 @@ def default_avatar_for(user: User, db: Session = None) -> str:
             return mapping.get(key, "avatar_yule.jpg")
     return "avatar_yule.jpg"
 
-# 组装用户资料（nickname/avatar，空昵称用用户名兜底）
-def user_profile(user: User):
-    return {
-        "username": user.username,
-        "nickname": user.nickname or user.username,
-        "avatar": user.avatar
-    }
-
 # 获取老板列表（仅管理员和客服可查看全部）
 @router.get("/boss/list", response_model=List[BossInfoResponse])
 def get_boss_list(

@@ -1,5 +1,41 @@
 # 更新日志 CHANGELOG
 
+## [V3.3.1] 2026-09-11
+
+### 🧹 代码与仓库整理（删除冗余、修正文档，无功能变更）
+1. **删除失效启动脚本 `backend/启动.bat`**：其中写死的解释器路径 `D:\python\python.exe` 在本机并不存在（双击直接报错），且 `set DB_ENGINE=sqlite` 会绕过 MySQL 去连一个空库，造成"数据被清空了"的错觉
+2. **删除冗余环境与 IDE 缓存**：根目录 `.venv`（50.5MB，且缺 uvicorn / python-multipart / python-dotenv，根本无法启动服务）与 `.idea/`；项目实际使用的是 `backend/venv`（8 项依赖齐全）
+3. **后端死代码**：删除 `user_info_api.py` 的 `user_profile()`（全项目零调用）、`schemas.py` 的 `MonthlyProfitResponse`（`stats_api` 直接返回 dict，从未引用）
+4. **前端死代码**（净删 55 行）：被停用的"自定义头像"功能整块（`AVATAR_LIBRARY` / `renderAvatarSelect` / `selectAvatar` + 隐藏表单块 + 对应隐藏逻辑，共 40 行）、2 个永不渲染的空元素（`#toast-container`、`#order-boss-balance`）、4 个零引用 CSS 变量、3 处孤儿注释
+5. **修复崩溃隐患**：`renderNotice()` 中残留的 `console.log(data.content)` 位于 `if (!data)` **之前**，`notice` 缺失时会抛 TypeError 使守卫失效，已删除该调试行
+6. **修正 `models.py` 订单状态注释**：原注释遗漏 `pending_settlement`（`order_api.py:289` 实际会写入该状态），补全为完整状态流转说明
+7. **清理 `.gitignore`**：移除已废弃的 SQLite 忽略配置，并补充 `bizhiku/` 被忽略却会被前端引用的说明
+8. 保留项（有意不删）：`touxiangku/` 素材库、`bizhiku/` 背景视频、Tailwind 暗色映射规则表（其中少数规则当前零引用，但属同层映射体系，不宜摘除）
+
+### 📖 文档修正（README）
+1. **删除失效说明**：目录结构中的 `game_club.db`、两处"删除 `game_club.db` 重启自动重建"（SQLite 时代残留）
+2. **修正错误引用**：「默认数据初始化在 `main.py` 的 `init_default_data()`」——该函数已在 V3.3.0 被删除，实际为 `seed_default_accounts.py`
+3. **修正数量**：测试账号 10 → **11**（1 管理员 + 1 客服 + 3 老板 + 6 打手，已按数据库实测核对）
+4. **修正内容模块数**：6 → **8**（补上此前遗漏的「赛事专栏」`matches`）
+5. **修正 MySQL 路径**：`D:\MySQL` → `D:\MYsql`，并补上 `mysql.exe` 位置
+6. **补全目录结构**：新增 `notification_api.py`、`seed_default_accounts.py`、`seed_demo_data.py`、`backup_db.py`、`backups/`、`bizhiku/`，并逐文件加说明
+7. **补全接口表**：由约 35 条补至与运行时完全一致的 **60 条**，按 9 个模块分组
+8. **新增「架构说明」章节**：11 张表的数据模型、订单状态机、资金流转 7 步链路、鉴权边界
+9. **新增易踩坑提示**：`bizhiku/` 被 gitignore 但前端引用（新克隆必须自行放入，否则背景视频 404）；`DB_ENGINE=sqlite` 回退会新建空库；`content_config` 被复用存公司账户余额
+
+### ✅ 验证
+- 全部 Python 文件 `py_compile` 通过；`models` 导入成功，11 张表
+- 完整应用**真实启动成功**，运行时确认 **60 个接口**（POST 29 / GET 25 / PUT 5 / DELETE 1），与文档逐一吻合
+- 端到端冒烟测试：登录获取 token、内容配置返回 8 模块、公司余额接口、静态资源（`/avatars/*.png` → 200 image/png、`/bizhiku/背景.mp4` → 200 video/mp4）全部正常
+- 越权测试：管理员 token 访问打手专属接口正确返回 **403**
+- 前端 JS 经 `node --check` 语法合法；括号配平（1259/1784/238）；79 个内联 `onclick/onchange` 目标函数全部存在，无悬空引用
+- `loadProfileEditor()` 引用的 5 个元素经核对均存在
+- **未改动任何数据库数据**（仅幂等 seed 复跑，日志显示"已存在的记录未重复插入"）
+
+> 附注：本版不含功能变更，故仅做补丁版本号 +1（`main.py` 中 `version` 同步为 `3.3.1`）。
+
+---
+
 ## [V3.3.0] 2026-09-11
 
 ### 🗄️ 账户数据全面迁入 MySQL（代码不再内嵌账户信息）

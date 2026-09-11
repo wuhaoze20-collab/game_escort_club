@@ -83,7 +83,10 @@ class Order(Base):
     total_amount = Column(Integer, nullable=False)  # 订单总金额（分）
     service_note = Column(String(50), default="")  # 业务量说明（如 50级 / 3层 / 满级），非时长业务使用
     remark = Column(Text, default="")  # 老板下单备注（打手接单参考）
-    status = Column(String(20), default="pending")  # pending/pending_accept/assigned/processing/completed/cancelled/rejected
+    # 订单状态流转：pending(待派单) → pending_accept(待打手确认) → assigned(已接单)
+    #             → processing(服务中) → pending_settlement(待确认结单) → completed(已完成)
+    # 分支：rejected(打手拒单，可重新派单) / cancelled(已取消)
+    status = Column(String(20), default="pending")
     created_at = Column(DateTime, default=datetime.now)
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)

@@ -1,4 +1,4 @@
-# Python 虚拟环境
+# Python 虚拟环境（项目使用 backend/venv，勿提交）
 venv/
 env/
 .venv/
@@ -7,10 +7,6 @@ env/
 __pycache__/
 *.py[cod]
 *.egg-info/
-
-# SQLite 数据库（本地生成，不上传）
-# *.db
-# *.sqlite3
 
 # IDE 配置
 .idea/
@@ -22,8 +18,9 @@ Thumbs.db
 *.log
 pip_install_log*
 
-# MySQL 备份文件（本地保留，不上传）
+# 数据库备份：故意不忽略，backups/ 下的 .sql 需随仓库分发（新环境靠它同步内容）
 #backups/
 
-# 壁纸视频(体积大,不上传仓库)
+# 背景视频：体积大不提交。但 frontend/index.html 会引用 bizhiku/登录背景.mp4 与 bizhiku/背景.mp4，
+# 因此新克隆的仓库必须自行放入这两个文件，否则页面背景视频静默 404（不影响其它功能）
 bizhiku/
