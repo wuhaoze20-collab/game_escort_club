@@ -7,6 +7,7 @@ from database import get_db
 from models import Order, SalaryRecord, BossInfo, PlayerInfo, User
 from schemas import CreateOrderRequest, AssignPlayerRequest, OrderResponse, SalaryRecordResponse
 from auth import get_current_user, require_roles
+from api.notification_api import create_notification
 
 router = APIRouter(prefix="/api/order", tags=["订单管理"])
 
@@ -133,6 +134,20 @@ def accept_order(
     order.status = "assigned"
     db.commit()
     db.refresh(order)
+    
+    # 给老板发通知
+    boss_user = db.query(User).filter(User.username == order.boss_username).first()
+    if boss_user:
+        player_user = db.query(User).filter(User.username == current_user.username).first()
+        player_name = player_user.nickname if player_user and player_user.nickname else current_user.username
+        create_notification(
+            db, boss_user.id,
+            title="接单成功",
+            content=f"打手 {player_name} 已接受您的订单 {order.order_no}，即将开始服务",
+            type="success",
+            link="/order"
+        )
+    
     return order
 
 # 打手拒绝订单（退回老板余额）

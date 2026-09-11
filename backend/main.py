@@ -18,6 +18,7 @@ from api.rating_api import router as rating_router, auto_default_rating
 from api.stats_api import router as stats_router
 from api.tip_api import router as tip_router
 from api.withdraw_api import router as withdraw_router
+from api.notification_api import router as notification_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -78,6 +79,7 @@ app.include_router(rating_router)
 app.include_router(stats_router)
 app.include_router(tip_router)
 app.include_router(withdraw_router)
+app.include_router(notification_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")

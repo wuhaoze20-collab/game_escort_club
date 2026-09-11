@@ -140,3 +140,16 @@ class WithdrawalRecord(Base):
     note = Column(Text, default="")  # 管理员审核备注
     created_at = Column(DateTime, default=datetime.now)
     processed_at = Column(DateTime, nullable=True)  # 审核时间
+
+# 消息通知表
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    title = Column(String(100), nullable=False)
+    content = Column(Text, default="")
+    type = Column(String(20), default="info")
+    is_read = Column(Integer, default=0)
+    link = Column(String(255), default="")
+    created_at = Column(DateTime, default=datetime.now)

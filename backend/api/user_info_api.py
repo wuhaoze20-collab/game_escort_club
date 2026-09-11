@@ -447,3 +447,35 @@ def recharge_balance(
         "payment": request.payment,
         "balance": boss.balance
     }
+
+
+# 管理员拉黑/注销用户（打手/老板）
+@router.post("/admin/ban/{username}")
+def ban_user(
+    username: str,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    if user.role not in ["boss", "player"]:
+        raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
+    
+    if user.role == "player":
+        # 打手：后台金额清零，视为转入公司账户
+        player = db.query(PlayerInfo).filter(PlayerInfo.username == username).first()
+        if player:
+            player.backend_amount = 0
+    elif user.role == "boss":
+        # 老板：余额清零，视为放弃余额
+        boss = db.query(BossInfo).filter(BossInfo.username == username).first()
+        if boss:
+            boss.balance = 0
+    
+    # 账号注销，无法登录
+    user.account_status = "rejected"
+    
+    db.commit()
+    return {"message": f"用户 {username} 已被拉黑注销，余额/后台金额已清零并入公司账户"}

@@ -343,6 +343,23 @@
         #login-page .text-gray-400 { color: #4b5563 !important; }
         #login-page input { color: var(--text-card) !important; }
         #login-page input::placeholder { color: #6b7280 !important; }
+        
+        /* 全局select下拉框暗色模式字体 */
+        select {
+            background-color: var(--input-bg) !important;
+            color: var(--text-card) !important;
+        }
+        select option {
+            background-color: var(--bg-card) !important;
+            color: var(--text-card) !important;
+        }
+        input, textarea {
+            background-color: var(--input-bg) !important;
+            color: var(--text-card) !important;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #6b7280 !important;
+        }
 
         /* 弹窗鎏金边框 */
         #edit-modal > div:not(.modal-overlay), #rating-modal > div:not(.modal-overlay), #complaint-modal > div:not(.modal-overlay), #tip-modal > div:not(.modal-overlay),
@@ -662,6 +679,13 @@
         <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
             <div id="page-title" class="text-gray-600 text-sm tracking-wider">欢迎使用管理系统</div>
             <div class="flex items-center gap-4">
+                <!-- 消息通知按钮 -->
+                <button id="notification-btn" class="relative w-9 h-9 rounded-full flex items-center justify-center transition hover:bg-gray-100 dark:hover:bg-white/10" title="消息通知">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                    <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center hidden">0</span>
+                </button>
                 <button id="theme-toggle" class="w-9 h-9 rounded-full flex items-center justify-center transition" title="切换主题（暗色/明亮）" aria-label="切换主题">
                     <svg id="theme-icon-dark" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
@@ -840,14 +864,17 @@
                     <!-- 下单表单 -->
                     <div class="bg-gray-50 rounded-xl p-5 mb-6">
                         <h3 class="text-base font-medium text-gray-800 mb-4">填写订单信息</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-sm text-gray-600 mb-1">选中打手</label>
-                                <input id="order-player" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600" readonly placeholder="请先选择打手">
+                                <label class="block text-sm text-gray-600 mb-1">指定打手（可选，不选则由客服派单）</label>
+                                <div class="flex gap-2">
+                                    <input id="order-player" type="text" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg" readonly placeholder="点击下方打手卡片选择">
+                                    <button onclick="clearPlayer()" class="px-3 py-2 text-sm border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 whitespace-nowrap">清空</button>
+                                </div>
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-600 mb-1">游戏/服务类型</label>
-                                <select id="order-game" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                <select id="order-game" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                                     <option>王者荣耀</option>
                                     <option>英雄联盟</option>
                                     <option>和平精英</option>
@@ -865,11 +892,11 @@
                                 <input id="order-duration" type="number" min="30" step="30" value="60" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                             </div>
                             <div>
-                                <label class="block text-sm text-gray-600 mb-1">金额(元)</label>
-                                <input id="order-amount" type="number" min="1" step="1" value="25" oninput="updateCoinCost()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                                <p class="text-xs text-amber-600 mt-1">将消耗 <b id="coin-cost">25</b> 大狗币</p>
+                                <label class="block text-sm text-gray-600 mb-1">金额(元，支持小数)</label>
+                                <input id="order-amount" type="number" min="1" step="0.5" value="25" oninput="updateCoinCost()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <p class="text-xs text-amber-600 mt-1">将消耗 <b id="coin-cost">25.0</b> 大狗币</p>
                             </div>
-                            <div class="flex items-end">
+                            <div class="md:col-span-2">
                                 <button onclick="createOrder()" class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">立即下单</button>
                             </div>
                         </div>
@@ -1356,6 +1383,23 @@
             </div>
         </div>
     </div>
+
+    <!-- 消息通知弹窗 -->
+    <div id="notification-modal" class="fixed inset-0 z-50 hidden">
+        <div class="modal-overlay absolute inset-0" onclick="closeNotificationModal()"></div>
+        <div class="absolute top-14 right-4 w-96 max-h-[70vh] bg-white rounded-xl shadow-xl flex flex-col overflow-hidden">
+            <div class="px-4 py-3 border-b flex justify-between items-center">
+                <h3 class="font-semibold">消息通知</h3>
+                <button onclick="markAllRead()" class="text-xs text-blue-500 hover:text-blue-600">全部已读</button>
+            </div>
+            <div id="notification-list" class="overflow-y-auto flex-1">
+                <div class="p-4 text-center text-sm text-gray-400">暂无消息</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗通知（顶部弹出） -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2"></div>
 
     <script>
         // ==================== 主题初始化（暗色/明亮，记忆选择） ====================
@@ -2549,11 +2593,15 @@
         function selectPlayer(username) {
             document.getElementById('order-player').value = username;
         }
+        // 清空打手选择
+        function clearPlayer() {
+            document.getElementById('order-player').value = '';
+        }
 
         // 更新大狗币消耗提示
         function updateCoinCost() {
             const amount = parseFloat(document.getElementById('order-amount').value) || 0;
-            document.getElementById('coin-cost').textContent = Math.round(amount);
+            document.getElementById('coin-cost').textContent = amount.toFixed(2);
         }
 
         // 老板下单
@@ -2564,10 +2612,9 @@
             const amount = parseFloat(document.getElementById('order-amount').value);
             const remark = document.getElementById('order-remark').value.trim();
 
-            if (!player) { alert('请先选择打手'); return; }
             if (!duration_min || duration_min < 30) { alert('服务时长不能少于30分钟'); return; }
             if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
-            if (!Number.isInteger(amount)) { alert('金额须为整数元（1元 = 1大狗币）'); return; }
+            if (amount < 1) { alert('订单金额不能小于1元'); return; }
 
             try {
                 await apiRequest('/api/order/create', 'POST', {
