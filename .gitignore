@@ -9,8 +9,8 @@ __pycache__/
 *.egg-info/
 
 # SQLite 数据库（本地生成，不上传）
-*.db
-*.sqlite3
+# *.db
+# *.sqlite3
 
 # IDE 配置
 .idea/
@@ -23,7 +23,7 @@ Thumbs.db
 pip_install_log*
 
 # MySQL 备份文件（本地保留，不上传）
-backups/
+#backups/
 
 # 壁纸视频(体积大,不上传仓库)
 bizhiku/
