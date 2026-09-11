@@ -39,20 +39,17 @@ def create_order(
         raise HTTPException(status_code=400, detail="服务时长必须大于0分钟")
     if request.duration_min > 1440:
         raise HTTPException(status_code=400, detail="单笔订单服务时长不能超过24小时（1440分钟）")
-    if not isinstance(request.total_amount, int) or request.total_amount < 100:
+    if not isinstance(request.total_amount, (int, float)) or request.total_amount < 100:
         raise HTTPException(status_code=400, detail="订单金额不能小于1元")
     if request.total_amount > 5000000:
         raise HTTPException(status_code=400, detail="单笔订单金额不能超过5万元")
-    # 订单金额必须为整数元（1大狗币 = 1元）
-    if request.total_amount % 100 != 0:
-        raise HTTPException(status_code=400, detail="订单金额须为整数元（大狗币按1:1结算）")
     if request.remark and len(request.remark) > 500:
         raise HTTPException(status_code=400, detail="下单备注不能超过500个字符")
-    coins_required = request.total_amount // 100
+    coins_required = round(request.total_amount / 100, 2)
     
     # 检查大狗币余额是否足够
     if boss.balance < coins_required:
-        raise HTTPException(status_code=400, detail=f"大狗币余额不足，需要 {coins_required} 大狗币，当前余额 {boss.balance}，请先充值")
+        raise HTTPException(status_code=400, detail=f"大狗币余额不足，需要 {coins_required:.2f} 大狗币，当前余额 {boss.balance:.2f}，请先充值")
     
     # 生成订单号
     order_no = "ORD" + datetime.now().strftime("%Y%m%d%H%M%S") + uuid.uuid4().hex[:4].upper()

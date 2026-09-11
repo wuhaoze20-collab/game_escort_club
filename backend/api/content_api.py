@@ -10,7 +10,7 @@ from auth import get_current_user, require_roles
 router = APIRouter(prefix="/api/content", tags=["内容管理"])
 
 # 允许的配置key
-VALID_CONFIG_KEYS = ["notice", "orderGuide", "price", "recharge", "member", "payment", "punishment"]
+VALID_CONFIG_KEYS = ["notice", "orderGuide", "price", "recharge", "member", "payment", "punishment", "matches"]
 
 # 各内容模块允许的结构：notice=对象；orderGuide=字符串数组；其余=对象数组（字段均为字符串）
 LIST_TEXT_FIELDS = {
@@ -19,6 +19,7 @@ LIST_TEXT_FIELDS = {
     "member": ["level", "discount", "benefits"],
     "payment": ["name", "desc", "icon"],
     "punishment": ["level", "desc", "date"],
+    "matches": ["game", "title", "url"],
 }
 # 对象数组中的数字字段
 LIST_NUMBER_FIELDS = {
