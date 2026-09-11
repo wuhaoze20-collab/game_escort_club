@@ -191,6 +191,9 @@ def get_player_ratings(
         PlayerRating.player_username == player_username,
         PlayerRating.review_status == "normal"
     ).order_by(PlayerRating.created_at.desc()).all()
+    # 近期评价不显示系统自动默认好评（仅展示真实评价；
+    # 默认好评仍计入好评率计算，见 recalc_good_rate）
+    ratings = [r for r in ratings if r.comment != "系统默认好评（结单3天未评价）"]
     return [_rating_profile(db, r) for r in ratings]
 
 # 打手查看自己的全部评价（含复查中/已移除状态）

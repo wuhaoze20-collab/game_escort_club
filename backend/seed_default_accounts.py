@@ -98,6 +98,15 @@ DEFAULT_CONTENT = {
         {"level": "停单3天", "desc": "中度违规（无故拒单、态度恶劣），期间无法接单", "date": "2026-09-01"},
         {"level": "封禁账号", "desc": "严重违规（作弊、诈骗、恶意刷单等），永久封禁并扣除后台金额", "date": "2026-09-01"},
     ],
+    "matches": [
+        {"game": "三角洲行动", "title": "三角洲行动官方赛事直播", "url": "https://live.bilibili.com/1921272912"},
+        {"game": "Apex英雄", "title": "Apex英雄官方赛事直播", "url": "https://space.bilibili.com/1676940341"},
+        {"game": "CS2", "title": "CS2官方赛事直播", "url": "https://space.bilibili.com/474595627"},
+        {"game": "英雄联盟", "title": "英雄联盟官方赛事直播", "url": "https://live.bilibili.com/6"},
+        {"game": "无畏契约", "title": "无畏契约官方赛事直播", "url": "https://space.bilibili.com/2071691173"},
+        {"game": "刀塔2", "title": "刀塔2官方赛事直播", "url": "https://space.bilibili.com/17561885"},
+        {"game": "王者荣耀", "title": "王者荣耀官方赛事直播", "url": "https://live.bilibili.com/55"},
+    ],
 }
 
 
