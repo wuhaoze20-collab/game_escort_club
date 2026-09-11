@@ -4,6 +4,8 @@ import threading
 import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 from database import engine, SessionLocal, Base, DB_ENGINE
 from models import User, ContentConfig, BossInfo, PlayerInfo
@@ -220,7 +222,13 @@ init_default_data()
 
 @app.get("/")
 def root():
-    return {"message": "大狗嚼电竞管理系统API", "docs": "/docs"}
+    return FileResponse("../frontend/index.html")
+
+# 挂载头像静态文件
+app.mount("/avatars", StaticFiles(directory="../frontend/avatars"), name="avatars")
+
+# 挂载壁纸库静态文件
+app.mount("/bizhiku", StaticFiles(directory="../bizhiku"), name="bizhiku")
 
 if __name__ == "__main__":
     import uvicorn

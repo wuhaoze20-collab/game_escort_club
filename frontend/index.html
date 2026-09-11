@@ -28,20 +28,20 @@
             --bg-login-card: rgba(16, 22, 32, 0.5);
             --border-gold: rgba(255, 70, 85, 0.5);
             --border-gold-light: rgba(255, 70, 85, 0.3);
-            --border-gold-lighter: rgba(236, 232, 225, 0.15);
-            --text-card: #ece8e1;
-            --text-card-muted: #a3adb8;
+            --border-gold-lighter: rgba(236, 232, 225, 0.22);
+            --text-card: #f0f2f5;
+            --text-card-muted: #c2c9d2;
             --text-card-title: #ffffff;
-            --text-sidebar: #aeb9c6;
+            --text-sidebar: #d0d5dc;
             --text-sidebar-hover: #ffffff;
-            --text-sidebar-sub: #768079;
-            --text-header: #a3adb8;
-            --text-header-strong: #ece8e1;
+            --text-sidebar-sub: #9ba3ad;
+            --text-header: #c2c9d2;
+            --text-header-strong: #f0f2f5;
             --input-bg: rgba(15, 25, 35, 0.85);
             --table-head: linear-gradient(90deg, #262f3d, #2b3444);
             --table-head-text: #ece8e1;
             --row-hover: rgba(255, 70, 85, 0.08);
-            --divide: rgba(236, 232, 225, 0.1);
+            --divide: rgba(236, 232, 225, 0.15);
             --star-display: block;
             --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
             --btn-text: #ffffff;
@@ -65,8 +65,8 @@
             --border-gold: rgba(200, 50, 60, 0.45);
             --border-gold-light: rgba(200, 50, 60, 0.28);
             --border-gold-lighter: rgba(60, 70, 80, 0.15);
-            --text-card: #1f2733;
-            --text-card-muted: #5a6572;
+            --text-card: #111827;
+            --text-card-muted: #374151;
             --text-card-title: #b32330;
             --text-sidebar: #3a4552;
             --text-sidebar-hover: #0f1923;
@@ -337,8 +337,12 @@
             letter-spacing: 0;
             font-weight: 400;
         }
+        #login-page .text-gray-800, #login-page .text-gray-900 { color: var(--text-card) !important; }
         #login-page .text-gray-700 { color: var(--text-card) !important; }
-        #login-page .text-gray-500 { color: var(--text-card-muted) !important; }
+        #login-page .text-gray-600, #login-page .text-gray-500 { color: var(--text-card-muted) !important; }
+        #login-page .text-gray-400 { color: #4b5563 !important; }
+        #login-page input { color: var(--text-card) !important; }
+        #login-page input::placeholder { color: #6b7280 !important; }
 
         /* 弹窗鎏金边框 */
         #edit-modal > div:not(.modal-overlay), #rating-modal > div:not(.modal-overlay), #complaint-modal > div:not(.modal-overlay), #tip-modal > div:not(.modal-overlay),
@@ -407,6 +411,15 @@
             border-color: #3a4552 !important;
         }
         [data-theme="dark"] #login-page input::placeholder { color: #5a6572 !important; }
+        [data-theme="dark"] #recharge-balance-box {
+            background-color: rgba(251, 191, 36, 0.15) !important;
+            border-color: rgba(251, 191, 36, 0.3) !important;
+            color: #fcd34d !important;
+        }
+        [data-theme="dark"] #recharge-balance-box #recharge-balance {
+            color: #fde047 !important;
+        }
+
 
         /* ==================== V3.2.1 亚克力侧栏/顶栏 ==================== */
         aside {
