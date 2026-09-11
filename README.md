@@ -1,6 +1,6 @@
 # 大狗嚼电竞管理系统
 
-基于 FastAPI + SQLite + 原生前端的完整前后端分离管理系统，实现多角色权限、内容管理、订单全流程、工资结算、打手评价、盈利统计等功能。
+基于 FastAPI + MySQL + 原生前端的完整前后端分离管理系统，实现多角色权限、内容管理、订单全流程、工资结算、打手评价、盈利统计等功能。
 
 ## 技术栈
 - **后端**：Python 3.8+ / FastAPI / SQLAlchemy / MySQL / JWT鉴权 / bcrypt密码加密
@@ -102,7 +102,21 @@ venv\Scripts\python -c "import fastapi, uvicorn, sqlalchemy, jose, bcrypt; print
 - 输出 `依赖OK` → 环境就绪，继续第 3 步
 - 报 `ModuleNotFoundError: No module named 'xxx'` → 说明对应依赖未装上，重新执行 `pip install -r requirements.txt`（或用镜像源重装）
 
-### 第 3 步：启动后端服务
+### 第 3 步：导入最新数据库备份（推荐，与作者内容保持一致）
+
+> **重要**：公告、下单须知、价格、充值福利、处罚通告等内容都存储在 **MySQL 数据库**里，不在 Git 代码中。直接启动后端会用 `seed_default_accounts.py` 里的默认内容初始化（且 seed 幂等，**不会覆盖数据库中已存在的数据**）。想让你的页面内容与 Gitee 仓库作者完全一致，请导入 `backups/` 下**最新**的 `.sql` 备份文件（每个备份文件名带时间戳，取日期最新的那个）。
+
+先确认已按"数据库配置"章节创建好库与账号，然后导入（命令中的文件名换成 `backups/` 里最新的）:
+
+```bash
+mysql -u game_escort -p123456 game_escort_club < backups\game_escort_club_20260911_180022.sql
+```
+
+> - 导入会覆盖数据库中的全部数据（用户、内容、订单等），第一次初始化或想与作者同步时使用。
+> - 只想保留作者最新内容、不要测试订单时，可先导入备份，再按"第 5 步"方式一清空业务流水。
+> - 不导入备份直接启动也可以运行，但页面内容可能与作者仓库不一致。
+
+### 第 4 步：启动后端服务
 
 ```bash
 cd C:\Users\18642\game_escort_club\backend
@@ -123,7 +137,7 @@ venv\Scripts\python main.py
 
 **关闭后端**：在运行窗口按 `Ctrl + C`，或直接关闭该终端窗口。
 
-### 第 4 步：启动前端页面（二选一）
+### 第 5 步：启动前端页面（二选一）
 
 **方式一：直接双击打开（最简单）**
 
@@ -137,7 +151,7 @@ venv\Scripts\python main.py
 
 > 前后端是分离的：前端页面（5500 或 file://）通过 HTTP 请求访问后端（8000），**两个服务都要开着**才能完整使用。
 
-### 第 5 步：重置数据库（可选）
+### 第 6 步：重置数据库（可选）
 
 系统数据默认存放在 **MySQL**（库名 `game_escort_club`，账号 `game_escort` / 密码 `123456`）。
 想恢复初始状态时，清空业务数据后重启后端即可重新初始化：
