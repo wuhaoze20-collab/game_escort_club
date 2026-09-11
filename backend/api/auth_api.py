@@ -5,6 +5,7 @@ from database import get_db
 from models import User, BossInfo, PlayerInfo
 from schemas import LoginRequest, LoginResponse, ResetPasswordRequest, ChangePasswordRequest, RegisterRequest, RegistrationDecisionRequest
 from auth import verify_password, hash_password, create_access_token, get_current_user, require_roles, ACCESS_TOKEN_EXPIRE_MINUTES
+from api.notification_api import create_notification
 
 router = APIRouter(prefix="/api", tags=["认证"])
 
@@ -148,6 +149,9 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
 
     if needs_review:
+        # 通知管理员有新的注册待审核
+        for au in db.query(User).filter(User.role == "admin").all():
+            create_notification(db, au.id, "新注册待审核", f"新用户 {username}（{ROLE_NAMES[role]}）提交了注册申请，请及时审核", "info", "/register")
         return {"message": "注册成功！账号已提交审核，请等待管理员审核通过后登录", "status": "pending"}
     return {"message": "注册成功！请使用新账号登录", "status": "approved"}
 
@@ -194,6 +198,12 @@ def registration_decision(
     else:
         user.account_status = "rejected"
         msg = f"已驳回 {user.username} 的注册申请"
+    
+    # 通知用户审核结果
+    if request.action == "approve":
+        create_notification(db, user.id, "注册审核通过", "恭喜！您的账号已通过审核，现在可以登录了", "success", "/")
+    else:
+        create_notification(db, user.id, "注册被驳回", f"您的注册申请未通过审核（{request.note or '未说明原因'}），如有疑问请联系管理员", "warning", "/")
     db.commit()
     return {"message": msg}
 

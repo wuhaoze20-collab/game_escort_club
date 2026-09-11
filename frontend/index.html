@@ -874,7 +874,7 @@
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-600 mb-1">游戏/服务类型</label>
-                                <select id="order-game" onchange="calcOrderAmount()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <select id="order-game" onchange="onGameChange()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                                     <option>王者荣耀</option>
                                     <option>英雄联盟</option>
                                     <option>和平精英</option>
@@ -886,10 +886,16 @@
                                     <option>DOTA2</option>
                                     <option>其他</option>
                                 </select>
+                                <label class="block text-sm text-gray-600 mb-1 mt-2">业务类型</label>
+                                <select id="order-type" onchange="calcOrderAmount()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                    <option value="默认">默认</option>
+                                </select>
                             </div>
                             <div>
-                                <label class="block text-sm text-gray-600 mb-1">服务时长(分钟)</label>
+                                <label id="order-duration-label" class="block text-sm text-gray-600 mb-1">服务时长(分钟)</label>
                                 <input id="order-duration" type="number" min="30" step="30" value="60" oninput="calcOrderAmount()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                <label id="order-qty-label" class="block text-sm text-gray-600 mb-1 mt-2 hidden">等级/层数</label>
+                                <input id="order-qty" type="number" min="1" step="1" value="1" oninput="calcOrderAmount()" class="w-full px-3 py-2 border border-gray-300 rounded-lg hidden">
                             </div>
                             <div>
                                 <label class="block text-sm text-gray-600 mb-1">金额(元，按服务时长自动计算)</label>
@@ -1758,6 +1764,76 @@
             document.getElementById('avatar-view-modal').classList.add('hidden');
         }
 
+        // ==================== 消息通知 ====================
+        const notificationBtn = document.getElementById('notification-btn');
+        const notificationModal = document.getElementById('notification-modal');
+
+        function openNotificationModal() {
+            notificationModal.classList.remove('hidden');
+            loadNotifications();
+        }
+        function closeNotificationModal() {
+            notificationModal.classList.add('hidden');
+        }
+
+        notificationBtn.addEventListener('click', openNotificationModal);
+
+        // 加载通知列表
+        async function loadNotifications() {
+            try {
+                const list = await apiRequest('/api/notification/list');
+                const box = document.getElementById('notification-list');
+                if (!list || list.length === 0) {
+                    box.innerHTML = '<div class="p-4 text-center text-sm text-gray-400">暂无消息</div>';
+                    return;
+                }
+                box.innerHTML = list.map(n => `
+                    <div class="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${n.is_read === 0 ? 'bg-blue-50' : ''}" onclick="markNotificationRead(${n.id})">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium ${n.is_read === 0 ? 'text-blue-600' : 'text-gray-600'}">${escapeHtml(n.title)}</span>
+                            <span class="text-xs text-gray-400">${n.created_at}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 mb-1">${escapeHtml(n.content)}</p>
+                        <span class="text-xs px-1.5 py-0.5 rounded ${n.type === 'success' ? 'bg-green-100 text-green-600' : n.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'}">${n.type === 'success' ? '成功' : n.type === 'warning' ? '提醒' : '信息'}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('notification-list').innerHTML = `<div class="p-4 text-center text-sm text-gray-400">${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        // 刷新未读红点
+        async function refreshUnreadCount() {
+            try {
+                const data = await apiRequest('/api/notification/unread-count');
+                const badge = document.getElementById('notification-badge');
+                if (data.count > 0) {
+                    badge.textContent = data.count > 99 ? '99+' : data.count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            } catch (e) { /* 忽略轮询错误 */ }
+        }
+
+        // 标记单条已读
+        async function markNotificationRead(id) {
+            try {
+                await apiRequest(`/api/notification/${id}/read`, 'POST');
+                await loadNotifications();
+                await refreshUnreadCount();
+            } catch (e) { }
+        }
+
+        // 全部已读
+        async function markAllRead() {
+            try {
+                await apiRequest('/api/notification/read-all', 'POST');
+                await loadNotifications();
+                await refreshUnreadCount();
+            } catch (e) { }
+        }
+
         async function initApp() {
             loginPage.classList.add('hidden');
             appPage.classList.remove('hidden');
@@ -1772,6 +1848,10 @@
             renderUserArea();
 
             renderSidebar();
+            
+            // 启动消息通知：立即查未读数 + 每 30 秒轮询
+            refreshUnreadCount();
+            setInterval(refreshUnreadCount, 30000);
             
             // 加载所有内容
             await loadAllContent();
@@ -2587,7 +2667,7 @@
             } catch (e) {
                 document.getElementById('public-players').innerHTML = `<div class="text-red-500 col-span-3">${e.message}</div>`;
             }
-            calcOrderAmount();
+            onGameChange();
         }
 
         // 选中打手（输入框显示昵称，内部记录 username 用于提交）
@@ -2602,15 +2682,71 @@
             document.getElementById('order-player').value = '';
         }
 
-        // 金额随时长自动计算（只读，不可手动修改）
+        // 切换游戏：刷新业务类型下拉并重算金额
+        function onGameChange() {
+            refreshOrderTypes();
+            calcOrderAmount();
+        }
+
+        // 根据所选游戏从价格表加载业务类型
+        function refreshOrderTypes() {
+            const game = document.getElementById('order-game').value;
+            const sel = document.getElementById('order-type');
+            const priceList = contentData && contentData.price ? contentData.price : [];
+            const items = priceList.filter(p => p.game === game);
+            sel.innerHTML = items.length > 0
+                ? items.map(it => `<option value="${escapeHtml(it.rank)}">${escapeHtml(it.rank)}（${escapeHtml(it.unit)}）</option>`).join('')
+                : '<option value="默认">默认</option>';
+        }
+
+        // 金额自动计算（只读，不可手动修改）：小时随时长 / 级·层按数量 / 满级一口价
         function calcOrderAmount() {
             const game = document.getElementById('order-game').value;
-            const duration = parseFloat(document.getElementById('order-duration').value) || 0;
+            const rank = document.getElementById('order-type') ? document.getElementById('order-type').value : '';
             let unitPrice = 25;
+            let unit = '元/小时';
             const priceList = contentData && contentData.price ? contentData.price : [];
-            const item = priceList.find(p => p.game === game);
-            if (item && item.price) unitPrice = item.price;
-            const amount = Math.max(0, duration / 60 * unitPrice);
+            const item = priceList.find(p => p.game === game && p.rank === rank) || priceList.find(p => p.game === game);
+            if (item && item.price) { unitPrice = item.price; unit = item.unit || '元/小时'; }
+
+            const durBox = document.getElementById('order-duration');
+            const durLabel = document.getElementById('order-duration-label');
+            const qtyBox = document.getElementById('order-qty');
+            const qtyLabel = document.getElementById('order-qty-label');
+            let amount;
+
+            if (unit.indexOf('小时') >= 0) {
+                // 按服务时长计价
+                durBox.classList.remove('hidden'); durLabel.classList.remove('hidden');
+                qtyBox.classList.add('hidden'); qtyLabel.classList.add('hidden');
+                const duration = parseFloat(durBox.value) || 0;
+                amount = Math.max(0, duration / 60 * unitPrice);
+            } else if (unit.indexOf('满级') >= 0) {
+                // 一口价（如通行证满级）
+                durBox.classList.add('hidden'); durLabel.classList.add('hidden');
+                qtyBox.classList.add('hidden'); qtyLabel.classList.add('hidden');
+                amount = unitPrice;
+            } else if (unit.indexOf('级') >= 0 || unit.indexOf('层') >= 0) {
+                // 按数量计价（等级/层数）
+                durBox.classList.add('hidden'); durLabel.classList.add('hidden');
+                qtyBox.classList.remove('hidden'); qtyLabel.classList.remove('hidden');
+                let qty = parseInt(qtyBox.value) || 1;
+                // Apex通行证代肝：上限60级，60级自动按满级价70元
+                if (game === 'Apex英雄' && rank === '通行证代肝') {
+                    qtyBox.max = 60;
+                    qtyLabel.textContent = '等级/层数（Apex通行证上限60级，60级自动按满级价70元）';
+                    if (qty > 60) { qty = 60; qtyBox.value = 60; }
+                    if (qty >= 60) {
+                        const full = priceList.find(p => p.game === game && p.rank === '通行证满级');
+                        amount = full && full.price ? full.price : 70;
+                    } else {
+                        amount = Math.max(0, qty * unitPrice);
+                    }
+                } else {
+                    qtyLabel.textContent = '等级/层数';
+                    amount = Math.max(0, qty * unitPrice);
+                }
+            }
             document.getElementById('order-amount').value = amount.toFixed(2);
             document.getElementById('coin-cost').textContent = amount.toFixed(2);
         }
@@ -2619,20 +2755,44 @@
         async function createOrder() {
             const player = selectedPlayerUsername;
             const game_type = document.getElementById('order-game').value;
-            const duration_min = parseInt(document.getElementById('order-duration').value);
-            calcOrderAmount(); // 提交前强制按时长重算，防止金额被篡改
+            const serviceType = document.getElementById('order-type') ? document.getElementById('order-type').value : '';
+            const submitGameType = serviceType && serviceType !== '默认' ? game_type + '-' + serviceType : game_type;
+            let duration_min = parseInt(document.getElementById('order-duration').value);
+            calcOrderAmount(); // 提交前强制重算，防止金额被篡改
             const amount = parseFloat(document.getElementById('order-amount').value);
             const remark = document.getElementById('order-remark').value.trim();
 
-            if (!duration_min || duration_min < 30) { alert('服务时长不能少于30分钟'); return; }
+            // 判断当前业务计价方式：非时长业务（级/层/满级）用 service_note 记录业务量
+            let service_note = '';
+            const rank2 = document.getElementById('order-type') ? document.getElementById('order-type').value : '';
+            const pList2 = contentData && contentData.price ? contentData.price : [];
+            const item2 = pList2.find(p => p.game === game_type && p.rank === rank2) || pList2.find(p => p.game === game_type);
+            const unit2 = item2 ? (item2.unit || '元/小时') : '元/小时';
+            if (unit2.indexOf('小时') < 0) {
+                if (unit2.indexOf('满级') >= 0) {
+                    service_note = rank2;
+                } else if (unit2.indexOf('级') >= 0) {
+                    let q = parseInt(document.getElementById('order-qty').value) || 1;
+                    if (game_type === 'Apex英雄' && rank2 === '通行证代肝' && q > 60) q = 60;
+                    service_note = q + '级';
+                } else if (unit2.indexOf('层') >= 0) {
+                    service_note = (parseInt(document.getElementById('order-qty').value) || 1) + '层';
+                } else {
+                    service_note = rank2;
+                }
+                duration_min = 1; // 非时长业务时长占位
+            }
+
+            if (unit2.indexOf('小时') >= 0 && (!duration_min || duration_min < 30)) { alert('服务时长不能少于30分钟'); return; }
             if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
             if (amount < 1) { alert('订单金额不能小于1元'); return; }
 
             try {
                 await apiRequest('/api/order/create', 'POST', {
                     boss_username: currentUser.username,
-                    game_type: game_type,
+                    game_type: submitGameType,
                     duration_min: duration_min,
+                    service_note: service_note,
                     total_amount: amount * 100,
                     player_username: player,
                     remark: remark
@@ -2669,7 +2829,7 @@
                                 ? `<span class="inline-flex items-center gap-1.5"><img src="${o.player_avatar ? 'avatars/' + o.player_avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-6 h-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"><span>${escapeHtml(o.player_nickname || o.player_username)}</span></span>`
                                 : '<span class="text-gray-400">待分配</span>'}
                         </td>
-                        <td class="px-4 py-2">${o.duration_min}分钟</td>
+                        <td class="px-4 py-2">${o.service_note ? escapeHtml(o.service_note) : o.duration_min + '分钟'}</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
                         <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
                         <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>
@@ -2888,7 +3048,7 @@
                             <span class="inline-flex items-center gap-1.5"><img src="${o.boss_avatar ? 'avatars/' + o.boss_avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-6 h-6 rounded-full object-cover cursor-pointer hover:opacity-80 transition" title="点击查看大图"><span>${escapeHtml(o.boss_nickname || o.boss_username)}</span></span>
                         </td>
                         <td class="px-4 py-2">${escapeHtml(o.game_type)}</td>
-                        <td class="px-4 py-2">${o.duration_min}分钟</td>
+                        <td class="px-4 py-2">${o.service_note ? escapeHtml(o.service_note) : o.duration_min + '分钟'}</td>
                         <td class="px-4 py-2 text-blue-600 font-medium">¥${(o.total_amount / 100).toFixed(2)}</td>
                         <td class="px-4 py-2">${o.remark ? escapeHtml(o.remark) : '<span class="text-gray-300">无</span>'}</td>
                         <td class="px-4 py-2 ${statusColor[o.status]} font-medium">${statusMap[o.status]}</td>

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
 from models import BossInfo, PlayerInfo, PlayerTag, User, ContentConfig
+from api.notification_api import create_notification
 from schemas import (
     BossInfoResponse, PlayerInfoResponse, PlayerPublicInfo,
     IntroUpdateRequest, LevelUpdateRequest, TagCreateRequest, TagResponse,
@@ -270,6 +271,9 @@ def decide_profile(
             msg = "头像不合规，已恢复默认头像"
         u.pending_avatar = ""
     
+    # 通知用户审核结果
+    create_notification(db, u.id, "资料审核结果", msg, "success" if "通过" in msg else "warning", "/profile")
+    
     db.commit()
     return {"message": msg, "nickname": u.nickname, "avatar": u.avatar}
 
@@ -397,6 +401,14 @@ def decide_tag(
     t.status = "approved" if request.action == "approve" else "rejected"
     t.note = request.note
     t.processed_at = datetime.now()
+    
+    # 通知打手标签审核结果
+    p_user = db.query(User).filter(User.username == t.username).first()
+    if p_user:
+        if t.status == "approved":
+            create_notification(db, p_user.id, "标签审核通过", f"您的标签「{t.tag}」已通过审核，将对外展示", "success", "/profile")
+        else:
+            create_notification(db, p_user.id, "标签被驳回", f"您的标签「{t.tag}」未通过审核（{request.note or '未说明原因'}）", "warning", "/profile")
     db.commit()
     db.refresh(t)
     return {"message": "已通过" if t.status == "approved" else "已拒绝", "tag": t.tag, "status": t.status}

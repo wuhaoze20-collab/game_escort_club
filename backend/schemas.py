@@ -230,6 +230,7 @@ class CreateOrderRequest(BaseModel):
     duration_min: int
     total_amount: int
     player_username: Optional[str] = None  # 老板点单可直接指定打手
+    service_note: str = ""  # 业务量说明（如 50级 / 3层），非时长业务使用
     remark: str = ""  # 老板下单备注（打手接单参考）
 
 # 分配打手请求
@@ -245,6 +246,7 @@ class OrderResponse(BaseModel):
     game_type: str
     duration_min: int
     total_amount: int
+    service_note: str = ""
     remark: str = ""
     status: str
     created_at: datetime

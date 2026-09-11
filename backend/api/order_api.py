@@ -46,6 +46,8 @@ def create_order(
         raise HTTPException(status_code=400, detail="单笔订单金额不能超过5万元")
     if request.remark and len(request.remark) > 500:
         raise HTTPException(status_code=400, detail="下单备注不能超过500个字符")
+    if request.service_note and len(request.service_note) > 50:
+        raise HTTPException(status_code=400, detail="业务量说明不能超过50个字符")
     coins_required = round(request.total_amount / 100, 2)
     
     # 检查大狗币余额是否足够
@@ -61,6 +63,7 @@ def create_order(
         game_type=game_type,
         duration_min=request.duration_min,
         total_amount=request.total_amount,
+        service_note=request.service_note or "",
         remark=request.remark,
         status="pending"
     )
@@ -77,6 +80,17 @@ def create_order(
     
     # 冻结老板大狗币
     boss.balance -= coins_required
+    
+    # 发送订单通知：指定打手 → 通知打手；未指定 → 通知客服派单
+    if order.status == "pending_accept":
+        p_user = db.query(User).filter(User.username == order.player_username).first()
+        if p_user:
+            b_user = db.query(User).filter(User.username == order.boss_username).first()
+            boss_name = b_user.nickname if b_user and b_user.nickname else order.boss_username
+            create_notification(db, p_user.id, "新订单", f"老板 {boss_name} 给您指派了新订单 {order.order_no}，请及时确认", "info", "/order")
+    else:
+        for su in db.query(User).filter(User.role == "service").all():
+            create_notification(db, su.id, "新订单待派单", f"有新的待派单订单 {order.order_no}，请及时派单", "info", "/order")
     
     db.commit()
     db.refresh(order)
@@ -111,6 +125,16 @@ def assign_player(
     
     order.player_username = request.player_username
     order.status = "assigned"
+    
+    # 通知老板派单成功、打手有新订单
+    b_user = db.query(User).filter(User.username == order.boss_username).first()
+    p_user = db.query(User).filter(User.username == order.player_username).first()
+    player_name = p_user.nickname if p_user and p_user.nickname else order.player_username
+    if b_user:
+        create_notification(db, b_user.id, "派单成功", f"客服已为您派单：打手 {player_name}，订单 {order.order_no}，等待开始服务", "success", "/order")
+    if p_user:
+        create_notification(db, p_user.id, "新订单", f"您有新的派单订单 {order.order_no}，请及时接单", "info", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -173,6 +197,13 @@ def reject_order(
     if boss:
         boss.balance += order.total_amount // 100
     
+    # 通知老板订单被拒、金额退回
+    b_user = db.query(User).filter(User.username == order.boss_username).first()
+    p_user = db.query(User).filter(User.username == current_user.username).first()
+    player_name = p_user.nickname if p_user and p_user.nickname else current_user.username
+    if b_user:
+        create_notification(db, b_user.id, "打手拒单", f"打手 {player_name} 拒绝了订单 {order.order_no}，大狗币已退回您的余额", "warning", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -196,6 +227,14 @@ def start_order(
     
     order.status = "processing"
     order.start_time = datetime.now()
+    
+    # 通知老板服务开始
+    b_user = db.query(User).filter(User.username == order.boss_username).first()
+    p_user = db.query(User).filter(User.username == order.player_username).first()
+    player_name = p_user.nickname if p_user and p_user.nickname else order.player_username
+    if b_user:
+        create_notification(db, b_user.id, "服务开始", f"打手 {player_name} 已开始为您服务，订单 {order.order_no}", "info", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -248,6 +287,14 @@ def submit_settlement(
         raise HTTPException(status_code=403, detail="只能提交自己的订单")
     
     order.status = "pending_settlement"
+    
+    # 通知老板确认结单
+    b_user = db.query(User).filter(User.username == order.boss_username).first()
+    p_user = db.query(User).filter(User.username == current_user.username).first()
+    player_name = p_user.nickname if p_user and p_user.nickname else current_user.username
+    if b_user:
+        create_notification(db, b_user.id, "待确认结单", f"打手 {player_name} 已提交结单申请，订单 {order.order_no}，请确认结单", "warning", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -269,6 +316,13 @@ def confirm_settlement(
         raise HTTPException(status_code=403, detail="只能确认自己的订单")
     
     settle_order(db, order)
+    
+    # 通知打手订单完成、金额入账
+    p_user = db.query(User).filter(User.username == order.player_username).first()
+    if p_user:
+        income = order.total_amount - int(order.total_amount * CLUB_COMMISSION_RATE)
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已确认结单，本次收入 {income / 100:.2f} 元已入账后台金额", "success", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -287,6 +341,13 @@ def complete_order(
         raise HTTPException(status_code=400, detail="当前状态的订单不能直接完成")
     
     settle_order(db, order)
+    
+    # 通知打手订单完成、金额入账
+    p_user = db.query(User).filter(User.username == order.player_username).first()
+    if p_user:
+        income = order.total_amount - int(order.total_amount * CLUB_COMMISSION_RATE)
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已完成结算，本次收入 {income / 100:.2f} 元已入账后台金额", "success", "/order")
+    
     db.commit()
     db.refresh(order)
     return order
@@ -314,6 +375,11 @@ def cancel_order(
     boss = db.query(BossInfo).filter(BossInfo.username == order.boss_username).first()
     if boss:
         boss.balance += order.total_amount // 100
+    
+    # 通知打手订单已取消
+    p_user = db.query(User).filter(User.username == order.player_username).first() if order.player_username else None
+    if p_user:
+        create_notification(db, p_user.id, "订单已取消", f"订单 {order.order_no} 已取消，请知悉", "warning", "/order")
     
     db.commit()
     db.refresh(order)

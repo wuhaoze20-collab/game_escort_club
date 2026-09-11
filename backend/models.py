@@ -81,6 +81,7 @@ class Order(Base):
     game_type = Column(String(50), nullable=False)
     duration_min = Column(Integer, nullable=False)  # 服务时长（分钟）
     total_amount = Column(Integer, nullable=False)  # 订单总金额（分）
+    service_note = Column(String(50), default="")  # 业务量说明（如 50级 / 3层 / 满级），非时长业务使用
     remark = Column(Text, default="")  # 老板下单备注（打手接单参考）
     status = Column(String(20), default="pending")  # pending/pending_accept/assigned/processing/completed/cancelled/rejected
     created_at = Column(DateTime, default=datetime.now)

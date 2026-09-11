@@ -5,6 +5,7 @@ from database import get_db
 from models import BossInfo, Order, PlayerInfo, TipRecord, User
 from schemas import TipCreateRequest, TipResponse
 from auth import require_roles
+from api.notification_api import create_notification
 
 router = APIRouter(prefix="/api/tip", tags=["打赏管理"])
 
@@ -66,6 +67,12 @@ def create_tip(
         amount=request.amount
     )
     db.add(tip)
+    
+    # 通知打手收到打赏
+    p_user = db.query(User).filter(User.username == order.player_username).first()
+    if p_user:
+        create_notification(db, p_user.id, "收到打赏", f"老板 {current_user.nickname or current_user.username} 为您打赏 {request.amount // 100:.0f} 元，已计入后台金额", "success", "/tip")
+    
     db.commit()
     db.refresh(tip)
     return tip
