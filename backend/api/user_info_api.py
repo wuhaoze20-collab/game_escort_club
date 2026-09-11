@@ -475,19 +475,69 @@ def ban_user(
     if user.role not in ["boss", "player"]:
         raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
     
+    # 拉黑前：后台金额/余额转入公司后台
+    amount = 0
+    role_name = "老板" if user.role == "boss" else "打手"
+    display = user.nickname or username
     if user.role == "player":
-        # 打手：后台金额清零，视为转入公司账户
         player = db.query(PlayerInfo).filter(PlayerInfo.username == username).first()
         if player:
+            amount = player.backend_amount
             player.backend_amount = 0
     elif user.role == "boss":
-        # 老板：余额清零，视为放弃余额
         boss = db.query(BossInfo).filter(BossInfo.username == username).first()
         if boss:
+            amount = boss.balance
             boss.balance = 0
+    
+    # 公司后台资金池入账 + 资金流水
+    if amount > 0:
+        cb = db.query(ContentConfig).filter(ContentConfig.config_key == "company_balance").first()
+        if not cb:
+            cb = ContentConfig(config_key="company_balance", config_value=json.dumps({"balance": 0}))
+            db.add(cb)
+        cfg = json.loads(cb.config_value or '{"balance": 0}')
+        cfg["balance"] = cfg.get("balance", 0) + amount
+        cb.config_value = json.dumps(cfg, ensure_ascii=False)
+        
+        rec = db.query(ContentConfig).filter(ContentConfig.config_key == "company_records").first()
+        if not rec:
+            rec = ContentConfig(config_key="company_records", config_value="[]")
+            db.add(rec)
+        records = json.loads(rec.config_value or "[]")
+        records.insert(0, {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "type": "拉黑", "user": f"{display}（{username}）", "amount": amount})
+        rec.config_value = json.dumps(records, ensure_ascii=False)
+    
+    # 处罚公告自动追加一条
+    pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if pun:
+        plist = json.loads(pun.config_value or "[]")
+        if amount > 0:
+            desc = f"{role_name}「{display}」被管理员拉黑封禁，{('后台金额' if user.role == 'player' else '账户余额')} ¥{amount / 100:.2f} 已转入公司账户"
+        else:
+            desc = f"{role_name}「{display}」被管理员拉黑封禁，账号已注销"
+        plist.insert(0, {"level": "封禁账号", "desc": desc, "date": datetime.now().strftime("%Y-%m-%d")})
+        pun.config_value = json.dumps(plist, ensure_ascii=False)
+    
+    # 通知被拉黑用户
+    from api.notification_api import create_notification
+    create_notification(db, user.id, "账号被封禁", f"您的账号已被管理员拉黑注销，如有疑问请联系管理员", "warning", "/")
     
     # 账号注销，无法登录
     user.account_status = "rejected"
     
     db.commit()
-    return {"message": f"用户 {username} 已被拉黑注销，余额/后台金额已清零并入公司账户"}
+    return {"message": f"用户 {username} 已被拉黑注销，金额已转入公司账户"}
+
+
+# 公司后台余额与资金流水（仅管理员）
+@router.get("/admin/company-balance")
+def get_company_balance(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    cb = db.query(ContentConfig).filter(ContentConfig.config_key == "company_balance").first()
+    rec = db.query(ContentConfig).filter(ContentConfig.config_key == "company_records").first()
+    balance = json.loads(cb.config_value).get("balance", 0) if cb else 0
+    records = json.loads(rec.config_value) if rec else []
+    return {"balance": balance, "records": records}

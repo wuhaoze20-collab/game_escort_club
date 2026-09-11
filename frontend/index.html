@@ -797,6 +797,7 @@
                                     <th class="px-4 py-2">累计消费金额</th>
                                     <th class="px-4 py-2">大狗币余额</th>
                                     <th class="px-4 py-2">点单次数</th>
+                                    <th class="px-4 py-2">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="boss-list" class="divide-y divide-gray-100"></tbody>
@@ -819,6 +820,7 @@
                                     <th class="px-4 py-2">投诉次数</th>
                                     <th class="px-4 py-2">好评率</th>
                                     <th class="px-4 py-2">后台金额</th>
+                                    <th class="px-4 py-2">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="player-list" class="divide-y divide-gray-100"></tbody>
@@ -833,6 +835,10 @@
                         <button onclick="loadProfit()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                     </div>
                     <div id="profit-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"><div class="loading">加载中...</div></div>
+                    <div class="mb-6">
+                        <h3 class="text-base font-medium text-gray-700 mb-3">公司后台（拉黑转入资金）</h3>
+                        <div id="company-balance-box" class="p-4 bg-amber-50 border border-amber-200 rounded-lg"><div class="loading">加载中...</div></div>
+                    </div>
                     <h3 class="text-base font-medium text-gray-700 mb-3">各打手盈利明细</h3>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
@@ -1883,6 +1889,7 @@
             // 管理员加载本月盈利、复查审核与注册审核
             if (currentUser.role === 'admin') {
                 await loadProfit();
+                await loadCompanyBalance();
                 await loadReviewManage();
                 await loadRegistrationList();
             }
@@ -2298,6 +2305,9 @@
                         <td class="px-4 py-2">¥${(item.consume_amount / 100).toLocaleString()}</td>
                         <td class="px-4 py-2 text-green-600">${item.balance} 大狗币</td>
                         <td class="px-4 py-2">${item.order_count} 次</td>
+                        <td class="px-4 py-2">
+                            <button onclick="banUser('${item.username}', '老板')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition">拉黑</button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (e) {
@@ -2326,6 +2336,9 @@
                         <td class="px-4 py-2 text-red-500">${item.complaint_count} 次</td>
                         <td class="px-4 py-2 text-green-600">${item.good_rate != null ? item.good_rate + '%' : '-'}</td>
                         <td class="px-4 py-2">¥${(item.backend_amount / 100).toLocaleString()}</td>
+                        <td class="px-4 py-2">
+                            <button onclick="banUser('${item.username}', '打手')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition">拉黑</button>
+                        </td>
                     </tr>
                 `).join('');
             } catch (e) {
@@ -2980,6 +2993,60 @@
             } catch (e) {
                 alert(e.message);
             }
+        }
+
+        // ==================== 拉黑（管理员） ====================
+        async function banUser(username, roleName) {
+            if (!confirm(`确定要拉黑${roleName}「${username}」吗？其后台金额/余额将转入公司账户，且账号将无法再登录。`)) return;
+            try {
+                await apiRequest(`/api/admin/ban/${username}`, 'POST');
+                alert('已拉黑！金额已转入公司账户，处罚公告已自动添加');
+                await loadBossList();
+                await loadPlayerList();
+                await loadCompanyBalance();
+                await loadAllContent(); // 刷新处罚公告等公共内容
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 公司后台余额（管理员） ====================
+        async function loadCompanyBalance() {
+            try {
+                const data = await apiRequest('/api/admin/company-balance');
+                const box = document.getElementById('company-balance-box');
+                if (!box) return;
+                const yuan = (data.balance / 100).toFixed(2);
+                let html = `
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <div class="text-sm text-gray-500">公司后台余额</div>
+                            <div class="text-2xl font-bold text-amber-600">¥${yuan}</div>
+                        </div>
+                        <div class="text-xs text-gray-400">拉黑用户时其后台金额/余额转入此处</div>
+                    </div>`;
+                if (data.records && data.records.length > 0) {
+                    html += `<table class="w-full text-sm text-left">
+                        <thead class="bg-amber-100/60 text-amber-800">
+                            <tr>
+                                <th class="px-3 py-1.5">时间</th>
+                                <th class="px-3 py-1.5">类型</th>
+                                <th class="px-3 py-1.5">用户</th>
+                                <th class="px-3 py-1.5">转入金额</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-amber-100">
+                            ${data.records.map(r => `<tr>
+                                <td class="px-3 py-1.5 text-xs">${escapeHtml(r.date)}</td>
+                                <td class="px-3 py-1.5 text-xs text-red-500">${escapeHtml(r.type)}</td>
+                                <td class="px-3 py-1.5 text-xs">${escapeHtml(r.user)}</td>
+                                <td class="px-3 py-1.5 text-xs text-amber-600 font-medium">¥${(r.amount / 100).toFixed(2)}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>`;
+                } else {
+                    html += '<div class="text-sm text-gray-400">暂无转入记录</div>';
+                }
+                box.innerHTML = html;
+            } catch (e) { /* 忽略 */ }
         }
 
         // ==================== 本月盈利（管理员） ====================
