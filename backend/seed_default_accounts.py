@@ -114,7 +114,7 @@ DEFAULT_CONTENT = {
         {"game": "Apex英雄", "title": "Apex英雄官方赛事直播", "url": "https://space.bilibili.com/1676940341"},
         {"game": "CS2", "title": "CS2官方赛事直播", "url": "https://space.bilibili.com/474595627"},
         {"game": "英雄联盟", "title": "英雄联盟官方赛事直播", "url": "https://live.bilibili.com/6"},
-        {"game": "无畏契约", "title": "无畏契约官方赛事直播", "url": "https://space.bilibili.com/2071691173"},
+        {"game": "无畏契约", "title": "无畏契约官方赛事直播", "url": "https://live.bilibili.com/22908869/?live_from=86001&spm_id_from=333.1387.0.0"},
         {"game": "刀塔2", "title": "刀塔2官方赛事直播", "url": "https://space.bilibili.com/17561885"},
         {"game": "王者荣耀", "title": "王者荣耀官方赛事直播", "url": "https://live.bilibili.com/55"},
     ],
