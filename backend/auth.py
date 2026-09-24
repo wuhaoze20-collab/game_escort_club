@@ -12,7 +12,7 @@ from models import User
 # 配置：生产环境务必通过环境变量 SECRET_KEY 覆盖（例如：set SECRET_KEY=随机长字符串）
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24小时有效期
+# 令牌有效期不再硬编码于此：统一由 system_config 的 token_expire_minutes 提供（默认 24 小时）
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/login")
 
@@ -34,7 +34,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        # 未显式指定时按 system_config 的有效期（默认 24 小时），避免此处再藏一份隐式默认值
+        import config_service
+        minutes = int(config_service.get_config("token_expire_minutes"))
+        expire = datetime.utcnow() + timedelta(minutes=minutes)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

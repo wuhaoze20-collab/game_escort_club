@@ -157,3 +157,26 @@ class Notification(Base):
     is_read = Column(Integer, default=0)
     link = Column(String(255), default="")
     created_at = Column(DateTime, default=datetime.now)
+
+# 台词表（顶部台词栏随机轮换；由后台增删改查维护，不再硬编码在前端）
+class Quote(Base):
+    __tablename__ = "quotes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(String(255), nullable=False)  # 台词正文
+    source = Column(String(100), default="")  # 出处（如《英雄联盟》）
+    enabled = Column(Integer, default=1)  # 1=启用 0=停用（停用不参与轮换）
+    sort_order = Column(Integer, default=0)  # 排序（小在前）
+    created_at = Column(DateTime, default=datetime.now)
+
+# 系统参数表（业务规则集中存储，后台可改，无需改代码重启）
+class SystemConfig(Base):
+    __tablename__ = "system_config"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    config_key = Column(String(50), unique=True, index=True, nullable=False)
+    config_value = Column(String(255), nullable=False)  # 统一以字符串存储，读取时按 value_type 转换
+    value_type = Column(String(20), default="str")  # int/float/str/bool/json
+    label = Column(String(100), default="")  # 后台显示名
+    description = Column(String(255), default="")  # 说明（含单位）
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

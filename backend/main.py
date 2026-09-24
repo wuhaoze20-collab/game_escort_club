@@ -8,6 +8,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import text
 from database import engine, SessionLocal, Base, DB_ENGINE
 from seed_default_accounts import seed_default_accounts
+from seed_quotes import seed_quotes
+import config_service
 
 # 导入路由
 from api.auth_api import router as auth_router
@@ -19,6 +21,8 @@ from api.stats_api import router as stats_router
 from api.tip_api import router as tip_router
 from api.withdraw_api import router as withdraw_router
 from api.notification_api import router as notification_router
+from api.quote_api import router as quote_router
+from api.config_api import router as config_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -56,7 +60,7 @@ def migrate_db():
 
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.3.1")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.4.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -80,6 +84,8 @@ app.include_router(stats_router)
 app.include_router(tip_router)
 app.include_router(withdraw_router)
 app.include_router(notification_router)
+app.include_router(quote_router)
+app.include_router(config_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")
@@ -102,6 +108,25 @@ def start_auto_default_rating():
 
 # 启动时初始化默认数据（账户/老板/打手/内容配置，幂等，数据实体存 MySQL）
 seed_default_accounts()
+
+
+# 初始化台词表与系统参数表（幂等：二者都只在缺失时写入，不覆盖后台的增删改）
+def init_quotes_and_config():
+    db = SessionLocal()
+    try:
+        added_quotes = seed_quotes(db)
+        if added_quotes:
+            print(f"台词表初始化完成：导入 {added_quotes} 条默认台词")
+        added_configs = config_service.ensure_defaults(db)
+        if added_configs:
+            print(f"系统参数表初始化完成：补齐 {added_configs} 项参数")
+    except Exception as e:
+        print(f"[init_quotes_and_config] 初始化异常: {e}")
+    finally:
+        db.close()
+
+
+init_quotes_and_config()
 
 @app.get("/")
 def root():

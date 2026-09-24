@@ -16,10 +16,11 @@ from models import (
     SalaryRecord, PlayerRating, TipRecord, WithdrawalRecord,
 )
 from auth import hash_password
+import config_service
 
 random.seed(20260910)
 
-COMMISSION = 0.3  # 俱乐部抽成 30%（与 order_api.CLUB_COMMISSION_RATE 一致）
+# 俱乐部抽成比例不再硬编码：直接读取 system_config，避免与 order_api 的取值不一致
 
 # 新增打手（username, 昵称, 陪玩类型, 技术等级, 头像, 自我介绍, 已审核标签）
 NEW_PLAYERS = [
@@ -124,8 +125,8 @@ def main():
                                   created_at=created, start_time=start, end_time=end)
                     db.add(order)
                     db.flush()
-                    # 结算：工资记录
-                    commission = int(amount * COMMISSION)
+                    # 结算：工资记录（抽成比例读自 system_config，与真实结单逻辑保持同一口径）
+                    commission = int(amount * config_service.commission_rate(db))
                     income = amount - commission
                     db.add(SalaryRecord(order_id=order.id, player_username=player.username,
                                         order_total=amount, club_commission=commission,

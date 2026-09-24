@@ -8,11 +8,14 @@ from models import Order, SalaryRecord, BossInfo, PlayerInfo, User
 from schemas import CreateOrderRequest, AssignPlayerRequest, OrderResponse, SalaryRecordResponse
 from auth import get_current_user, require_roles
 from api.notification_api import create_notification
+import config_service
 
 router = APIRouter(prefix="/api/order", tags=["订单管理"])
 
-# 俱乐部抽成比例（30%）
-CLUB_COMMISSION_RATE = 0.3
+
+def _rate(db: Session) -> float:
+    """俱乐部抽成比例，取自 system_config（后台可改，默认 0.3）"""
+    return config_service.commission_rate(db)
 
 # 创建订单（管理员、客服、老板可创建）
 @router.post("/create", response_model=OrderResponse)
@@ -30,24 +33,31 @@ def create_order(
     if not boss:
         raise HTTPException(status_code=404, detail="老板账户不存在")
 
-    # ---- 服务端参数校验（防止构造非法请求） ----
+    # ---- 服务端参数校验（防止构造非法请求）；各项限额取自 system_config，后台可调 ----
+    max_game_len = int(config_service.get_config("game_type_max_len", db))
+    max_duration = int(config_service.get_config("order_max_duration_min", db))
+    min_amount = int(config_service.get_config("order_min_amount", db))
+    max_amount = int(config_service.get_config("order_max_amount", db))
+    max_remark_len = int(config_service.get_config("order_remark_max_len", db))
+    max_note_len = int(config_service.get_config("order_service_note_max_len", db))
+
     game_type = (request.game_type or "").strip()
     if not game_type:
         raise HTTPException(status_code=400, detail="请选择游戏类型")
-    if len(game_type) > 50:
-        raise HTTPException(status_code=400, detail="游戏类型不能超过50个字符")
+    if len(game_type) > max_game_len:
+        raise HTTPException(status_code=400, detail=f"游戏类型不能超过{max_game_len}个字符")
     if request.duration_min < 1:
         raise HTTPException(status_code=400, detail="服务时长必须大于0分钟")
-    if request.duration_min > 1440:
-        raise HTTPException(status_code=400, detail="单笔订单服务时长不能超过24小时（1440分钟）")
-    if not isinstance(request.total_amount, (int, float)) or request.total_amount < 100:
-        raise HTTPException(status_code=400, detail="订单金额不能小于1元")
-    if request.total_amount > 5000000:
-        raise HTTPException(status_code=400, detail="单笔订单金额不能超过5万元")
-    if request.remark and len(request.remark) > 500:
-        raise HTTPException(status_code=400, detail="下单备注不能超过500个字符")
-    if request.service_note and len(request.service_note) > 50:
-        raise HTTPException(status_code=400, detail="业务量说明不能超过50个字符")
+    if request.duration_min > max_duration:
+        raise HTTPException(status_code=400, detail=f"单笔订单服务时长不能超过{max_duration}分钟（{max_duration // 60}小时）")
+    if not isinstance(request.total_amount, (int, float)) or request.total_amount < min_amount:
+        raise HTTPException(status_code=400, detail=f"订单金额不能小于{min_amount / 100:g}元")
+    if request.total_amount > max_amount:
+        raise HTTPException(status_code=400, detail=f"单笔订单金额不能超过{max_amount / 100:g}元")
+    if request.remark and len(request.remark) > max_remark_len:
+        raise HTTPException(status_code=400, detail=f"下单备注不能超过{max_remark_len}个字符")
+    if request.service_note and len(request.service_note) > max_note_len:
+        raise HTTPException(status_code=400, detail=f"业务量说明不能超过{max_note_len}个字符")
     coins_required = round(request.total_amount / 100, 2)
     
     # 检查大狗币余额是否足够
@@ -240,12 +250,13 @@ def start_order(
     return order
 
 # 结算订单（完成订单并生成工资记录，金额入账）
-def settle_order(db: Session, order: Order):
+# 返回生成的 SalaryRecord，调用方应直接复用它，避免重复计算金额导致口径不一致
+def settle_order(db: Session, order: Order) -> SalaryRecord:
     order.status = "completed"
     order.end_time = datetime.now()
     
     # 计算结算
-    club_commission = int(order.total_amount * CLUB_COMMISSION_RATE)
+    club_commission = int(order.total_amount * _rate(db))
     player_income = order.total_amount - club_commission
     
     # 生成工资记录
@@ -269,6 +280,9 @@ def settle_order(db: Session, order: Order):
     if boss:
         boss.consume_amount += order.total_amount
         boss.order_count += 1
+
+    return salary
+
 
 # 打手提交结单申请（服务完成后，等待老板确认，金额尚未入账）
 @router.post("/{order_id}/submit-settlement", response_model=OrderResponse)
@@ -315,13 +329,12 @@ def confirm_settlement(
     if current_user.role == "boss" and order.boss_username != current_user.username:
         raise HTTPException(status_code=403, detail="只能确认自己的订单")
     
-    settle_order(db, order)
+    salary = settle_order(db, order)
     
-    # 通知打手订单完成、金额入账
+    # 通知打手订单完成、金额入账（金额直接复用结算结果，避免口径不一致）
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        income = order.total_amount - int(order.total_amount * CLUB_COMMISSION_RATE)
-        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已确认结单，本次收入 {income / 100:.2f} 元已入账后台金额", "success", "/order")
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已确认结单，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "/order")
     
     db.commit()
     db.refresh(order)
@@ -340,13 +353,12 @@ def complete_order(
     if order.status not in ["processing", "pending_settlement"]:
         raise HTTPException(status_code=400, detail="当前状态的订单不能直接完成")
     
-    settle_order(db, order)
+    salary = settle_order(db, order)
     
-    # 通知打手订单完成、金额入账
+    # 通知打手订单完成、金额入账（金额直接复用结算结果，避免口径不一致）
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        income = order.total_amount - int(order.total_amount * CLUB_COMMISSION_RATE)
-        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已完成结算，本次收入 {income / 100:.2f} 元已入账后台金额", "success", "/order")
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已完成结算，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "/order")
     
     db.commit()
     db.refresh(order)

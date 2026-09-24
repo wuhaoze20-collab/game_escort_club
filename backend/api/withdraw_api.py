@@ -6,16 +6,15 @@ from database import get_db
 from models import PlayerInfo, SalaryRecord, TipRecord, User, WithdrawalRecord
 from schemas import WithdrawCreateRequest, WithdrawProcessRequest, WithdrawResponse
 from auth import require_roles
+import config_service
 
 router = APIRouter(prefix="/api/withdraw", tags=["提现管理"])
 
-# 提现冷却期（天）：入账金额需满30天才可提现
-COOLDOWN_DAYS = 30
-
-# 计算打手可提现金额（已过30天冷却期的收入 + 打赏 - 已批准提现）
+# 提现冷却期取自 system_config（默认 30 天）：入账金额需满该天数才可提现
 def calc_available_amount(db: Session, player_username: str) -> int:
     now = datetime.now()
-    cutoff = now - timedelta(days=COOLDOWN_DAYS)
+    cooldown_days = config_service.withdraw_cooldown_days(db)
+    cutoff = now - timedelta(days=cooldown_days)
     
     # 已过冷却期的订单收入
     matured_salary = db.query(SalaryRecord).filter(
@@ -56,7 +55,7 @@ def get_available_amount(
     return {
         "available_amount": available,
         "backend_amount": player.backend_amount,
-        "cooldown_days": COOLDOWN_DAYS
+        "cooldown_days": config_service.withdraw_cooldown_days(db)
     }
 
 # 打手发起提现申请

@@ -4,14 +4,11 @@ from datetime import datetime, timedelta
 from database import get_db
 from models import User, BossInfo, PlayerInfo
 from schemas import LoginRequest, LoginResponse, ResetPasswordRequest, ChangePasswordRequest, RegisterRequest, RegistrationDecisionRequest
-from auth import verify_password, hash_password, create_access_token, get_current_user, require_roles, ACCESS_TOKEN_EXPIRE_MINUTES
+from auth import verify_password, hash_password, create_access_token, get_current_user, require_roles
 from api.notification_api import create_notification
+import config_service
 
 router = APIRouter(prefix="/api", tags=["认证"])
-
-# 登录锁定配置：连续输错 5 次锁定 10 分钟
-MAX_FAILED_ATTEMPTS = 5
-LOCK_MINUTES = 10
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -26,6 +23,10 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     now = datetime.now()
 
+    # 登录锁定策略取自 system_config（默认：连续 5 次锁定 10 分钟）
+    max_attempts = config_service.login_max_failed_attempts(db)
+    lock_minutes = config_service.login_lock_minutes(db)
+
     # 锁定检查：若账户处于锁定期，直接拒绝
     if user.lock_until and user.lock_until > now:
         remaining_min = int((user.lock_until - now).total_seconds() // 60) + 1
@@ -37,17 +38,17 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     # 验证密码
     if not verify_password(request.password, user.password_hash):
         user.failed_attempts = (user.failed_attempts or 0) + 1
-        if user.failed_attempts >= MAX_FAILED_ATTEMPTS:
-            # 达到上限：锁定 10 分钟并重置计数
-            user.lock_until = now + timedelta(minutes=LOCK_MINUTES)
+        if user.failed_attempts >= max_attempts:
+            # 达到上限：按配置锁定并重置计数
+            user.lock_until = now + timedelta(minutes=lock_minutes)
             user.failed_attempts = 0
             db.commit()
             raise HTTPException(
                 status_code=423,
-                detail=f"密码连续错误 {MAX_FAILED_ATTEMPTS} 次，账户已锁定 {LOCK_MINUTES} 分钟，请稍后再试"
+                detail=f"密码连续错误 {max_attempts} 次，账户已锁定 {lock_minutes} 分钟，请稍后再试"
             )
         db.commit()
-        remaining = MAX_FAILED_ATTEMPTS - user.failed_attempts
+        remaining = max_attempts - user.failed_attempts
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"账号或密码错误，还可尝试 {remaining} 次"
@@ -71,8 +72,9 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="账号审核未通过，无法登录"
         )
 
-    # 生成令牌
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    # 生成令牌（有效期取自 system_config，默认 24 小时）
+    token_minutes = int(config_service.get_config("token_expire_minutes", db))
+    access_token_expires = timedelta(minutes=token_minutes)
     access_token = create_access_token(
         data={"sub": user.username, "role": user.role},
         expires_delta=access_token_expires
@@ -95,7 +97,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 # 老板注册直接生效；打手/客服注册需管理员审核通过后才能登录
 ROLE_NAMES = {"boss": "老板", "player": "打手", "service": "客服"}
 ROLE_AVATARS = {"boss": "avatar_boss.png", "player": "avatar_yule.jpg", "service": "avatar_service.png"}
-TECH_LEVELS = ("985", "211", "大专", "魔王护", "明星护")
+# 技术陪等级列表已迁入 system_config（tech_levels），此处不再重复定义
 
 
 @router.post("/register")
@@ -118,12 +120,15 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     avatar = ROLE_AVATARS[role]
     needs_review = role in ("player", "service")
 
-    # 打手等级校验
+    # 打手等级校验（等级列表取自 system_config，与「我的账户」修改等级使用同一份数据）
     if role == "player":
         level_type = request.level_type.strip() or "娱乐陪"
         tech_level = request.tech_level.strip()
-        if level_type == "技术陪" and tech_level not in TECH_LEVELS:
-            raise HTTPException(status_code=400, detail="技术陪等级须为：985 / 211 / 大专 / 魔王护 / 明星护")
+        if level_type == "技术陪" and tech_level not in config_service.tech_levels(db):
+            raise HTTPException(
+                status_code=400,
+                detail=f"技术陪等级须为：{' / '.join(config_service.tech_levels(db))}"
+            )
 
     user = User(
         username=username,

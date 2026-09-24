@@ -11,7 +11,7 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 60 个接口）
+│   ├── api/                     # 接口路由（共 68 个接口）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
@@ -21,13 +21,17 @@ game_escort_club/
 │   │   ├── stats_api.py         # 本月盈利统计
 │   │   ├── tip_api.py           # 打赏接口
 │   │   ├── withdraw_api.py      # 提现申请与审核
-│   │   └── notification_api.py  # 站内消息通知
+│   │   ├── notification_api.py  # 站内消息通知
+│   │   ├── quote_api.py         # 台词增删改查 + 批量导入
+│   │   └── config_api.py        # 系统参数读取/修改/恢复默认
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（11 张表）
+│   ├── models.py                # 数据库表模型（13 张表）
 │   ├── schemas.py               # 请求/响应数据模型
 │   ├── auth.py                  # JWT 鉴权与角色权限校验
+│   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
 │   ├── main.py                  # 程序入口（建表 + 自动补列 + 挂载路由与静态目录）
 │   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
+│   ├── seed_quotes.py           # 默认台词初始化（290 条，仅首次导入）
 │   ├── seed_demo_data.py        # 演示数据填充脚本（可选，手动执行）
 │   ├── backup_db.py             # MySQL 备份脚本（mysqldump，默认保留最近 7 份）
 │   ├── requirements.txt         # Python 依赖清单
@@ -63,8 +67,12 @@ game_escort_club/
 | `tip_records` | 打赏记录 | 关联订单；累计不超过订单金额的 30% |
 | `withdrawal_records` | 提现申请 | `status`：pending/approved/rejected |
 | `notifications` | 站内消息 | `user_id` 外键；`is_read` |
+| `quotes` | 顶部台词栏的台词 | `text`、`source`(出处)、`enabled`(1/0，停用不参与轮换)、`sort_order`。**前台台词栏的唯一数据源**，后台「台词管理」可增删改 |
+| `system_config` | 业务参数（键值表） | `config_key` 唯一、`config_value`(字符串存)、`value_type`(int/float/str/json)、`label`/`description`。**抽成比例、冷却天数、各类上限等全部在此**，改完立即生效 |
 
 > **金额单位统一为「分」（整数）**，避免浮点误差。仅 `boss_info.balance`（大狗币，1 大狗币 = 1 元）、`player_info.backend_amount`、`good_rate` 使用小数。
+
+> **`system_config` 有默认值兜底**：每条参数在 `config_service.py` 的 `CONFIG_META` 里都定义了出厂默认值与类型。数据库缺行、值非法或类型转换失败时一律回退默认值并打印告警，**业务不会因配置问题崩溃**。读取带 10 秒缓存，写入时立即失效，所以改完马上生效。
 
 > **`content_config` 是复用表**：除 8 个页面内容模块外，它还存了两个**内部键** `company_balance`（公司账户余额）与 `company_records`（封禁资金流水）。这两个键不在 `VALID_CONFIG_KEYS` 白名单内，因此不会出现在 `/api/content/all` 里，也不能通过内容接口读写——**直接清空/重建这张表会连带清掉公司账户余额**。
 
@@ -89,12 +97,42 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 4. **打手提交结单** → `processing` → `pending_settlement`，**此时资金尚未到打手账户**（保障老板资金安全）
 5. **老板确认结单** → 写 `salary_records`：`club_commission`(30%，`CLUB_COMMISSION_RATE`) 归俱乐部 + `player_income`(70%) 计入打手 `backend_amount`
 6. **打赏** → 老板额外打赏（≤订单 30%），直接计入打手后台金额
-7. **提现** → 打手后台金额**入账满 30 天**（`COOLDOWN_DAYS`）后才可申请 → 管理员/客服审核 → 批准后扣除
+7. **提现** → 打手后台金额**入账满 30 天**（`withdraw_cooldown_days`，后台可调）后才可申请 → 管理员/客服审核 → 批准后扣除
 
 ### 鉴权与权限
 
 - 登录签发 JWT（`auth.py`，`SECRET_KEY` 环境变量可覆盖，默认 24 小时有效）
 - 接口级权限用 `Depends(require_roles("admin", ...))` 校验，越权返回 403；前端再按角色隐藏菜单与按钮（**前端隐藏只是体验，真正的边界在后端**）
+
+### 可维护配置（改后台即可，无需改代码或重启）
+
+以下内容原先硬编码在代码里，现已全部迁入数据库，由后台页面维护：
+
+| 内容 | 存放位置 | 后台入口 | 可操作角色 |
+|---|---|---|---|
+| **台词**（290 条，驱动顶部台词栏） | `quotes` 表 | 系统设置 → 台词管理 | 管理员 / 客服 |
+| **业务参数**（18 项） | `system_config` 表 | 系统设置 → 系统参数 | 管理员（客服只读） |
+
+**业务参数清单**（`config_service.CONFIG_META`，含默认值与类型校验）：
+
+| 参数 | 默认值 | 说明 |
+|---|---|---|
+| `club_commission_rate` | 0.3 | 俱乐部抽成比例（0~1） |
+| `tip_max_rate` | 0.3 | 单笔订单累计打赏上限比例 |
+| `withdraw_cooldown_days` | 30 | 提现冷却天数 |
+| `recharge_max_amount` | 10000000 | 单次充值上限（分） |
+| `login_max_failed_attempts` | 5 | 连续输错密码锁定阈值 |
+| `login_lock_minutes` | 10 | 账户锁定时长（分钟） |
+| `token_expire_minutes` | 1440 | 登录令牌有效期（分钟） |
+| `order_min_amount` / `order_max_amount` | 100 / 5000000 | 订单金额下限 / 上限（分） |
+| `order_max_duration_min` | 1440 | 单笔订单时长上限（分钟） |
+| `order_remark_max_len` / `order_service_note_max_len` / `game_type_max_len` | 500 / 50 / 50 | 各类文本字段字数上限 |
+| `nickname_max_len` / `tag_max_len` | 20 / 20 | 昵称 / 标签字数上限 |
+| `violation_nickname` | 违规昵称 | 昵称被打回后的占位文案 |
+| `tech_levels` / `level_types` | 985…明星护 / 娱乐陪·技术陪 | 打手等级列表（JSON 数组） |
+
+> 修改参数会**立即生效**（写入即失效缓存）。填了非法值会被拒绝并提示原因（例如比例越界、类型不符），不会写进库。
+> 台词改动会同步影响所有角色的顶部台词栏（前端登录时拉取一次，之后本地 10 秒轮换，不会高频请求后端）。
 
 ## 快速启动（详细环境配置）
 
@@ -328,7 +366,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **60 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **68 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
@@ -426,10 +464,26 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 |---|---|---|---|
 | GET | /api/stats/monthly-profit | 本月盈利统计 | 管理员 |
 
+### 台词管理（5）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/quote/list | 台词列表（管理员/客服含停用项，其他用户仅启用的） | 所有登录用户 |
+| POST | /api/quote/create | 新增台词 | 管理员/客服 |
+| PUT | /api/quote/{quote_id} | 修改台词（内容/出处/启用状态/排序） | 管理员/客服 |
+| DELETE | /api/quote/{quote_id} | 删除台词 | 管理员/客服 |
+| POST | /api/quote/batch-import | 批量导入（每行一条，`台词|出处`，自动跳过重复） | 管理员/客服 |
+
+### 系统参数（3）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/config/all | 读取全部参数（含默认值、类型、说明） | 管理员/客服 |
+| PUT | /api/config/{config_key} | 修改参数（校验类型与取值范围，改完立即生效） | 管理员 |
+| POST | /api/config/{config_key}/reset | 恢复该参数为默认值 | 管理员 |
+
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（11 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
-2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`（`main.py` 启动时幂等调用，**已存在的数据不会被覆盖**）
-3. 俱乐部抽成比例在 `backend/api/order_api.py` 的 `CLUB_COMMISSION_RATE` 常量（当前 `0.3`，即抽成 30%）；`seed_demo_data.py` 的 `COMMISSION` 需与其保持一致
+1. 数据库表结构在 `backend/models.py`（13 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；两者都在启动时幂等调用，**已存在的数据不会被覆盖**
+3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
 4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧 CORS 配置
 
 ## 数据库配置（MySQL）

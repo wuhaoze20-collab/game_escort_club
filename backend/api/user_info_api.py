@@ -12,14 +12,11 @@ from schemas import (
     TagDecisionRequest, RechargeRequest, ProfileUpdateRequest, ProfileReviewRequest
 )
 from auth import get_current_user, require_roles
+import config_service
 
 router = APIRouter(prefix="/api", tags=["用户信息"])
 
-# 技术陪细分等级（由低到高）
-TECH_LEVELS = ["985", "211", "大专", "魔王护", "明星护"]
-
-# 违规昵称（头像/昵称被管理员打回后的昵称）
-VIOLATION_NICKNAME = "违规昵称"
+# 技术陪细分等级、违规昵称等已迁入 system_config 表（后台可改），此处不再硬编码。
 
 # 用户默认头像分配（touxiangku 图库仅供系统默认分配，任何人不可选用）
 def default_avatar_for(user: User, db: Session = None) -> str:
@@ -175,9 +172,10 @@ def update_my_profile(
     
     if request.nickname is not None and request.nickname.strip():
         nick = request.nickname.strip()
-        if len(nick) > 20:
-            raise HTTPException(status_code=400, detail="昵称不能超过20个字符")
-        if nick == VIOLATION_NICKNAME:
+        max_nick_len = int(config_service.get_config("nickname_max_len", db))
+        if len(nick) > max_nick_len:
+            raise HTTPException(status_code=400, detail=f"昵称不能超过{max_nick_len}个字符")
+        if nick == config_service.get_config("violation_nickname", db):
             raise HTTPException(status_code=400, detail="该昵称不可用")
         if current_user.nickname_status == "pending":
             raise HTTPException(status_code=400, detail="昵称审核中，请等待管理员审核后再修改")
@@ -244,10 +242,11 @@ def decide_profile(
             u.nickname_status = "approved"
             msg = f"昵称审核通过：{u.nickname}"
         else:
-            u.nickname = VIOLATION_NICKNAME
+            violation = config_service.get_config("violation_nickname", db)
+            u.nickname = violation
             u.nickname_status = "approved"
             u.reject_reason = request.note
-            msg = f"昵称不合规，已改为：{VIOLATION_NICKNAME}"
+            msg = f"昵称不合规，已改为：{violation}"
         u.pending_nickname = ""
     else:
         if u.avatar_status != "pending" or not u.pending_avatar:
@@ -290,12 +289,14 @@ def update_my_level(
     current_user: User = Depends(require_roles("player")),
     db: Session = Depends(get_db)
 ):
-    if request.level_type not in ["娱乐陪", "技术陪"]:
-        raise HTTPException(status_code=400, detail="等级大类必须为：娱乐陪 或 技术陪")
+    all_level_types = config_service.level_types(db)
+    tech_levels = config_service.tech_levels(db)
+    if request.level_type not in all_level_types:
+        raise HTTPException(status_code=400, detail=f"等级大类必须为：{' / '.join(all_level_types)}")
     tech_level = ""
     if request.level_type == "技术陪":
-        if request.tech_level not in TECH_LEVELS:
-            raise HTTPException(status_code=400, detail=f"技术陪细分等级必须为：{'/'.join(TECH_LEVELS)}")
+        if request.tech_level not in tech_levels:
+            raise HTTPException(status_code=400, detail=f"技术陪细分等级必须为：{'/'.join(tech_levels)}")
         tech_level = request.tech_level
     info = db.query(PlayerInfo).filter(PlayerInfo.username == current_user.username).first()
     if not info:
@@ -326,7 +327,7 @@ def add_my_tag(
     if not tag:
         raise HTTPException(status_code=400, detail="标签内容不能为空")
     if len(tag) > 20:
-        raise HTTPException(status_code=400, detail="标签不能超过20个字符")
+        raise HTTPException(status_code=400, detail=f"标签不能超过{int(config_service.get_config('tag_max_len', db))}个字符")
     # 限制待审核标签数量，防止刷屏
     pending_count = db.query(PlayerTag).filter(
         PlayerTag.username == current_user.username,
@@ -414,8 +415,9 @@ def recharge_balance(
 ):
     if request.amount <= 0:
         raise HTTPException(status_code=400, detail="充值金额必须大于0")
-    if request.amount > 100000:
-        raise HTTPException(status_code=400, detail="单次充值金额不能超过10万元")
+    recharge_max = int(config_service.get_config("recharge_max_amount", db))
+    if request.amount > recharge_max:
+        raise HTTPException(status_code=400, detail=f"单次充值金额不能超过{recharge_max / 100:g}元")
     if not request.payment.strip():
         raise HTTPException(status_code=400, detail="请选择支付方式")
     

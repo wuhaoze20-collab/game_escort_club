@@ -260,3 +260,24 @@ class SalaryRecordResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ——— 台词管理 ———
+class QuoteCreate(BaseModel):
+    text: str
+    source: str = ""
+    enabled: Optional[bool] = True
+    sort_order: Optional[int] = None  # 不传则自动排到末尾
+
+class QuoteUpdate(BaseModel):
+    text: Optional[str] = None
+    source: Optional[str] = None
+    enabled: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+# 批量导入：每行一条，支持 "台词|出处"
+class QuoteBatchImport(BaseModel):
+    content: str
+
+# ——— 系统参数 ———
+class SystemConfigUpdate(BaseModel):
+    value: str  # 统一按字符串提交，后端按参数类型校验并转换

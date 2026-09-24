@@ -6,11 +6,9 @@ from models import BossInfo, Order, PlayerInfo, TipRecord, User
 from schemas import TipCreateRequest, TipResponse
 from auth import require_roles
 from api.notification_api import create_notification
+import config_service
 
 router = APIRouter(prefix="/api/tip", tags=["打赏管理"])
-
-# 打赏上限比例（订单金额的30%）
-TIP_MAX_RATE = 0.3
 
 # 老板对已完成订单打赏打手
 @router.post("/create", response_model=TipResponse)
@@ -38,11 +36,12 @@ def create_tip(
     if not order.player_username:
         raise HTTPException(status_code=400, detail="订单未分配打手，无法打赏")
     
-    # 打赏上限：累计打赏不超过订单金额的30%
-    max_tip = int(order.total_amount * TIP_MAX_RATE)
+    # 打赏上限：累计打赏不超过订单金额的设定比例（system_config，默认 30%）
+    tip_rate = config_service.tip_max_rate(db)
+    max_tip = int(order.total_amount * tip_rate)
     already_tipped = sum(t.amount for t in db.query(TipRecord).filter(TipRecord.order_id == order.id).all())
     if already_tipped + request.amount > max_tip:
-        raise HTTPException(status_code=400, detail=f"该订单累计打赏不能超过订单金额的30%（上限¥{max_tip / 100:.2f}，已打赏¥{already_tipped / 100:.2f}）")
+        raise HTTPException(status_code=400, detail=f"该订单累计打赏不能超过订单金额的{tip_rate * 100:g}%（上限¥{max_tip / 100:.2f}，已打赏¥{already_tipped / 100:.2f}）")
     
     # 打赏金额必须为整数元（大狗币1:1结算）
     if request.amount % 100 != 0:
