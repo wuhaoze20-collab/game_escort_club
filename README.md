@@ -245,6 +245,19 @@ venv\Scripts\python main.py
 > venv\Scripts\python.exe main.py
 > ```
 
+> **最省事的启动方式**：双击 `backend\启动.bat`。该脚本**固定使用本项目的 `backend\venv`**，并在启动前先校验依赖是否齐全，选错解释器这类问题不会再出现。
+
+#### 在 PyCharm 里运行时必须改解释器
+
+PyCharm 的运行按钮用的是**它自己配置的解释器**，跟 `main.py` 里的代码无关。本项目务必指向 `backend\venv`：
+
+1. `File` → `Settings` → `Project: game_escort_club` → `Python Interpreter`
+2. 齿轮 → `Add Local Interpreter` → `Existing`
+3. 选择 `C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe` → 确定
+4. 再打开 `Run` → `Edit Configurations...`，确认 `main` 这条配置的 `Python interpreter` 也选成上面这个（运行配置里的解释器是单独存的，改项目 SDK 不一定同步）
+
+> 注意：项目根的 `.venv` 目录已在整理时删除（它缺 `uvicorn` 等依赖，本来就不完整）。**唯一正确且完整的环境是 `backend\venv`。** 若 PyCharm 里还留着指向 `game_escort_club\.venv` 的失效解释器，删掉即可。
+
 **关闭后端**：在运行窗口按 `Ctrl + C`，或直接关闭该终端窗口。
 
 ### 第 5 步：启动前端页面（二选一）
