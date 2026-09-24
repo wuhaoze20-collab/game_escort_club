@@ -220,7 +220,13 @@ cd C:\Users\18642\game_escort_club\backend
 venv\Scripts\python main.py
 ```
 
-- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手）
+> **必须用 `backend\venv` 里的解释器**，不要用系统 Python 或其它项目的虚拟环境（见下方排查表第 1 条）。
+> 工作目录现已不再影响运行——路径都基于 `main.py` 自身位置解析，所以也可以用绝对路径从任意目录启动：
+> ```bash
+> C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\main.py
+> ```
+
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、18 项系统参数）
 - 后端服务地址：`http://localhost:8000`
 - 在线接口文档（Swagger）：`http://localhost:8000/docs`
 
@@ -228,9 +234,16 @@ venv\Scripts\python main.py
 
 | 现象 | 原因 | 解决办法 |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'fastapi'` | 没用 venv 的 Python，或依赖没装 | 必须用 `venv\Scripts\python main.py` 启动，并先完成第 2 步 |
+| `ModuleNotFoundError: No module named 'fastapi'` | **用错了 Python 解释器**（最常见）：用了系统 Python，或用了**别的项目**的虚拟环境 | 必须用本项目的 `backend\venv\Scripts\python.exe`。用 `python -c "import sys; print(sys.executable)"` 确认当前解释器路径，若输出不是 `...\game_escort_club\backend\venv\...` 就是选错了 |
+| `RuntimeError: Directory '../frontend/avatars' does not exist` | 在旧版本中因工作目录不是 `backend` 导致（**V3.4.1 已修复，不再依赖工作目录**） | 升级到最新代码；或先 `cd` 到 `backend` 再启动 |
 | `[Errno 10048] ... address already in use` | 8000 端口被占用 | 方法一：`netstat -ano | findstr 8000` 查出 PID 后 `taskkill /F /PID <PID>` 结束占用进程；方法二：改 `main.py` 里的 `port=8000` 为其他端口 |
 | 启动无报错但页面连不上 | 后端没起来 / 前端 API 地址不对 | 确认终端停留在运行状态（不要关闭窗口）；确认 `frontend/index.html` 顶部 `API_BASE` 为 `http://localhost:8000` |
+
+> **本机有多个 Python 时的建议**：不要靠 `python` 这个命令名去猜，直接用完整路径启动最稳妥：
+> ```
+> cd C:\Users\18642\game_escort_club\backend
+> venv\Scripts\python.exe main.py
+> ```
 
 **关闭后端**：在运行窗口按 `Ctrl + C`，或直接关闭该终端窗口。
 

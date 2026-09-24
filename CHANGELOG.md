@@ -1,5 +1,25 @@
 # 更新日志 CHANGELOG
 
+## [V3.4.1] 2026-09-24
+
+### 🔧 启动不再依赖工作目录（修掉一类常见启动失败）
+1. **`main.py` 路径基准改为基于 `__file__` 推导**：`frontend/index.html`、`frontend/avatars`、`bizhiku/` 原先写作 `../frontend/...` 这类**相对工作目录**的路径，一旦不是从 `backend` 目录启动就会报
+   `RuntimeError: Directory '../frontend/avatars' does not exist`。现在改为从 `main.py` 自身位置推导项目根目录，**在任意目录下启动都能正确定位**
+2. **`main.py` 启动时把自身目录加入 `sys.path`**，并给 `uvicorn.run(..., app_dir=BASE_DIR)` 传参，使热重载（reload）的子进程同样不受工作目录影响
+3. **`database.py` 的 SQLite 回退路径改为绝对路径**：原先 `sqlite:///./game_club.db` 会随工作目录不同而把库文件生成到别处，现固定落在 `backend/game_club.db`
+
+### 📖 文档
+- README 启动章节补充「务必用 `backend\venv` 解释器」的提示与绝对路径启动示例
+- README 排查表把 `ModuleNotFoundError: No module named 'fastapi'` 的头号原因明确为**用错解释器**（含"误用其它项目的虚拟环境"这一情形），并给出用 `sys.executable` 自查的方法；新增 `Directory ... does not exist` 一条并标注本版已修复
+
+### ✅ 验证
+- 把工作目录切到与本项目无关的 `C:\Windows`，仍能正常启动并解析出正确的绝对路径
+- 上述状态下实测 `GET /` → 200（254700 字节）、`GET /avatars/avatar_boss.png` → 200（103449 字节）
+- 用绝对路径 `...\backend\venv\Scripts\python.exe ...\backend\main.py` 且工作目录为 `C:\Windows` 启动，**不再出现目录不存在错误**，初始化日志正常
+- `C:\Windows` 下确认 SQLite 回退 URL 已为 `sqlite:///C:/Users/18642/game_escort_club/backend/game_club.db`
+
+---
+
 ## [V3.4.0] 2026-09-24
 
 ### 🗄️ 硬编码数据全部迁入数据库（新增 2 张表 + 8 个接口 + 2 个后台页面）

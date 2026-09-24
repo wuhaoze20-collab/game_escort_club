@@ -6,6 +6,9 @@ from sqlalchemy.orm import sessionmaker
 # 数据库类型：默认 mysql；设置环境变量 DB_ENGINE=sqlite 可回退到本地 SQLite
 DB_ENGINE = os.getenv("DB_ENGINE", "mysql")
 
+# SQLite 文件的落点固定为 backend/ 目录下，避免因工作目录不同而生成到别处
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
 if DB_ENGINE == "mysql":
     MYSQL_USER = os.getenv("MYSQL_USER", "game_escort")
     MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "123456")
@@ -17,7 +20,8 @@ if DB_ENGINE == "mysql":
     )
     engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 else:
-    SQLALCHEMY_DATABASE_URL = "sqlite:///./game_club.db"
+    _SQLITE_FILE = os.path.join(_BACKEND_DIR, "game_club.db").replace("\\", "/")
+    SQLALCHEMY_DATABASE_URL = f"sqlite:///{_SQLITE_FILE}"
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
     )

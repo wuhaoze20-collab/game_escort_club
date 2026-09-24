@@ -1,6 +1,21 @@
 import os
+import sys
 import threading
 import time
+
+# 路径基准：全部基于本文件位置推导，因此从任何工作目录启动都能正确定位
+# （此前用 "../frontend/..." 这类相对路径，必须先 cd 到 backend 才能启动）
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))       # backend/
+PROJECT_ROOT = os.path.dirname(BASE_DIR)                     # 项目根目录
+FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
+AVATARS_DIR = os.path.join(FRONTEND_DIR, "avatars")
+BIZHIKU_DIR = os.path.join(PROJECT_ROOT, "bizhiku")
+INDEX_HTML = os.path.join(FRONTEND_DIR, "index.html")
+
+# 保证任何工作目录下都能 import 到本项目模块
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -60,7 +75,7 @@ def migrate_db():
 
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.4.0")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.4.1")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -130,14 +145,15 @@ init_quotes_and_config()
 
 @app.get("/")
 def root():
-    return FileResponse("../frontend/index.html")
+    return FileResponse(INDEX_HTML)
 
 # 挂载头像静态文件
-app.mount("/avatars", StaticFiles(directory="../frontend/avatars"), name="avatars")
+app.mount("/avatars", StaticFiles(directory=AVATARS_DIR), name="avatars")
 
 # 挂载壁纸库静态文件
-app.mount("/bizhiku", StaticFiles(directory="../bizhiku"), name="bizhiku")
+app.mount("/bizhiku", StaticFiles(directory=BIZHIKU_DIR), name="bizhiku")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # app_dir 让 reload 的子进程也能找到本模块，从而摆脱对工作目录的依赖
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, app_dir=BASE_DIR)
