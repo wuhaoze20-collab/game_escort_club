@@ -11,7 +11,7 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 68 个接口）
+│   ├── api/                     # 接口路由（共 73 个接口）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
@@ -23,18 +23,22 @@ game_escort_club/
 │   │   ├── withdraw_api.py      # 提现申请与审核
 │   │   ├── notification_api.py  # 站内消息通知
 │   │   ├── quote_api.py         # 台词增删改查 + 批量导入
-│   │   └── config_api.py        # 系统参数读取/修改/恢复默认
+│   │   ├── config_api.py        # 系统参数读取/修改/恢复默认
+│   │   └── ai_api.py            # AI 客服（千问）：对话/会话/历史
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（13 张表）
+│   ├── models.py                # 数据库表模型（15 张表）
 │   ├── schemas.py               # 请求/响应数据模型
 │   ├── auth.py                  # JWT 鉴权与角色权限校验
 │   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
+│   ├── ai_service.py            # AI 客服服务层：拼知识库提示词 + 调用千问
 │   ├── main.py                  # 程序入口（建表 + 自动补列 + 挂载路由与静态目录）
 │   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
 │   ├── seed_quotes.py           # 默认台词初始化（290 条，仅首次导入）
 │   ├── seed_demo_data.py        # 演示数据填充脚本（可选，手动执行）
 │   ├── backup_db.py             # MySQL 备份脚本（mysqldump，默认保留最近 7 份）
 │   ├── requirements.txt         # Python 依赖清单
+│   ├── .env.example             # 环境变量模板（复制为 .env 后填 API Key）
+│   ├── .env                     # 本地密钥文件（**已被 .gitignore 排除，不会提交**）
 │   └── venv/                    # 虚拟环境（本机已创建，勿删除）
 ├── frontend/                    # 前端页面（原生单页应用）
 │   ├── index.html               # 单页入口（HTML + CSS + JS 全部在这一个文件内）
@@ -69,6 +73,8 @@ game_escort_club/
 | `notifications` | 站内消息 | `user_id` 外键；`is_read` |
 | `quotes` | 顶部台词栏的台词 | `text`、`source`(出处)、`enabled`(1/0，停用不参与轮换)、`sort_order`。**前台台词栏的唯一数据源**，后台「台词管理」可增删改 |
 | `system_config` | 业务参数（键值表） | `config_key` 唯一、`config_value`(字符串存)、`value_type`(int/float/str/json)、`label`/`description`。**抽成比例、冷却天数、各类上限等全部在此**，改完立即生效 |
+| `ai_conversations` | AI 客服会话 | `username`(归属用户)、`title`(由首条提问生成)、`updated_at`。**接口层强制校验归属**，不能读别人的会话 |
+| `ai_messages` | AI 客服消息 | `conversation_id`、`role`(user/assistant)、`content`、`prompt_tokens`/`completion_tokens`(用量统计)、`error`(调用失败原因) |
 
 > **金额单位统一为「分」（整数）**，避免浮点误差。仅 `boss_info.balance`（大狗币，1 大狗币 = 1 元）、`player_info.backend_amount`、`good_rate` 使用小数。
 
@@ -145,9 +151,53 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 | `nickname_max_len` / `tag_max_len` | 20 / 20 | 昵称 / 标签字数上限 |
 | `violation_nickname` | 违规昵称 | 昵称被打回后的占位文案 |
 | `tech_levels` / `level_types` | 985…明星护 / 娱乐陪·技术陪 | 打手等级列表（JSON 数组） |
+| `ai_enabled` | true | 是否启用 AI 客服（关闭后前端不显示气泡） |
+| `ai_model` | qwen-plus | 千问模型名（qwen-turbo 更快更便宜、qwen-max 最强） |
+| `ai_daily_limit` | 30 | 每人每日提问上限（0 = 不限制） |
+| `ai_temperature` | 0.3 | 回答随机度，客服场景建议偏低 |
+| `ai_max_tokens` | 800 | 单次回答最大长度 |
+| `ai_extra_instruction` | 空 | 附加到系统提示词末尾的临时话术要求 |
+| `ai_history_rounds` | 6 | 每次携带的历史对话轮数 |
 
 > 修改参数会**立即生效**（写入即失效缓存）。填了非法值会被拒绝并提示原因（例如比例越界、类型不符），不会写进库。
 > 台词改动会同步影响所有角色的顶部台词栏（前端登录时拉取一次，之后本地 10 秒轮换，不会高频请求后端）。
+
+### AI 客服（接入通义千问）
+
+登录后右下角有一个**悬浮气泡**，点开即可对话。它是**客服答疑型**：只依据数据库里的内容配置回答，不查个人订单数据。
+
+**配置步骤（三步）**：
+
+```bash
+# 1. 把模板复制为 .env
+cd C:\Users\18642\game_escort_club\backend
+copy .env.example .env
+
+# 2. 编辑 .env，填入你的阿里云百炼 API Key
+#    DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx
+
+# 3. 重启后端
+venv\Scripts\python.exe main.py
+```
+
+> **不配置也能正常启动**：AI 功能会自动关闭（前端不显示气泡），其它功能完全不受影响。
+
+**工作原理**：每次提问时，后端把 `content_config` 的 **8 个内容模块拼成知识库**塞进系统提示词，再带上最近若干轮对话去问千问。因此：
+
+- **在后台改了价格/公告/充值福利，AI 的回答会自动跟着变** —— 不需要改任何代码
+- 提示词里明确要求"平台资料里没有的就说不确定、**绝不编造价格规则**"
+
+**几个容易踩的坑**：
+
+| 坑 | 说明 |
+|---|---|
+| **Key 与地域绑定** | 用北京接口就必须配北京的 Key，否则返回 `401 invalid_api_key`（不是 Key 失效）。换地域要同时改 `.env` 里的 `QWEN_BASE_URL` |
+| **`.env` 绝不能提交** | 已在 `.gitignore` 中排除；提交前用 `git status` 确认它没出现 |
+| **必须设超时** | 已内置（默认 60 秒）。千问不通时请求会在超时后返回可读提示，不会把后端拖死 |
+| **有每日上限** | 默认每人每天 30 条（`ai_daily_limit`，后台可调），防止被刷导致费用失控 |
+| **不要改成 async** | 调用用的是同步 `requests`，与项目其它接口一致（FastAPI 会放进线程池）。改成 `async def` 会阻塞事件循环 |
+
+**相关文件**：路由 `backend/api/ai_api.py`，服务层 `backend/ai_service.py`，密钥 `backend/.env`。
 
 ## 快速启动（详细环境配置）
 
@@ -407,7 +457,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **68 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **73 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
@@ -521,8 +571,17 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | PUT | /api/config/{config_key} | 修改参数（校验类型与取值范围，改完立即生效） | 管理员 |
 | POST | /api/config/{config_key}/reset | 恢复该参数为默认值 | 管理员 |
 
+### AI 客服（5）
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/ai/status | 查询是否可用、模型、今日剩余次数（前端据此决定是否显示气泡） | 所有登录用户 |
+| POST | /api/ai/chat | 发消息并获取回复（带上会话上下文） | 所有登录用户 |
+| GET | /api/ai/conversations | 我的会话列表 | 所有登录用户 |
+| GET | /api/ai/conversations/{id}/messages | 某会话的历史消息 | **仅会话归属者** |
+| DELETE | /api/ai/conversations/{id} | 删除会话及其消息 | **仅会话归属者** |
+
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（13 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+1. 数据库表结构在 `backend/models.py`（15 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
 2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；两者都在启动时幂等调用，**已存在的数据不会被覆盖**
 3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
 4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧 CORS 配置

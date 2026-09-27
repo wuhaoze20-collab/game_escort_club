@@ -18,6 +18,12 @@ Thumbs.db
 *.log
 pip_install_log*
 
+# 环境变量文件：含千问 API Key 等密钥，绝不能提交
+.env
+.env.local
+*.env
+!.env.example
+
 # 数据库备份：故意不忽略，backups/ 下的 .sql 需随仓库分发（新环境靠它同步内容）
 #backups/
 

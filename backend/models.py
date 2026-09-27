@@ -180,3 +180,26 @@ class SystemConfig(Base):
     label = Column(String(100), default="")  # 后台显示名
     description = Column(String(255), default="")  # 说明（含单位）
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+# AI 客服会话表（每个用户可有多个会话；同一时刻只有一个「当前会话」）
+class AiConversation(Base):
+    __tablename__ = "ai_conversations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), index=True, nullable=False)  # 会话归属用户
+    title = Column(String(100), default="新对话")  # 由首条提问生成，便于识别
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+# AI 客服消息表（一问一答都存这里，便于回看与统计用量）
+class AiMessage(Base):
+    __tablename__ = "ai_messages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("ai_conversations.id"), index=True, nullable=False)
+    role = Column(String(20), nullable=False)  # user / assistant
+    content = Column(Text, nullable=False)
+    prompt_tokens = Column(Integer, default=0)  # 本次实际消耗（assistant 消息上记录）
+    completion_tokens = Column(Integer, default=0)
+    error = Column(String(255), default="")  # 调用失败时的原因（便于排查）
+    created_at = Column(DateTime, default=datetime.now)

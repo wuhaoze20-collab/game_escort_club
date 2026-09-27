@@ -1422,6 +1422,45 @@
 
             </div>
         </main>
+
+        <!-- AI 客服：悬浮气泡（登录后显示；未配置密钥或已关闭时 JS 会保持隐藏） -->
+        <button id="ai-chat-bubble" onclick="openAiChat()" title="AI 客服：有问题随时问我"
+            class="hidden fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-blue-500 text-white shadow-lg hover:bg-blue-600 transition items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </button>
+
+        <!-- AI 客服面板（id 以 -modal 结尾，以复用现有的暗色主题覆盖规则） -->
+        <div id="ai-chat-modal" class="fixed inset-0 z-50 hidden">
+            <div class="modal-overlay absolute inset-0" onclick="closeAiChat()"></div>
+            <div class="absolute bottom-24 right-6 w-[380px] max-w-[92vw] h-[540px] max-h-[72vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+                <div class="px-4 py-3 border-b flex justify-between items-center shrink-0">
+                    <div>
+                        <h3 class="font-semibold">AI 客服</h3>
+                        <p id="ai-chat-subtitle" class="text-xs text-gray-400">依据平台资料回答，仅供参考</p>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                        <button onclick="showAiHistory()" class="text-xs text-gray-500 hover:text-gray-700">历史</button>
+                        <button onclick="newAiConversation()" class="text-xs text-blue-500 hover:text-blue-600">新对话</button>
+                        <button onclick="closeAiChat()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+                    </div>
+                </div>
+
+                <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3"></div>
+
+                <div class="border-t p-3 shrink-0">
+                    <div class="flex gap-2 items-end">
+                        <textarea id="ai-chat-input" rows="1" placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        <button id="ai-chat-send" onclick="sendAiMessage()"
+                            class="px-4 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition shrink-0">发送</button>
+                    </div>
+                    <div id="ai-chat-hint" class="text-xs text-gray-400 mt-2"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 编辑弹窗 -->
@@ -1909,6 +1948,9 @@
             // 加载台词（数据库驱动，供顶部台词栏轮换）
             await loadQuotes();
 
+            // AI 客服：查状态决定是否显示悬浮气泡（未配置密钥时保持隐藏）
+            await initAiChat();
+
             // 加载用户信息
             if (currentUser.role === 'admin' || currentUser.role === 'service') {
                 await loadBossList();
@@ -2262,6 +2304,202 @@
                 const res = await apiRequest('/api/config/' + key + '/reset', 'POST');
                 alert(res.message);
                 await loadSystemConfig();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== AI 客服（悬浮气泡） ====================
+        // 消息存数据库（ai_conversations / ai_messages），后端再依据 content_config
+        // 拼知识库去问千问。未配置 API Key 时后端返回 available=false，这里就保持隐藏。
+        let aiStatus = { available: false, remaining_today: -1 };
+        let aiConversationId = null;
+        let aiSending = false;
+
+        async function initAiChat() {
+            try {
+                aiStatus = await apiRequest('/api/ai/status');
+            } catch (e) {
+                aiStatus = { available: false, remaining_today: -1 };
+            }
+
+            const bubble = document.getElementById('ai-chat-bubble');
+            if (aiStatus.available) {
+                bubble.classList.remove('hidden');
+                bubble.classList.add('flex');
+            } else {
+                bubble.classList.add('hidden');
+                bubble.classList.remove('flex');
+            }
+            updateAiHint();
+
+            // Enter 发送、Shift+Enter 换行（只绑一次）
+            const input = document.getElementById('ai-chat-input');
+            if (input && !input.dataset.bound) {
+                input.dataset.bound = '1';
+                input.addEventListener('keydown', function (ev) {
+                    if (ev.key === 'Enter' && !ev.shiftKey) {
+                        ev.preventDefault();
+                        sendAiMessage();
+                    }
+                });
+            }
+        }
+
+        function updateAiHint() {
+            const hint = document.getElementById('ai-chat-hint');
+            const sub = document.getElementById('ai-chat-subtitle');
+            if (hint) {
+                hint.textContent = (aiStatus.remaining_today >= 0)
+                    ? '今日还可提问 ' + aiStatus.remaining_today + ' 次'
+                    : '';
+            }
+            if (sub && aiStatus.model) {
+                sub.textContent = '模型 ' + aiStatus.model + ' · 依据平台资料回答，仅供参考';
+            }
+        }
+
+        function openAiChat() {
+            document.getElementById('ai-chat-modal').classList.remove('hidden');
+            const box = document.getElementById('ai-chat-messages');
+            if (!box.dataset.loaded) {
+                newAiConversation();
+            }
+            setTimeout(function () {
+                const i = document.getElementById('ai-chat-input');
+                if (i) i.focus();
+            }, 50);
+        }
+
+        function closeAiChat() {
+            document.getElementById('ai-chat-modal').classList.add('hidden');
+        }
+
+        function newAiConversation() {
+            aiConversationId = null;
+            const box = document.getElementById('ai-chat-messages');
+            box.dataset.loaded = '1';
+            box.innerHTML = '';
+            appendAiMsg('assistant', '你好，我是「小嚼」。\n价格、下单、接单、充值、提现、会员福利等问题都可以问我～');
+        }
+
+        function appendAiMsg(role, content, isError) {
+            const box = document.getElementById('ai-chat-messages');
+            const wrap = document.createElement('div');
+            let cls = 'max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-line ';
+            if (role === 'user') {
+                wrap.className = 'flex justify-end';
+                cls += 'bg-blue-500 text-white';
+            } else {
+                wrap.className = 'flex justify-start';
+                cls += isError ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-800';
+            }
+            const bubble = document.createElement('div');
+            bubble.className = cls;
+            // 用 textContent 而非 innerHTML，避免 AI 返回内容里的标签被执行
+            bubble.textContent = content;
+            wrap.appendChild(bubble);
+            box.appendChild(wrap);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function sendAiMessage() {
+            if (aiSending) return;
+            const input = document.getElementById('ai-chat-input');
+            const text = (input.value || '').trim();
+            if (!text) return;
+
+            aiSending = true;
+            const btn = document.getElementById('ai-chat-send');
+            btn.disabled = true;
+            btn.classList.add('opacity-50');
+            input.value = '';
+            appendAiMsg('user', text);
+
+            const box = document.getElementById('ai-chat-messages');
+            const thinking = document.createElement('div');
+            thinking.className = 'flex justify-start';
+            thinking.innerHTML = '<div class="max-w-[85%] px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-400">正在思考…</div>';
+            box.appendChild(thinking);
+            box.scrollTop = box.scrollHeight;
+
+            try {
+                const res = await apiRequest('/api/ai/chat', 'POST', {
+                    message: text,
+                    conversation_id: aiConversationId
+                });
+                thinking.remove();
+                aiConversationId = res.conversation_id;
+                appendAiMsg('assistant', res.reply);
+                if (res.remaining_today >= 0) {
+                    aiStatus.remaining_today = res.remaining_today;
+                    updateAiHint();
+                }
+            } catch (e) {
+                thinking.remove();
+                // 后端把失败原因写在 detail 里，apiRequest 会包成 Error.message
+                appendAiMsg('assistant', String((e && e.message) || e), true);
+            } finally {
+                aiSending = false;
+                btn.disabled = false;
+                btn.classList.remove('opacity-50');
+                input.focus();
+            }
+        }
+
+        async function showAiHistory() {
+            const box = document.getElementById('ai-chat-messages');
+            box.dataset.loaded = '1';
+            box.innerHTML = '<div class="text-sm text-gray-400">加载中…</div>';
+            try {
+                const list = await apiRequest('/api/ai/conversations');
+                if (!list || !list.length) {
+                    box.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">还没有历史会话</div>';
+                    return;
+                }
+                box.innerHTML = list.map(function (c) {
+                    const t = String(c.updated_at).replace('T', ' ').slice(0, 16);
+                    return ''
+                        + '<div class="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2">'
+                        + '  <button onclick="loadAiConversation(' + c.id + ')" class="flex-1 text-left min-w-0">'
+                        + '    <div class="text-sm text-gray-800 truncate">' + escapeHtml(c.title) + '</div>'
+                        + '    <div class="text-xs text-gray-400">' + c.message_count + ' 条 · ' + escapeHtml(t) + '</div>'
+                        + '  </button>'
+                        + '  <button onclick="deleteAiConversation(' + c.id + ')" class="text-xs text-red-500 hover:text-red-600 shrink-0">删除</button>'
+                        + '</div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(String((e && e.message) || e)) + '</div>';
+            }
+        }
+
+        async function loadAiConversation(id) {
+            const box = document.getElementById('ai-chat-messages');
+            box.innerHTML = '<div class="text-sm text-gray-400">加载中…</div>';
+            try {
+                const list = await apiRequest('/api/ai/conversations/' + id + '/messages');
+                aiConversationId = id;
+                box.innerHTML = '';
+                if (!list || !list.length) {
+                    box.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">该会话暂无消息</div>';
+                    return;
+                }
+                list.forEach(function (m) {
+                    if (m.role === 'assistant' && !m.content) {
+                        appendAiMsg('assistant', '（这条没有成功回复：' + (m.error || '未知原因') + '）', true);
+                    } else {
+                        appendAiMsg(m.role, m.content);
+                    }
+                });
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(String((e && e.message) || e)) + '</div>';
+            }
+        }
+
+        async function deleteAiConversation(id) {
+            if (!confirm('确定删除这个会话？删除后不可恢复。')) return;
+            try {
+                await apiRequest('/api/ai/conversations/' + id, 'DELETE');
+                if (aiConversationId === id) newAiConversation();
+                showAiHistory();
             } catch (e) { alert(e.message); }
         }
 

@@ -38,6 +38,7 @@ from api.withdraw_api import router as withdraw_router
 from api.notification_api import router as notification_router
 from api.quote_api import router as quote_router
 from api.config_api import router as config_router
+from api.ai_api import router as ai_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -75,7 +76,7 @@ def migrate_db():
 
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.4.2")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.5.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -101,6 +102,7 @@ app.include_router(withdraw_router)
 app.include_router(notification_router)
 app.include_router(quote_router)
 app.include_router(config_router)
+app.include_router(ai_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")

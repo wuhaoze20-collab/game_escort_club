@@ -281,3 +281,36 @@ class QuoteBatchImport(BaseModel):
 # ——— 系统参数 ———
 class SystemConfigUpdate(BaseModel):
     value: str  # 统一按字符串提交，后端按参数类型校验并转换
+
+# ——— AI 客服 ———
+class AiChatRequest(BaseModel):
+    message: str
+    conversation_id: Optional[int] = None  # 不传则自动新建会话
+
+class AiMessageResponse(BaseModel):
+    id: int
+    role: str
+    content: str
+    error: str = ""
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class AiConversationResponse(BaseModel):
+    id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+    
+    class Config:
+        from_attributes = True
+
+class AiChatResponse(BaseModel):
+    conversation_id: int
+    reply: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    remaining_today: int = -1  # -1 表示不限制
+    model: str = ""

@@ -99,6 +99,35 @@ CONFIG_META: dict[str, dict] = {
         "default": ["娱乐陪", "技术陪"], "type": "json",
         "label": "打手等级大类", "desc": "JSON 数组，打手等级的两大类",
     },
+    # ——— AI 客服（千问）———
+    "ai_enabled": {
+        "default": True, "type": "bool", "label": "启用 AI 客服",
+        "desc": "关闭后前端不显示聊天入口；仍需在 backend/.env 配置 DASHSCOPE_API_KEY 才能真正对话",
+    },
+    "ai_model": {
+        "default": "qwen-plus", "type": "str", "label": "千问模型名",
+        "desc": "如 qwen-plus（均衡）、qwen-turbo（快且便宜）、qwen-max（最强）",
+    },
+    "ai_daily_limit": {
+        "default": 30, "type": "int", "label": "每人每日提问上限",
+        "desc": "按用户按自然日统计，防止接口被刷导致费用失控；0 表示不限制",
+    },
+    "ai_temperature": {
+        "default": 0.3, "type": "float", "label": "回答随机度",
+        "desc": "0~2。客服场景建议偏低（0.2~0.5）以保证回答稳定、少发挥",
+    },
+    "ai_max_tokens": {
+        "default": 800, "type": "int", "label": "单次回答最大长度",
+        "desc": "模型单次回复的最大 token 数，调大可回答更详细但更慢更贵",
+    },
+    "ai_extra_instruction": {
+        "default": "", "type": "str", "label": "额外指示（附加到系统提示词末尾）",
+        "desc": "可写临时话术要求，如「最近有活动，记得提醒老板充值有赠送」。留空则不加",
+    },
+    "ai_history_rounds": {
+        "default": 6, "type": "int", "label": "携带的历史轮数",
+        "desc": "每次请求带上前多少轮对话作为上下文，越大越连贯但越贵",
+    },
 }
 
 # 进程内缓存：{key: (值, 写入时间)}
