@@ -499,16 +499,23 @@ def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bo
     role_name = "老板" if user.role == "boss" else "打手"
     display = user.nickname or username
 
-    # 拉黑前：后台金额/余额转入公司后台
+    # 拉黑前：把余额/后台金额转入公司账户。
+    #
+    # ⚠️ 单位不同，必须先统一成「分」再入账 —— company_balance 与 company_records 的单位都是分
+    #    （前端两处均按 /100 显示）：
+    #      · player_info.backend_amount 单位是「分」
+    #      · boss_info.balance          单位是「大狗币」（1 大狗币 = 1 元）
+    #    早期版本对两者一视同仁，导致**封禁老板时金额少 100 倍**
+    #    （余额 123 元只入账 123 分、处罚通告写成 ¥1.23）。
     if user.role == "player":
         player = db.query(PlayerInfo).filter(PlayerInfo.username == username).first()
         if player:
-            amount = player.backend_amount
+            amount = int(round(player.backend_amount or 0))   # 已是「分」
             player.backend_amount = 0
     elif user.role == "boss":
         boss = db.query(BossInfo).filter(BossInfo.username == username).first()
         if boss:
-            amount = boss.balance
+            amount = int(round((boss.balance or 0) * 100))    # 「元」-> 「分」
             boss.balance = 0
 
     # 公司后台资金池入账 + 资金流水
