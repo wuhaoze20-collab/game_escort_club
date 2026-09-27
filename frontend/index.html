@@ -2432,6 +2432,26 @@
             appendAiMsg('assistant', '你好，我是「小嚼」。\n价格、下单、接单、充值、提现、会员福利等问题都可以问我～');
         }
 
+        // AI 回复的轻量渲染。
+        // 起因：系统提示词本身是用 markdown 强调写的，模型会模仿这种排版，
+        // 于是回复里带 ** 加粗；而气泡原先用 textContent（防 XSS），** 就原样显示了。
+        // 这里做「先转义、再只插入自己生成的标签」，因此仍然安全。
+        // 放在前端还有一个好处：数据库里已有的历史消息也会一并正常显示。
+        function renderAiText(text) {
+            let s = escapeHtml(text);
+            // **加粗** → <strong>（用 [^*\n] 避免跨行误匹配）
+            s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+            // 行首的 # 标题标记去掉，保留文字
+            s = s.replace(/^#{1,6}\s*/gm, '');
+            // 行首 - / * 列表标记统一成 ·
+            s = s.replace(/^[ \t]*[-*][ \t]+/gm, '· ');
+            // 行内 `代码` 标记去掉
+            s = s.replace(/`([^`\n]+?)`/g, '$1');
+            // 兜底：清掉残留的孤立 **
+            s = s.replace(/\*\*/g, '');
+            return s;
+        }
+
         function appendAiMsg(role, content, isError) {
             const box = document.getElementById('ai-chat-messages');
             const wrap = document.createElement('div');
@@ -2445,8 +2465,9 @@
             }
             const bubble = document.createElement('div');
             bubble.className = cls;
-            // 用 textContent 而非 innerHTML，避免 AI 返回内容里的标签被执行
-            bubble.textContent = content;
+            // 先 escapeHtml 再只插入自己生成的 <strong>，因此仍然安全；
+            // 不能只用 textContent，否则 AI 回复里的 ** 会原样显示给用户
+            bubble.innerHTML = renderAiText(content);
             wrap.appendChild(bubble);
             box.appendChild(wrap);
             box.scrollTop = box.scrollHeight;

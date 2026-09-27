@@ -212,6 +212,10 @@ venv\Scripts\python.exe main.py
 
 **相关文件**：路由 `backend/api/ai_api.py`，服务层 `backend/ai_service.py`（含菜单/权限/路径定义），密钥 `backend/.env`。
 
+> **关于回复的渲染**：气泡用前端 `renderAiText()` 渲染 —— **先 `escapeHtml` 转义，再把 `**加粗**` 还原成 `<strong>`**。
+> 顺序不能颠倒（先转义、后插入自己生成的标签），否则会引入 XSS 风险。
+> 提示词里也要求模型输出纯文本，两层互为兜底。
+
 ## 快速启动（详细环境配置）
 
 ### 第 0 步：前置检查（只做一次）
