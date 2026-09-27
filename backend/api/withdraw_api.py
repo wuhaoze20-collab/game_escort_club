@@ -20,6 +20,11 @@ def calc_available_amount(db: Session, player_username: str) -> int:
     3. 在途（待审核）的申请会占用额度，避免同一笔钱被重复申请。
     结果保证不为负。
 
+    关于「期初结余」：backend_amount 是权威余额，但它与「收入记录累计」可能不等 ——
+    差额来自建库时预设的历史余额（没有任何 income 记录支撑）。这部分余额必然早于
+    所有记录存在，按定义已过冷却期，因此计入可提现基数；否则这些账户明明后台有钱，
+    却因为查不到对应的收入记录而一分都提不出来。
+
     注意：**已批准的提现不在此处扣减**。approve_withdraw() 已经把它从
     backend_amount 扣掉了，这里再减一次就是重复扣减 —— 这正是此前
     可提现金额出现负数的原因之一。
@@ -28,31 +33,39 @@ def calc_available_amount(db: Session, player_username: str) -> int:
     cooldown_days = config_service.withdraw_cooldown_days(db)
     cutoff = now - timedelta(days=cooldown_days)
 
-    # 已过冷却期的订单收入
-    matured_salary = db.query(SalaryRecord).filter(
-        SalaryRecord.player_username == player_username,
-        SalaryRecord.settlement_time <= cutoff
-    ).all()
-    salary_total = sum(s.player_income for s in matured_salary)
+    player = db.query(PlayerInfo).filter(PlayerInfo.username == player_username).first()
+    backend_amount = player.backend_amount if player else 0
 
-    # 已过冷却期的打赏
-    matured_tips = db.query(TipRecord).filter(
-        TipRecord.player_username == player_username,
-        TipRecord.created_at <= cutoff
-    ).all()
-    tip_total = sum(t.amount for t in matured_tips)
+    # 全部收入记录（用于推算期初结余）
+    all_salary = db.query(SalaryRecord).filter(
+        SalaryRecord.player_username == player_username).all()
+    all_tips = db.query(TipRecord).filter(
+        TipRecord.player_username == player_username).all()
+    records_income = sum(s.player_income for s in all_salary) + sum(t.amount for t in all_tips)
 
-    # 仅「待审核」占用额度（已批准的已从 backend_amount 扣除）
+    # 其中已过冷却期的部分
+    matured_income = sum(s.player_income for s in all_salary
+                         if s.settlement_time and s.settlement_time <= cutoff)
+    matured_income += sum(t.amount for t in all_tips
+                          if t.created_at and t.created_at <= cutoff)
+
+    # 已批准的提现：已从 backend_amount 扣除，此处不再减（避免重复扣减）
+    approved_total = sum(w.amount for w in db.query(WithdrawalRecord).filter(
+        WithdrawalRecord.player_username == player_username,
+        WithdrawalRecord.status == "approved"
+    ).all())
+
+    # 在途（待审核）申请占用额度
     pending_total = sum(w.amount for w in db.query(WithdrawalRecord).filter(
         WithdrawalRecord.player_username == player_username,
         WithdrawalRecord.status == "pending"
     ).all())
 
-    player = db.query(PlayerInfo).filter(PlayerInfo.username == player_username).first()
-    backend_amount = player.backend_amount if player else 0
+    # 期初结余：后台余额里没有收入记录支撑的部分，视为已过冷却期
+    opening_balance = max(0, backend_amount - (records_income - approved_total))
 
-    # 先按「已到期收入」与「实际余额」取小，再扣掉在途申请，最后兜底不为负
-    available = min(salary_total + tip_total, backend_amount) - pending_total
+    # 可用基数为「已到期收入 + 期初结余」，再受实际余额封顶、扣掉在途申请，最后兜底不为负
+    available = min(matured_income + opening_balance, backend_amount) - pending_total
     return max(0, available)
 
 # 打手查询可提现金额
