@@ -11,11 +11,11 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 73 个接口）
+│   ├── api/                     # 接口路由（共 77 个接口）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
-│   │   ├── user_info_api.py     # 用户资料/昵称审核/等级/标签/充值/封禁/公司账户
+│   │   ├── user_info_api.py     # 用户资料/昵称审核/等级/标签/充值/封禁(含客服申请-管理员审核)/公司账户
 │   │   ├── order_api.py         # 点单/派单/接单/结单/确认结算/取消/工资记录
 │   │   ├── rating_api.py        # 评价/投诉/回复/复查申请与审核
 │   │   ├── stats_api.py         # 本月盈利统计
@@ -23,10 +23,10 @@ game_escort_club/
 │   │   ├── withdraw_api.py      # 提现申请与审核
 │   │   ├── notification_api.py  # 站内消息通知
 │   │   ├── quote_api.py         # 台词增删改查 + 批量导入
-│   │   ├── config_api.py        # 系统参数读取/修改/恢复默认
+│   │   ├── config_api.py        # 系统参数读取/修改/恢复默认/静默失败留痕清理
 │   │   └── ai_api.py            # AI 客服（千问）：对话/会话/历史
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（15 张表）
+│   ├── models.py                # 数据库表模型（16 张表）
 │   ├── schemas.py               # 请求/响应数据模型
 │   ├── auth.py                  # JWT 鉴权与角色权限校验
 │   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
@@ -56,7 +56,7 @@ game_escort_club/
 
 ## 架构说明
 
-### 数据模型（11 张表）
+### 数据模型（16 张表）
 
 | 表 | 作用 | 关键字段与状态 |
 |---|---|---|
@@ -75,8 +75,20 @@ game_escort_club/
 | `system_config` | 业务参数（键值表） | `config_key` 唯一、`config_value`(字符串存)、`value_type`(int/float/str/json)、`label`/`description`。**抽成比例、冷却天数、各类上限等全部在此**，改完立即生效 |
 | `ai_conversations` | AI 客服会话 | `username`(归属用户)、`title`(由首条提问生成)、`updated_at`。**接口层强制校验归属**，不能读别人的会话 |
 | `ai_messages` | AI 客服消息 | `conversation_id`、`role`(user/assistant)、`content`、`prompt_tokens`/`completion_tokens`(用量统计)、`error`(调用失败原因) |
+| `ban_requests` | 客服发起的拉黑申请 | `target_username`/`target_role`、`requested_by`、`reason`、`status`(pending/approved/rejected)、`note`、`processed_by`/`processed_at`。**单独建表而非在 `users` 上加列**：同一账号可能被多次申请（驳回后可再申请），需要留历史 |
 
-> **金额单位统一为「分」（整数）**，避免浮点误差。仅 `boss_info.balance`（大狗币，1 大狗币 = 1 元）、`player_info.backend_amount`、`good_rate` 使用小数。
+> **金额单位与字段类型**（易错，改动前务必先看这里）：
+
+| 字段 | 单位 | 类型 | 说明 |
+|---|---|---|---|
+| `orders.total_amount`、`salary_records.*`、`tip_records.*`、`withdrawal_records.*` | **分**（整数） | `int` | 所有订单/工资/打赏/提现金额统一用分，避免浮点误差 |
+| `boss_info.balance` | **大狗币**（1 大狗币 = 1 元） | `DECIMAL(10,2)` | V3.8.0 起支持两位小数。订单金额不是 100 分整数倍时 `coins_required = 总额/100` 会产生小数，**用 int 列会被静默取整**，故必须用 DECIMAL |
+| `boss_info.consume_amount` | **分** | `int` | 累计消费 |
+| `player_info.backend_amount` | **分** | `int` | 打手后台金额。分是最小货币单位，**不需要小数**，故保持 int（模型曾误声明为 `Float`，V3.8.0 一并改正） |
+| `content_config.company_balance` / `company_records` | **分** | JSON 内整数 | 前端展示时两处均 `/100` |
+| `player_info.good_rate` | 百分比 | `Float` | 唯一真正需要小数的展示字段，无评价时为空 |
+
+> `boss_info.balance` 与 `player_info.backend_amount` **单位不同**（元 vs 分），两者互相换算时务必 `×100` / `÷100`——V3.7.1 修的「封禁老板时金额少 100 倍」就是这两者被直接相加导致的。
 
 > **`system_config` 有默认值兜底**：每条参数在 `config_service.py` 的 `CONFIG_META` 里都定义了出厂默认值与类型。数据库缺行、值非法或类型转换失败时一律回退默认值并打印告警，**业务不会因配置问题崩溃**。读取带 10 秒缓存，写入时立即失效，所以改完马上生效。
 
@@ -329,7 +341,7 @@ venv\Scripts\python main.py
 > C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\main.py
 > ```
 
-- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、18 项系统参数）
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、25 项系统参数）
 - 后端服务地址：`http://localhost:8000`
 - 在线接口文档（Swagger）：`http://localhost:8000/docs`
 
@@ -495,7 +507,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **73 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **77 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
@@ -522,7 +534,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | POST | /api/notification/{notification_id}/read | 标记单条已读 | 所有登录用户 |
 | POST | /api/notification/read-all | 全部标记已读 | 所有登录用户 |
 
-### 用户资料 / 标签 / 账户（18）
+### 用户资料 / 标签 / 账户（21）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | GET | /api/boss/list | 获取老板列表 | 管理员/客服 |
@@ -541,7 +553,10 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | GET | /api/player/tags/review | 标签审核列表 | 管理员/客服 |
 | POST | /api/player/tags/{tag_id}/decision | 标签审核通过 / 驳回 | 管理员/客服 |
 | POST | /api/boss/recharge | 老板充值大狗币 | 老板 |
-| POST | /api/admin/ban/{username} | 拉黑老板/打手（后台金额转入公司账户） | 管理员 |
+| POST | /api/admin/ban/{username} | 拉黑老板/打手（后台金额转入公司账户，**不可逆**） | 管理员 |
+| POST | /api/ban/request | 客服发起拉黑申请（不立即执行，等管理员审核） | 客服 |
+| GET | /api/ban/requests | 拉黑申请列表 | 管理员/客服 |
+| POST | /api/ban/requests/{id}/decision | 拉黑申请审核（approve 通过后才真正执行 / reject 驳回） | 管理员 |
 | GET | /api/admin/company-balance | 查询公司后台余额 | 管理员 |
 
 ### 订单与工资（11）
@@ -602,12 +617,13 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | DELETE | /api/quote/{quote_id} | 删除台词 | 管理员/客服 |
 | POST | /api/quote/batch-import | 批量导入（每行一条，`台词|出处`，自动跳过重复） | 管理员/客服 |
 
-### 系统参数（3）
+### 系统参数（4）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
-| GET | /api/config/all | 读取全部参数（含默认值、类型、说明） | 管理员/客服 |
+| GET | /api/config/all | 读取全部参数（含默认值、类型、说明）与静默失败留痕 | 管理员/客服 |
 | PUT | /api/config/{config_key} | 修改参数（校验类型与取值范围，改完立即生效） | 管理员 |
 | POST | /api/config/{config_key}/reset | 恢复该参数为默认值 | 管理员 |
+| POST | /api/config/alerts/clear | 清空静默失败留痕列表 | 管理员 |
 
 ### AI 客服（5）
 | 方法 | 路径 | 说明 | 权限 |
@@ -619,7 +635,9 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | DELETE | /api/ai/conversations/{id} | 删除会话及其消息 | **仅会话归属者** |
 
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（15 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+1. 数据库表结构在 `backend/models.py`（16 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+   - `migrate_db()` 除补列外还做**列类型迁移**：例如 `boss_info.balance` 若仍是 `int`，会在启动时自动 `ALTER` 成 `DECIMAL(10,2)`（包含 `NULL` 归零）。迁移前先查 `information_schema` 判断当前类型，**已是目标类型则不执行**，因此可反复重启而不会重复改表
+   - 新增需要小数或不同精度的金额字段时，请同时在 `models.py` 声明正确类型、在 `schemas.py` 用 `float`（用 `int` 会把小数**静默截断**），并在 `migrate_db()` 里补一段类型迁移
 2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；两者都在启动时幂等调用，**已存在的数据不会被覆盖**
 3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
 4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧 CORS 配置

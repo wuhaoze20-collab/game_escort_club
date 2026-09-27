@@ -515,7 +515,7 @@ def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bo
     elif user.role == "boss":
         boss = db.query(BossInfo).filter(BossInfo.username == username).first()
         if boss:
-            amount = int(round((boss.balance or 0) * 100))    # 「元」-> 「分」
+            amount = int((boss.balance or 0) * 100)           # 「元」-> 「分」（DECIMAL 精确，无需四舍五入）
             boss.balance = 0
 
     # 公司后台资金池入账 + 资金流水

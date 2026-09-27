@@ -44,7 +44,7 @@ from api.ai_api import router as ai_router
 Base.metadata.create_all(bind=engine)
 
 
-# 轻量迁移：旧库自动补充新增列（避免删除数据库丢失数据）
+# 轻量迁移：旧库自动补充新增列 / 修正列类型（避免删库丢数据）
 def migrate_db():
     with engine.connect() as conn:
         if DB_ENGINE == "mysql":
@@ -62,6 +62,24 @@ def migrate_db():
                 if not exists:
                     conn.execute(text(ddl))
             conn.commit()
+
+            # ---- 列类型修正：大狗币余额要支持两位小数 ----
+            # 早期建表时该列是 INT，会把小数静默取整（实测写入 0.01 读回 0），
+            # 而订单金额不是 100 分整数倍时（如 25.5 元）确实会产生小数。
+            # 只在类型还不是 DECIMAL 时执行，因此可反复启动而不会重复 ALTER。
+            data_type = conn.execute(
+                text("SELECT DATA_TYPE FROM information_schema.columns "
+                     "WHERE table_schema = DATABASE() AND table_name='boss_info' "
+                     "AND column_name='balance'")
+            ).scalar()
+            if data_type and str(data_type).lower() not in ("decimal", "numeric"):
+                print(f"[migrate] boss_info.balance 当前类型为 {data_type}，升级为 DECIMAL(10,2) 以支持小数…")
+                # 先把可能存在的 NULL 归零，否则加 NOT NULL 会失败
+                conn.execute(text("UPDATE boss_info SET balance = 0 WHERE balance IS NULL"))
+                conn.execute(text(
+                    "ALTER TABLE boss_info MODIFY COLUMN balance DECIMAL(10,2) NOT NULL DEFAULT 0.00"))
+                conn.commit()
+                print("[migrate] boss_info.balance 已升级为 DECIMAL(10,2)")
         else:
             # SQLite：通过 PRAGMA 检查列是否存在
             cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
@@ -71,12 +89,13 @@ def migrate_db():
                 conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
             if "account_status" not in cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"))
+            # SQLite 是动态类型，列本身无需改类型（Numeric 由 SQLAlchemy 侧处理）
             conn.commit()
 
 
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.7.1")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.8.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com

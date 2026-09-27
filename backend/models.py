@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Numeric
 from datetime import datetime
 from database import Base
 
@@ -39,7 +39,7 @@ class BossInfo(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     consume_amount = Column(Integer, default=0)  # 累计消费（单位：分）
-    balance = Column(Float, default=0.0)  # 大狗币余额（1大狗币 = 1元，支持两位小数）
+    balance = Column(Numeric(10, 2), nullable=False, default=0)  # 大狗币余额（1大狗币 = 1元，保留两位小数）
     order_count = Column(Integer, default=0)  # 点单次数
     created_at = Column(DateTime, default=datetime.now)
 
@@ -52,7 +52,7 @@ class PlayerInfo(Base):
     order_count = Column(Integer, default=0)  # 接单次数
     complaint_count = Column(Integer, default=0)  # 投诉次数
     good_rate = Column(Float, default=100.0)  # 好评率
-    backend_amount = Column(Float, default=0.0)  # 后台金额（单位：分，支持两位小数）
+    backend_amount = Column(Integer, default=0)  # 后台金额（单位：分，金额以分计故为整数）
     intro = Column(Text, default="")  # 打手自我介绍
     level_type = Column(String(20), default="娱乐陪")  # 等级大类：娱乐陪 / 技术陪
     tech_level = Column(String(20), default="")  # 技术陪细分：985/211/大专/魔王护/明星护

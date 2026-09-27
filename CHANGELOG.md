@@ -1,5 +1,83 @@
 # 更新日志 CHANGELOG
 
+## [V3.8.0] 2026-09-27
+
+### ✨ 改表结构：大狗币支持小数（`boss_info.balance` → `DECIMAL(10,2)`）
+
+V3.7.1 遗留问题的处理结果。此前 `models.py` 把这两个字段声明为 `Float` 且注释写「支持两位小数」，
+但**数据库列实际是 `int`**，写入的小数会被静默取整（写 123.45 读回 123.0，写 0.01 读回 **0.0**）。
+
+**结论：两个字段性质不同，分开处理。**
+
+| 字段 | 单位 | 原声明 | 现声明 | 理由 |
+|---|---|---|---|---|
+| `boss_info.balance` | 大狗币（1 大狗币 = 1 元） | 模型 `Float` / 库 `int` | 模型与库均为 **`DECIMAL(10,2)`** | 订单金额非 100 分整数倍时 `coins_required = 总额/100` 会产生小数，int 列会**静默取整**导致扣款对不上 |
+| `player_info.backend_amount` | **分** | 模型 `Float` / 库 `int` | 模型与库均为 **`Integer`** | 「分」已是最小货币单位，**本就不该有小数**，是模型声明错了 |
+
+**迁移方式是自动的**（`main.py` 的 `migrate_db()`）：启动时查 `information_schema` 判断当前类型，
+若不是 `decimal/numeric` 才执行 `ALTER`，因此**反复重启不会重复改表**。
+
+```python
+data_type = conn.execute(text("SELECT DATA_TYPE FROM information_schema.columns "
+    "WHERE table_schema = DATABASE() AND table_name='boss_info' AND column_name='balance'")).scalar()
+if data_type and str(data_type).lower() not in ("decimal", "numeric"):
+    conn.execute(text("UPDATE boss_info SET balance = 0 WHERE balance IS NULL"))
+    conn.execute(text("ALTER TABLE boss_info MODIFY COLUMN balance DECIMAL(10,2) NOT NULL DEFAULT 0.00"))
+```
+
+**同步修改的 3 处**（少任何一处这个改动都不成立）：
+
+1. `models.py`：`balance = Column(Numeric(10, 2), nullable=False, default=0)`；`backend_amount` 由 `Float` 改为 `Integer`
+2. `schemas.py`：`BossInfoResponse.balance` 由 `int` 改为 **`float`** —— 否则 Pydantic 会把小数**截断**，库改对了接口照样丢精度
+3. `order_api.py`：`coins_required` 改为 **`Decimal` 运算**并 `ROUND_HALF_UP` 保留两位。
+   若沿用 float，`boss.balance -= coins_required` 会出现 `Decimal - float` 的 `TypeError`
+
+### ✅ 验证（真实接口 + 真实库）
+
+| 项目 | 结果 |
+|---|---|
+| 列类型 | `decimal(10,2)`、`IS_NULLABLE=NO`、`COLUMN_DEFAULT=0.00` ✓ |
+| 数据保留 | `laoban 4885.00`、`laoban_02 4306.00`、`laoban_03 5896.00` 全部完好 ✓ |
+| 小数扣款 | 下单 2550 分（25.50 大狗币）：余额 `100.00 → 74.50`，HTTP 200 ✓（修复前会被取整成 26） |
+| 最小单位 | 扣 0.01 大狗币正常入账，不再变成 0 ✓ |
+| 余额校验 | 余额 10.00 下 25.50 的单被拒：400「需要 25.50 大狗币，当前余额 10.00」✓ |
+| 接口精度 | `/api/boss/list` 返回 `1234.56`，未被截断 ✓ |
+| 幂等性 | 重启后列仍为 `decimal(10,2)`、数据未变、未重复 ALTER ✓ |
+
+测试账号、订单与内容项均已清理还原（0 残留，`laoban` 余额回到 `4885.00`）。
+
+### 两点如实说明（都不是 bug，但要知道）
+
+1. **充值入口仍然只能充整数元**：`RechargeRequest.amount` 是 `int`（充值档位按元设计），所以「小数余额」只会来自
+   **非 100 分整数倍的订单扣款**，不会来自充值。若以后要支持充 0.5 元，需要同时改这个 schema。
+2. **显示上会去掉末尾的 0**：`4885.00` 会显示成 `4885`、`74.50` 显示成 `74.5`。
+   这是前端 `${info.balance}` 直接输出 JS 数字的正常结果，不是精度丢失。
+   已穷举验证 `0.00 ~ 20000.00` 共 **2,000,001** 个两位小数值，经「DB DECIMAL → Pydantic float → JSON → JS」全链路往返，
+   **无一个出现浮点噪声**（如 `74.50000000000001`），故前端未作改动。
+
+### 🔍 顺带排查：改 Decimal 后所有余额运算路径都安全
+`DECIMAL` 列读出来是 `Decimal`，与 `float` 直接相减会抛 `TypeError`。已逐个核对全部 11 处余额赋值/运算：
+
+| 位置 | 运算 | 右值类型 | 结论 |
+|---|---|---|---|
+| `order_api.py` 下单 / 派单扣款 | `-= coins_required` | `Decimal`（本次已改） | ✓ |
+| `order_api.py` 拒单 / 取消退款 | `+= order.total_amount // 100` | `int`（`//`） | ✓ Decimal ± int 合法 |
+| `tip_api.py:57` 打赏扣款 | `-= request.amount // 100` | `int`（`//`） | ✓ |
+| `tip_api.py:53` 打赏余额校验 | `balance < coins_required` | `Decimal` vs `int` | ✓ 可比较 |
+| `user_info_api.py:470` 充值到账 | `+= request.amount + gift` | `int`（schema 声明 `int`） | ✓ |
+| `user_info_api.py:519` 封禁清零 | `= 0` | `int` | ✓ |
+| `seed_demo_data.py` 4 处 | `+= / -=` 整数 | `int` | ✓ |
+
+**没有一处是 `Decimal` 与 `float` 混算**，因此不存在运行时 `TypeError` 的隐患。
+
+### 📄 文档同步订正（README 中多处计数早已过期）
+核对后逐项改为实测值：接口数 **73 → 77**、数据表 **15 → 16** 张（`ban_requests` 此前只加在 CHANGELOG 没加进 README 的表清单）、
+系统参数 **18 → 25** 项、接口分组标题「用户资料」**18 → 21**。
+并补上此前遗漏的 4 个接口（`/api/ban/request`、`/api/ban/requests`、`/api/ban/requests/{id}/decision`、`/api/config/alerts/clear`）。
+新增「金额单位与字段类型」对照表，明确 `balance`（元）与 `backend_amount`（分）**单位不同、不可直接相加**。
+
+---
+
 ## [V3.7.1] 2026-09-27
 
 ### 🐞 修复：封禁老板时金额少 100 倍（单位不一致）
@@ -48,6 +126,9 @@ player_info.backend_amount -> int      （模型写 Float）
   `coins_required = round(总额/100, 2)` 会产生小数，写入 int 列会被取整
 
 因涉及是否要改表结构（模型改成 Integer 还是把库改成 DECIMAL），未擅自改动。
+
+> **已在 [V3.8.0] 处理**：查清两个字段性质不同 —— `balance`（大狗币）改为 `DECIMAL(10,2)` 支持小数，
+> `backend_amount`（分）保持整数、把模型声明改回 `Integer`。详见上一条。
 
 ---
 

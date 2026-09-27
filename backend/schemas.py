@@ -44,7 +44,7 @@ class BossInfoResponse(BaseModel):
     nickname: str = ""
     avatar: str = ""
     consume_amount: int
-    balance: int
+    balance: float  # 大狗币保留两位小数（DB 为 DECIMAL，用 int 会被截断掉小数）
     order_count: int
     
     class Config:

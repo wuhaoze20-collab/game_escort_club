@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -58,10 +59,14 @@ def create_order(
         raise HTTPException(status_code=400, detail=f"下单备注不能超过{max_remark_len}个字符")
     if request.service_note and len(request.service_note) > max_note_len:
         raise HTTPException(status_code=400, detail=f"业务量说明不能超过{max_note_len}个字符")
-    coins_required = round(request.total_amount / 100, 2)
-    
+    # 大狗币余额列是 DECIMAL(10,2)，SQLAlchemy 读出来是 Decimal。
+    # ⚠️ Decimal 与 float 直接相减会抛 TypeError，所以这里**不能**用 round(x / 100, 2)，
+    #    必须同样用 Decimal 计算（早期代码是 round(...)，在余额支持小数后会崩）。
+    coins_required = (Decimal(request.total_amount) / Decimal(100)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP)
+
     # 检查大狗币余额是否足够
-    if boss.balance < coins_required:
+    if (boss.balance or 0) < coins_required:
         raise HTTPException(status_code=400, detail=f"大狗币余额不足，需要 {coins_required:.2f} 大狗币，当前余额 {boss.balance:.2f}，请先充值")
     
     # 生成订单号
