@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models import BossInfo, PlayerInfo, PlayerTag, User, ContentConfig
+from models import BanRequest, BossInfo, PlayerInfo, PlayerTag, User, ContentConfig
 from api.notification_api import create_notification
 from schemas import (
     BossInfoResponse, PlayerInfoResponse, PlayerPublicInfo,
     IntroUpdateRequest, LevelUpdateRequest, TagCreateRequest, TagResponse,
-    TagDecisionRequest, RechargeRequest, ProfileUpdateRequest, ProfileReviewRequest
+    TagDecisionRequest, RechargeRequest, ProfileUpdateRequest, ProfileReviewRequest,
+    BanRequestCreate, BanDecisionRequest
 )
 from auth import get_current_user, require_roles
 import config_service
@@ -480,24 +481,25 @@ def recharge_balance(
     }
 
 
-# 管理员拉黑/注销用户（打手/老板）
-@router.post("/admin/ban/{username}")
-def ban_user(
-    username: str,
-    current_user: User = Depends(require_roles("admin")),
-    db: Session = Depends(get_db)
-):
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    
-    if user.role not in ["boss", "player"]:
-        raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
-    
-    # 拉黑前：后台金额/余额转入公司后台
+# ——————————————————————————————————————————————
+# 拉黑：执行逻辑（管理员直接拉黑 / 客服申请经审核通过，两条路径共用）
+# ——————————————————————————————————————————————
+
+def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bool,
+               requester: str = "", reason: str = "") -> int:
+    """真正执行拉黑，返回转入公司账户的金额（分）。
+
+    **这是不可逆操作**：余额转入公司账户、写处罚通告、通知用户、账号注销。
+    因此只应由两条路径调用：
+      · 管理员直接拉黑（via_review=False）
+      · 客服提交申请、管理员审核通过（via_review=True）
+    """
+    username = user.username
     amount = 0
     role_name = "老板" if user.role == "boss" else "打手"
     display = user.nickname or username
+
+    # 拉黑前：后台金额/余额转入公司后台
     if user.role == "player":
         player = db.query(PlayerInfo).filter(PlayerInfo.username == username).first()
         if player:
@@ -508,7 +510,7 @@ def ban_user(
         if boss:
             amount = boss.balance
             boss.balance = 0
-    
+
     # 公司后台资金池入账 + 资金流水
     if amount > 0:
         cb = db.query(ContentConfig).filter(ContentConfig.config_key == "company_balance").first()
@@ -518,35 +520,192 @@ def ban_user(
         cfg = json.loads(cb.config_value or '{"balance": 0}')
         cfg["balance"] = cfg.get("balance", 0) + amount
         cb.config_value = json.dumps(cfg, ensure_ascii=False)
-        
+
         rec = db.query(ContentConfig).filter(ContentConfig.config_key == "company_records").first()
         if not rec:
             rec = ContentConfig(config_key="company_records", config_value="[]")
             db.add(rec)
         records = json.loads(rec.config_value or "[]")
-        records.insert(0, {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "type": "拉黑", "user": f"{display}（{username}）", "amount": amount})
+        records.insert(0, {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "type": "拉黑",
+                           "user": f"{display}（{username}）", "amount": amount})
         rec.config_value = json.dumps(records, ensure_ascii=False)
-    
+
+    money_desc = (f"{('后台金额' if user.role == 'player' else '账户余额')} ¥{amount / 100:.2f} 已转入公司账户"
+                  if amount > 0 else "账号已注销")
+    if via_review:
+        head = f"{role_name}「{display}」经客服申请、管理员审核后拉黑封禁"
+        if requester:
+            head += f"（申请发起：客服 {requester}）"
+        if reason:
+            head += f"，申请理由：{reason}"
+    else:
+        head = f"{role_name}「{display}」被{operator_display}拉黑封禁"
+
     # 处罚公告自动追加一条
     pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
     if pun:
         plist = json.loads(pun.config_value or "[]")
-        if amount > 0:
-            desc = f"{role_name}「{display}」被管理员拉黑封禁，{('后台金额' if user.role == 'player' else '账户余额')} ¥{amount / 100:.2f} 已转入公司账户"
-        else:
-            desc = f"{role_name}「{display}」被管理员拉黑封禁，账号已注销"
-        plist.insert(0, {"level": "封禁账号", "desc": desc, "date": datetime.now().strftime("%Y-%m-%d")})
+        plist.insert(0, {"level": "封禁账号", "desc": f"{head}，{money_desc}",
+                         "date": datetime.now().strftime("%Y-%m-%d")})
         pun.config_value = json.dumps(plist, ensure_ascii=False)
-    
+
     # 通知被拉黑用户
     from api.notification_api import create_notification
-    create_notification(db, user.id, "账号被封禁", f"您的账号已被管理员拉黑注销，如有疑问请联系管理员", "warning", "/")
-    
+    create_notification(db, user.id, "账号被封禁",
+                        "您的账号已被拉黑注销，如有疑问请联系管理员", "warning", "/")
+
     # 账号注销，无法登录
     user.account_status = "rejected"
-    
+    return amount
+
+
+# 管理员直接拉黑/注销用户（打手/老板）—— 立即生效，无需审核
+@router.post("/admin/ban/{username}")
+def ban_user(
+    username: str,
+    reason: str = "",
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if user.role not in ["boss", "player"]:
+        raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
+
+    _apply_ban(db, user, operator_display="管理员", via_review=False, reason=reason)
     db.commit()
     return {"message": f"用户 {username} 已被拉黑注销，金额已转入公司账户"}
+
+
+# ——————————————————————————————————————————————
+# 拉黑申请：客服发起、管理员审核
+# ——————————————————————————————————————————————
+
+# 客服提交拉黑申请（不会立即生效，等管理员审核）
+@router.post("/ban/request")
+def create_ban_request(
+    request: BanRequestCreate,
+    current_user: User = Depends(require_roles("service")),
+    db: Session = Depends(get_db)
+):
+    username = (request.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="请指定要拉黑的账号")
+
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.role not in ["boss", "player"]:
+        raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
+
+    # 同一账号不允许多条待审申请，避免刷单
+    dup = db.query(BanRequest).filter(BanRequest.target_username == username,
+                                      BanRequest.status == "pending").first()
+    if dup:
+        raise HTTPException(status_code=400,
+                            detail=f"该账号已有待审核的拉黑申请（申请人：{dup.requested_by}），请等待管理员处理")
+
+    br = BanRequest(
+        target_username=username,
+        target_role=user.role,
+        requested_by=current_user.username,
+        reason=(request.reason or "").strip()[:500],
+    )
+    db.add(br)
+
+    # 通知管理员有新申请
+    from api.notification_api import create_notification
+    for admin in db.query(User).filter(User.role == "admin").all():
+        create_notification(db, admin.id, "新的拉黑申请",
+                            f"客服 {current_user.username} 申请拉黑"
+                            f"{'老板' if user.role == 'boss' else '打手'}「{user.nickname or username}」，"
+                            f"请到「拉黑审核」处理", "warning", "/ban-review")
+
+    db.commit()
+    db.refresh(br)
+    return {"message": "已提交拉黑申请，等待管理员审核", "id": br.id}
+
+
+# 拉黑申请列表（管理员/客服都可看；客服用于跟踪自己申请的状态）
+@router.get("/ban/requests")
+def list_ban_requests(
+    current_user: User = Depends(require_roles("admin", "service")),
+    db: Session = Depends(get_db)
+):
+    rows = db.query(BanRequest).order_by(BanRequest.id.desc()).limit(100).all()
+    result = []
+    for r in rows:
+        target = db.query(User).filter(User.username == r.target_username).first()
+        result.append({
+            "id": r.id,
+            "target_username": r.target_username,
+            "target_role": "老板" if r.target_role == "boss" else "打手",
+            "target_nickname": (target.nickname or r.target_username) if target else r.target_username,
+            "requested_by": r.requested_by,
+            "reason": r.reason,
+            "status": r.status,
+            "note": r.note,
+            "processed_by": r.processed_by,
+            "created_at": r.created_at,
+            "processed_at": r.processed_at,
+        })
+    return result
+
+
+# 管理员审核：通过则执行拉黑（不可逆），驳回则仅记录
+@router.post("/ban/requests/{request_id}/decision")
+def decide_ban_request(
+    request_id: int,
+    request: BanDecisionRequest,
+    action: str = "approve",  # approve / reject
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    br = db.query(BanRequest).filter(BanRequest.id == request_id).first()
+    if not br:
+        raise HTTPException(status_code=404, detail="申请不存在")
+    if br.status != "pending":
+        raise HTTPException(status_code=400, detail="该申请已处理")
+
+    if action not in ("approve", "reject"):
+        raise HTTPException(status_code=400, detail="无效的操作")
+
+    from api.notification_api import create_notification
+
+    if action == "reject":
+        br.status = "rejected"
+        br.note = request.note or ""
+        br.processed_by = current_user.username
+        br.processed_at = datetime.now()
+        # 通知申请人
+        requester = db.query(User).filter(User.username == br.requested_by).first()
+        if requester:
+            create_notification(db, requester.id, "拉黑申请被驳回",
+                                f"你申请的拉黑「{br.target_username}」已被驳回"
+                                f"{('：' + request.note) if request.note else ''}", "info", "/ban-review")
+        db.commit()
+        return {"message": "已驳回该拉黑申请（未执行拉黑）"}
+
+    # 通过：此时才真正执行不可逆的拉黑
+    target = db.query(User).filter(User.username == br.target_username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="被申请拉黑的账号已不存在")
+
+    amount = _apply_ban(db, target, operator_display=current_user.nickname or current_user.username,
+                        via_review=True, requester=br.requested_by, reason=br.reason)
+    br.status = "approved"
+    br.note = request.note or ""
+    br.processed_by = current_user.username
+    br.processed_at = datetime.now()
+
+    requester = db.query(User).filter(User.username == br.requested_by).first()
+    if requester:
+        create_notification(db, requester.id, "拉黑申请已通过",
+                            f"你申请的拉黑「{br.target_username}」已由管理员审核通过并执行", "success", "/ban-review")
+    db.commit()
+    return {"message": f"已通过并执行拉黑，¥{amount / 100:.2f} 已转入公司账户"}
 
 
 # 公司后台余额与资金流水（仅管理员）

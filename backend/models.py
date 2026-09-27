@@ -203,3 +203,21 @@ class AiMessage(Base):
     completion_tokens = Column(Integer, default=0)
     error = Column(String(255), default="")  # 调用失败时的原因（便于排查）
     created_at = Column(DateTime, default=datetime.now)
+
+# 拉黑申请表（客服发起，需管理员审核通过才真正执行拉黑）
+# 说明：拉黑是不可逆操作（余额转入公司账户 + 写处罚通告 + 注销账号），
+#       因此客服只能提交申请，由管理员审核；管理员自己拉黑则直接执行、不入此表。
+#       单独建表而非在 users 上加列：同一账号可能被多次申请（驳回后可再申请），需要留history。
+class BanRequest(Base):
+    __tablename__ = "ban_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    target_username = Column(String(50), index=True, nullable=False)  # 被申请拉黑的账号
+    target_role = Column(String(20), default="")  # boss / player，便于列表展示
+    requested_by = Column(String(50), nullable=False)  # 发起人（客服）
+    reason = Column(Text, default="")  # 申请理由
+    status = Column(String(20), default="pending")  # pending / approved / rejected
+    note = Column(Text, default="")  # 管理员审核备注
+    processed_by = Column(String(50), default="")  # 审核人
+    created_at = Column(DateTime, default=datetime.now)
+    processed_at = Column(DateTime, nullable=True)

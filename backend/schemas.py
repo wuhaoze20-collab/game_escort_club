@@ -314,3 +314,11 @@ class AiChatResponse(BaseModel):
     completion_tokens: int = 0
     remaining_today: int = -1  # -1 表示不限制
     model: str = ""
+
+# ——— 拉黑申请（客服发起，管理员审核） ———
+class BanRequestCreate(BaseModel):
+    username: str
+    reason: str = ""
+
+class BanDecisionRequest(BaseModel):
+    note: str = ""

@@ -1218,6 +1218,18 @@
                 </div>
             </section>
 
+            <!-- 16.4.6 拉黑审核（客服申请、管理员审核通过后才执行） -->
+            <section id="page-ban-review" class="page-section bg-white rounded-xl shadow-sm p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-800">拉黑审核</h2>
+                    <button onclick="loadBanRequests()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                </div>
+                <p class="text-sm text-gray-500 mb-4">
+                    客服无法直接拉黑账号，只能提交申请；<b>管理员审核通过后才会真正执行</b>（余额转入公司账户 + 写入处罚通告 + 注销账号，<b>不可撤销</b>）。
+                </p>
+                <div id="ban-review-content" class="space-y-3"><div class="loading">加载中...</div></div>
+            </section>
+
             <!-- 16.5 评价复查审核（管理员） -->
                 <section id="page-review-manage" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-6">
@@ -2014,6 +2026,11 @@
                 await loadRegistrationList();
             }
 
+            // 拉黑审核：管理员要看并处理，客服要跟踪自己申请的状态
+            if (currentUser.role === 'admin' || currentUser.role === 'service') {
+                await loadBanRequests();
+            }
+
             // 控制编辑按钮显示：仅管理员和客服可见
             const canEdit = currentUser.role === 'admin' || currentUser.role === 'service';
             document.querySelectorAll('.edit-btn').forEach(btn => {
@@ -2047,7 +2064,8 @@
                     { key: 'review-manage', label: '评价复查' },
                     { key: 'tag-review', label: '标签审核' },
                     { key: 'profile-review', label: '头像昵称审核' },
-                    { key: 'registration-review', label: '注册审核' }
+                    { key: 'registration-review', label: '注册审核' },
+                    { key: 'ban-review', label: '拉黑审核' }
                 ]},
                 { group: '人员管理', items: [
                     { key: 'boss', label: '老板管理' },
@@ -2076,7 +2094,8 @@
                 ]},
                 { group: '审核管理', items: [
                     { key: 'tag-review', label: '标签审核' },
-                    { key: 'profile-review', label: '头像昵称审核' }
+                    { key: 'profile-review', label: '头像昵称审核' },
+                    { key: 'ban-review', label: '拉黑审核' }
                 ]},
                 { group: '人员管理', items: [
                     { key: 'boss', label: '老板信息' },
@@ -3587,9 +3606,28 @@
             }
         }
 
-        // ==================== 拉黑（管理员） ====================
+        // ==================== 拉黑 ====================
+        // 管理员：直接拉黑（立即生效，不可撤销）
+        // 客服：只能提交申请，需管理员在「拉黑审核」通过后才真正执行
         async function banUser(username, roleName) {
-            if (!confirm(`确定要拉黑${roleName}「${username}」吗？其后台金额/余额将转入公司账户，且账号将无法再登录。`)) return;
+            if (currentUser.role === 'service') {
+                const reason = prompt(
+                    `申请拉黑${roleName}「${username}」\n\n` +
+                    `拉黑会将其余额转入公司账户、写入处罚通告并注销账号，且不可撤销。\n` +
+                    `提交后需管理员审核通过才会执行。\n\n请填写申请理由：`
+                );
+                if (reason === null) return;           // 取消
+                if (!reason.trim()) { alert('请填写申请理由'); return; }
+                try {
+                    const res = await apiRequest('/api/ban/request', 'POST',
+                        { username: username, reason: reason.trim() });
+                    alert(res.message);
+                    await loadBanRequests();
+                } catch (e) { alert(e.message); }
+                return;
+            }
+
+            if (!confirm(`确定要拉黑${roleName}「${username}」吗？其后台金额/余额将转入公司账户，且账号将无法再登录。此操作不可撤销。`)) return;
             try {
                 await apiRequest(`/api/admin/ban/${username}`, 'POST');
                 alert('已拉黑！金额已转入公司账户，处罚公告已自动添加');
@@ -3597,6 +3635,76 @@
                 await loadPlayerList();
                 await loadCompanyBalance();
                 await loadAllContent(); // 刷新处罚公告等公共内容
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== 拉黑审核（客服申请、管理员审核） ====================
+        async function loadBanRequests() {
+            const box = document.getElementById('ban-review-content');
+            if (!box) return;
+            box.innerHTML = '<div class="loading">加载中…</div>';
+            try {
+                const list = await apiRequest('/api/ban/requests');
+                if (!list || !list.length) {
+                    box.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">暂无拉黑申请</div>';
+                    return;
+                }
+                const isAdmin = currentUser.role === 'admin';
+                const stMap = { pending: '待审核', approved: '已通过', rejected: '已驳回' };
+                const stCls = {
+                    pending: 'bg-yellow-100 text-yellow-700',
+                    approved: 'bg-green-100 text-green-700',
+                    rejected: 'bg-red-100 text-red-600'
+                };
+                box.innerHTML = list.map(r => ''
+                    + '<div class="border border-gray-200 rounded-lg p-4">'
+                    + '  <div class="flex justify-between items-start gap-3 flex-wrap">'
+                    + '    <div class="flex-1 min-w-0">'
+                    + '      <div class="text-sm text-gray-800">'
+                    + '        <span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 mr-1">' + escapeHtml(r.target_role) + '</span>'
+                    + escapeHtml(r.target_nickname) + '（' + escapeHtml(r.target_username) + '）'
+                    + '      </div>'
+                    + '      <div class="text-xs text-gray-500 mt-1">申请理由：' + escapeHtml(r.reason || '（未填写）') + '</div>'
+                    + '      <div class="text-xs text-gray-400 mt-0.5">申请人 ' + escapeHtml(r.requested_by)
+                    + ' · ' + escapeHtml(String(r.created_at).replace('T', ' ').slice(0, 16)) + '</div>'
+                    + (r.note ? '<div class="text-xs text-gray-500 mt-1">审核备注：' + escapeHtml(r.note) + '</div>' : '')
+                    + (r.processed_by ? '<div class="text-xs text-gray-400 mt-0.5">审核人 ' + escapeHtml(r.processed_by) + '</div>' : '')
+                    + '    </div>'
+                    + '    <div class="flex items-center gap-2 shrink-0">'
+                    + '      <span class="px-2 py-0.5 rounded-full text-xs ' + (stCls[r.status] || 'bg-gray-100 text-gray-600') + '">'
+                    + (stMap[r.status] || r.status) + '</span>'
+                    + (isAdmin && r.status === 'pending'
+                        ? '<button onclick="decideBanRequest(' + r.id + ', \'approve\')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">通过并拉黑</button>'
+                          + '<button onclick="decideBanRequest(' + r.id + ', \'reject\')" class="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">驳回</button>'
+                        : '')
+                    + '    </div>'
+                    + '  </div>'
+                    + '</div>').join('');
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(String((e && e.message) || e)) + '</div>';
+            }
+        }
+
+        async function decideBanRequest(id, action) {
+            let note = '';
+            if (action === 'approve') {
+                if (!confirm('通过后将立即执行拉黑：余额转入公司账户、写入处罚通告、账号注销。\n此操作不可撤销。\n\n确定通过？')) return;
+                const n = prompt('审核备注（可留空）：');
+                if (n === null) return;
+                note = n;
+            } else {
+                const n = prompt('驳回原因（可留空）：');
+                if (n === null) return;
+                note = n;
+            }
+            try {
+                const res = await apiRequest('/api/ban/requests/' + id + '/decision?action=' + action, 'POST', { note: note });
+                alert(res.message);
+                await loadBanRequests();
+                await loadBossList();
+                await loadPlayerList();
+                await loadCompanyBalance();
+                await loadAllContent();
             } catch (e) { alert(e.message); }
         }
 
