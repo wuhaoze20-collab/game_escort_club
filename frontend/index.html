@@ -2019,6 +2019,8 @@
         }
 
         // 菜单配置（左树分组）
+        // ⚠️ 改动本菜单时，请同步更新 backend/ai_service.py 的 ROLE_MENUS / ROLE_CAPS，
+        //    否则 AI 客服会按旧结构回答，给出不存在的菜单项或错误的操作路径。
         const menuConfig = {
             admin: [
                 { group: '店铺运营', items: [
