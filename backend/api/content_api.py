@@ -12,6 +12,12 @@ router = APIRouter(prefix="/api/content", tags=["内容管理"])
 # 允许的配置key
 VALID_CONFIG_KEYS = ["notice", "orderGuide", "price", "recharge", "member", "payment", "punishment", "matches"]
 
+# 客服不可编辑的内容项。
+# 这两项已从客服菜单移除（充值由老板自行操作、支付方式属平台配置），
+# 因此接口层也要一并拦住 —— 否则会出现「界面没入口、但调 API 仍能改」的前后端权限不一致。
+# 管理员不受此限制。
+SERVICE_FORBIDDEN_KEYS = {"recharge", "payment"}
+
 # 各内容模块允许的结构：notice=对象；orderGuide=字符串数组；其余=对象数组（字段均为字符串）
 LIST_TEXT_FIELDS = {
     "price": ["game", "rank", "unit"],
@@ -84,7 +90,7 @@ def get_content(config_key: str, current_user: User = Depends(get_current_user),
         return None
     return json.loads(config.config_value)
 
-# 更新内容配置（仅管理员和客服可编辑）
+# 更新内容配置（管理员可改全部；客服可改除 SERVICE_FORBIDDEN_KEYS 之外的内容）
 @router.put("/{config_key}")
 def update_content(
     config_key: str,
@@ -94,6 +100,13 @@ def update_content(
 ):
     if config_key not in VALID_CONFIG_KEYS:
         raise HTTPException(status_code=400, detail="无效的配置类型")
+
+    # 客服不能改充值中心与支付方式（与前端菜单保持一致）
+    if current_user.role == "service" and config_key in SERVICE_FORBIDDEN_KEYS:
+        raise HTTPException(
+            status_code=403,
+            detail="「充值中心」与「支付方式」仅管理员可编辑，客服无此权限",
+        )
 
     # 校验结构（防止写入错误类型把前端所有页面写崩）
     _validate_content_structure(config_key, request.value)
