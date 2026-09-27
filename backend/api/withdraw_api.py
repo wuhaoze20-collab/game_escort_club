@@ -7,6 +7,7 @@ from models import PlayerInfo, SalaryRecord, TipRecord, User, WithdrawalRecord
 from schemas import WithdrawCreateRequest, WithdrawProcessRequest, WithdrawResponse
 from auth import require_roles
 import config_service
+import ops_alerts
 
 router = APIRouter(prefix="/api/withdraw", tags=["提现管理"])
 
@@ -64,9 +65,21 @@ def calc_available_amount(db: Session, player_username: str) -> int:
     # 期初结余：后台余额里没有收入记录支撑的部分，视为已过冷却期
     opening_balance = max(0, backend_amount - (records_income - approved_total))
 
-    # 可用基数为「已到期收入 + 期初结余」，再受实际余额封顶、扣掉在途申请，最后兜底不为负
-    available = min(matured_income + opening_balance, backend_amount) - pending_total
-    return max(0, available)
+    # 可用基数为「已到期收入 + 期初结余」，再受实际余额封顶、扣掉在途申请
+    raw = min(matured_income + opening_balance, backend_amount) - pending_total
+    if raw < 0:
+        # 界面必须显示 0（不能给用户看负数），但**账目已经不一致这个事实要留痕**，
+        # 否则只剩一个 0，谁也不知道数据出了问题。
+        ops_alerts.record(
+            f"withdraw_negative:{player_username}",
+            f"打手 {player_username} 的可提现额算出负值 {raw} 分（已按 0 显示）："
+            f"已到期收入={matured_income} 期初结余={opening_balance} "
+            f"后台金额={backend_amount} 在途提现={pending_total}。"
+            f"通常意味着 backend_amount 与收入记录不一致"
+        )
+        print(f"[withdraw] {player_username} 可提现额算出负值 {raw}，已归零")
+        return 0
+    return raw
 
 # 打手查询可提现金额
 @router.get("/available")

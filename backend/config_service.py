@@ -4,8 +4,10 @@
 后台可改、无需改代码与重启。
 
 设计要点（重要）：
-1. **默认值兜底**：每条参数在 `DEFAULTS` 里都有出厂值。数据库缺行、值非法、
-   或类型转换失败时一律回退默认值并打印告警，保证业务永不因配置问题而崩溃。
+1. **默认值兜底**：每条参数在 `CONFIG_META` 里都有出厂值。数据库缺行、值非法、
+   或类型转换失败时一律回退默认值，保证业务永不因配置问题而崩溃。
+   但**同时会通过 `ops_alerts` 留痕**，后台「系统参数」页能看到 —— 否则连不上库
+   或参数被写坏时会静默按默认值运行，管理员还以为在用自己设的值。
 2. **短 TTL 缓存**：默认缓存 10 秒，避免每次请求都查库；写入时立即失效，
    因此改完参数马上生效。若有人直接改数据库，最多 10 秒后也会生效。
 3. 值统一以字符串存在库里，按 `value_type` 转换后返回。
@@ -14,6 +16,7 @@
 import json
 import time
 
+import ops_alerts
 from models import SystemConfig
 
 # 缓存存活秒数（直接改库时最多延迟这么久生效）
@@ -175,6 +178,9 @@ def get_config(key: str, db=None, default=None):
             own_session = True
         row = db.query(SystemConfig).filter(SystemConfig.config_key == key).first()
     except Exception as e:  # 查库失败不应影响业务，直接用默认值
+        # 但必须留痕：否则连不上库时会静默按出厂默认跑，管理员还以为在用后台设的值
+        ops_alerts.record(f"config_read:{key}",
+                          f"读取系统参数 {key} 失败，已临时使用默认值 {fallback!r}：{e}")
         print(f"[config] 读取 {key} 失败，使用默认值 {fallback!r}：{e}")
     finally:
         if own_session and db is not None:
@@ -187,6 +193,10 @@ def get_config(key: str, db=None, default=None):
         try:
             value = _coerce(row.config_value, row.value_type or (meta or {}).get("type", "str"), key)
         except Exception as e:
+            ops_alerts.record(f"config_bad_value:{key}",
+                              f"系统参数 {key} 的值 {row.config_value!r} 不是合法的 "
+                              f"{row.value_type}，已临时按默认值 {fallback!r} 运行。"
+                              f"请到「系统参数」页修正该项")
             print(f"[config] 参数 {key} 的值 {row.config_value!r} 无法转为 "
                   f"{row.value_type}，回退默认值 {fallback!r}：{e}")
             value = fallback

@@ -1288,6 +1288,7 @@
                         <button onclick="loadSystemConfig()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                     </div>
                     <p class="text-sm text-gray-500 mb-4">抽成比例、提现冷却、登录锁定、各类上限等业务规则集中在此。修改后<b>立即生效</b>，无需改代码或重启服务。</p>
+                    <div id="config-alerts"></div>
                     <div id="config-table" class="space-y-3"><div class="loading">加载中...</div></div>
                 </section>
 
@@ -1930,7 +1931,10 @@
                 await apiRequest(`/api/notification/${id}/read`, 'POST');
                 await loadNotifications();
                 await refreshUnreadCount();
-            } catch (e) { }
+            } catch (e) {
+                // 原先这里是空 catch：失败时页面毫无反应，用户以为点了没生效
+                alert('标记已读失败：' + (e && e.message ? e.message : '未知原因'));
+            }
         }
 
         // 全部已读
@@ -1939,7 +1943,9 @@
                 await apiRequest('/api/notification/read-all', 'POST');
                 await loadNotifications();
                 await refreshUnreadCount();
-            } catch (e) { }
+            } catch (e) {
+                alert('标记全部已读失败：' + (e && e.message ? e.message : '未知原因'));
+            }
         }
 
         async function initApp() {
@@ -2275,6 +2281,7 @@
 
         // ==================== 系统参数（仅管理员） ====================
         let configCache = [];
+        let configAlerts = [];
 
         async function loadSystemConfig() {
             const box = document.getElementById('config-table');
@@ -2283,13 +2290,53 @@
             try {
                 const res = await apiRequest('/api/config/all');
                 configCache = (res && res.items) || [];
+                configAlerts = (res && res.alerts) || [];
                 renderConfigTable();
             } catch (e) {
                 box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
             }
         }
 
+        // 运行期异常留痕：把被防御代码兜住的静默故障显示出来
+        // （配置读失败回退默认值、提现额算出负值、充值福利配置坏了等）
+        function renderConfigAlerts() {
+            const box = document.getElementById('config-alerts');
+            if (!box) return;
+            if (!configAlerts.length) {
+                box.innerHTML = '';
+                return;
+            }
+            const rows = configAlerts.map(a => ''
+                + '<div class="flex items-start gap-2">'
+                + '  <span class="text-amber-600 shrink-0">⚠</span>'
+                + '  <div class="flex-1 min-w-0">'
+                + '    <div class="break-words">' + escapeHtml(a.message) + '</div>'
+                + '    <div class="text-xs text-amber-600/70 mt-0.5">'
+                + escapeHtml(a.at) + (a.count > 1 ? '　出现 ' + a.count + ' 次' : '')
+                + '    </div>'
+                + '  </div>'
+                + '</div>').join('');
+            box.innerHTML = ''
+                + '<div class="border border-amber-300 bg-amber-50 rounded-lg p-4 mb-4">'
+                + '  <div class="flex justify-between items-center mb-2">'
+                + '    <div class="text-sm font-medium text-amber-700">系统运行提示（' + configAlerts.length + '）</div>'
+                + '    <button onclick="clearConfigAlerts()" class="text-xs text-amber-700 hover:underline shrink-0">已处理，清空</button>'
+                + '  </div>'
+                + '  <div class="text-sm text-amber-700 space-y-2">' + rows + '</div>'
+                + '  <div class="text-xs text-amber-600/80 mt-3">这些是「被兜住的异常」：业务没报错，但通常意味着某项配置或数据需要检查。</div>'
+                + '</div>';
+        }
+
+        async function clearConfigAlerts() {
+            if (!confirm('确认这些问题都已处理？清空后不再显示。')) return;
+            try {
+                await apiRequest('/api/config/alerts/clear', 'POST');
+                await loadSystemConfig();
+            } catch (e) { alert(e.message); }
+        }
+
         function renderConfigTable() {
+            renderConfigAlerts();
             const box = document.getElementById('config-table');
             if (!box) return;
             box.innerHTML = configCache.map(c => ''

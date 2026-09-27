@@ -13,6 +13,7 @@ from schemas import (
 )
 from auth import get_current_user, require_roles
 import config_service
+import ops_alerts
 
 router = APIRouter(prefix="/api", tags=["用户信息"])
 
@@ -425,20 +426,44 @@ def recharge_balance(
     if not boss:
         raise HTTPException(status_code=404, detail="老板账户不存在")
     
-    # 从充值福利配置中匹配赠送（精确匹配档位金额，未匹配则无赠送）
+    # 从充值福利配置中匹配赠送（精确匹配档位金额；未匹配到档位则无赠送，这是允许的）
     gift = 0
     bonus = ""
     cfg = db.query(ContentConfig).filter(ContentConfig.config_key == "recharge").first()
     if cfg:
         try:
             recharge_list = json.loads(cfg.config_value)
-            for item in recharge_list:
-                if item.get("amount") == request.amount:
-                    gift = int(item.get("gift", 0))
-                    bonus = item.get("bonus", "")
-                    break
-        except Exception:
-            pass
+            if not isinstance(recharge_list, list):
+                raise ValueError("充值福利配置不是数组")
+        except Exception as e:
+            # 配置坏了必须**显式失败**，不能静默按 0 赠送：
+            # 否则用户照常扣款却拿不到该有的赠送，而且没有任何人会发现配置坏了。
+            ops_alerts.record(
+                "recharge_config_broken",
+                f"「充值福利」配置无法解析（{e}），已暂停充值以免少给赠送。"
+                f"请到「充值福利」页检查配置格式"
+            )
+            print(f"[recharge] 「充值福利」配置解析失败，已拒绝本次充值：{e}")
+            raise HTTPException(
+                status_code=500,
+                detail="充值福利配置异常，为避免让你少拿赠送已暂停充值，请联系管理员检查「充值福利」配置",
+            )
+
+        for item in recharge_list:
+            if not isinstance(item, dict):
+                continue
+            if item.get("amount") == request.amount:
+                try:
+                    gift = int(item.get("gift") or 0)
+                except (TypeError, ValueError):
+                    # 单个档位的赠送值写坏了：这一项按 0 处理并留痕，但不阻断充值
+                    ops_alerts.record(
+                        f"recharge_gift_bad:{request.amount}",
+                        f"「充值福利」中 {request.amount} 元档位的赠送值不是整数，本次按 0 赠送处理",
+                    )
+                    gift = 0
+                bonus = item.get("bonus") or ""
+                break
     
     total = request.amount + gift
     boss.balance += total

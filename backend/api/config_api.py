@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import config_service
+import ops_alerts
 from database import get_db
 from models import User
 from auth import require_roles
@@ -13,13 +14,23 @@ MANAGE_ROLES = ("admin", "service")
 
 
 # 读取全部系统参数（含默认值、类型、说明，供后台设置页渲染表单）
+# 同时带回运行期异常留痕：让「被防御代码兜住的静默故障」能被管理员看见
 @router.get("/all")
 def list_configs(
     current_user: User = Depends(require_roles(*MANAGE_ROLES)),
     db: Session = Depends(get_db),
 ):
     items = config_service.get_all_configs(db)
-    return {"total": len(items), "items": items}
+    return {"total": len(items), "items": items, "alerts": ops_alerts.list_alerts()}
+
+
+# 清空异常留痕（管理员确认处理完之后）
+@router.post("/alerts/clear")
+def clear_alerts(
+    current_user: User = Depends(require_roles("admin")),
+):
+    ops_alerts.clear()
+    return {"message": "已清空异常提示"}
 
 
 # 修改单个参数
