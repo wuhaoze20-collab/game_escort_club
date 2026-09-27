@@ -390,6 +390,23 @@
         .modal-overlay { background-color: rgba(5, 10, 25, 0.7) !important; }
         #reset-password-modal, #register-modal { background-color: rgba(5, 10, 25, 0.7) !important; }
 
+        /* AI 客服面板：内容密集、面积又大，暗色下必须近乎不透明。
+           其它弹窗靠「--bg-modal(42% 透明) + blur(26px)」做玻璃效果，内容少还撑得住；
+           聊天窗若沿用同样透明度，页面文字会透上来与消息重叠、根本读不清。 */
+        [data-theme="dark"] #ai-chat-modal > div:not(.modal-overlay) {
+            background: rgba(14, 20, 28, 0.97) !important;
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+        }
+        /* 助手气泡要在新的深色底上分得出来（默认 #161e28 与面板底色太接近） */
+        [data-theme="dark"] #ai-chat-modal .bg-gray-100 {
+            background-color: #1f2b3a !important;
+        }
+        /* 用户气泡在暗色下略压暗，避免大面积高饱和蓝过于刺眼 */
+        [data-theme="dark"] #ai-chat-modal .bg-blue-500 {
+            background-color: #2563eb !important;
+        }
+
         /* 打手卡片 */
         #public-players > div:hover {
             border-color: var(--gs-gold) !important;
