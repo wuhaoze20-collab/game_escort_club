@@ -1304,6 +1304,77 @@
                     <div id="config-table" class="space-y-3"><div class="loading">加载中...</div></div>
                 </section>
 
+                <!-- 16.6 提示词管理（仅管理员） -->
+                <section id="page-ai-prompt" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">AI 提示词管理</h2>
+                        <button onclick="loadAiPrompts()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">
+                        这里改的是 AI 客服的<b>系统提示词</b>（存数据库，<b>保存后立即生效</b>，无需重启）。
+                        段落顺序由「优先级」决定（小的在前）；动态内容（当前用户、角色菜单、平台资料、当前时间）
+                        固定排在这些段落之后。改坏了可点「恢复默认」还原出厂内容。
+                    </p>
+
+                    <!-- 预览：按角色真实拼一次提示词，是调试提示词最有效的手段 -->
+                    <div class="bg-gray-50 rounded-lg p-4 mb-5">
+                        <div class="text-sm font-medium text-gray-700 mb-2">预览实际提示词</div>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <select id="ai-preview-role" class="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="boss">老板</option>
+                                <option value="player">打手</option>
+                                <option value="service">客服</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                            <input id="ai-preview-question" type="text" placeholder="（可选）填一句用户提问，检验问答库命中"
+                                class="flex-1 min-w-[240px] px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            <button onclick="previewAiPrompt()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">预览</button>
+                        </div>
+                        <div id="ai-preview-meta" class="text-xs text-gray-500 mt-2"></div>
+                        <textarea id="ai-preview-box" rows="12" readonly
+                            class="hidden w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none bg-white"></textarea>
+                    </div>
+
+                    <div id="ai-prompt-list" class="space-y-3"><div class="loading">加载中...</div></div>
+                </section>
+
+                <!-- 16.7 AI 问答库（管理员 / 客服） -->
+                <section id="page-ai-faq" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">AI 问答库</h2>
+                        <div class="flex gap-2">
+                            <button onclick="loadAiFaqs()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                            <button onclick="openFaqAdd()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">新增问答</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">
+                        按<b>关键词命中</b>后，只把相关的几条注入 AI 提示词（而不是每次都塞全部资料），更省也更准。
+                        <b>角色</b>决定这条问答对谁生效 —— 同一件事对不同角色的正确答法常常相反
+                        （例如"怎么充值"：老板是操作路径，打手是"你没有这个权限"）。
+                        答法里可以写 <code class="bg-gray-100 px-1 rounded">{参数名}</code> 引用系统参数，改参数时文案会自动跟着变。
+                    </p>
+
+                    <!-- 批量导入 -->
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div class="text-sm font-medium text-gray-700 mb-2">批量导入（每行一条，格式：<code>标准问法|标准答法|关键词|分类|角色</code>，后三项可省略）</div>
+                        <textarea id="faq-batch-input" rows="3" placeholder="打手怎么提现？|在「我的工作」→「提现中心」…|提现,取钱|提现|player"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        <div class="flex justify-end mt-2">
+                            <button onclick="batchImportFaqs()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">导入</button>
+                        </div>
+                    </div>
+
+                    <!-- 未命中提问：问答库的反馈闭环 -->
+                    <div id="faq-miss-box" class="mb-4"></div>
+
+                    <div class="flex items-center gap-3 mb-3">
+                        <input id="faq-search" type="text" oninput="renderFaqTable()" placeholder="搜索问法、关键词或答法…"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <span id="faq-count" class="text-sm text-gray-500 whitespace-nowrap"></span>
+                    </div>
+                    <div id="faq-table" class="space-y-2"><div class="loading">加载中...</div></div>
+                </section>
+
                 <!-- 16.8 头像查看弹窗（点击任意头像查看完整大图） -->
                 <div id="avatar-view-modal" class="fixed inset-0 z-50 hidden">
                     <div class="modal-overlay absolute inset-0" onclick="closeAvatarView()"></div>
@@ -1999,9 +2070,12 @@
                 await loadMyProfile();
                 // 台词管理（管理员/客服通用）
                 await loadQuoteManage();
-                // 系统参数仅管理员可见（后端也仅允许管理员修改）
+                // AI 问答库（管理员/客服通用：客服最清楚用户在问什么）
+                await loadAiFaqs();
+                // 系统参数与提示词仅管理员可见（后端也仅允许管理员读写）
                 if (currentUser.role === 'admin') {
                     await loadSystemConfig();
+                    await loadAiPrompts();
                 }
                 // 管理端隐藏充值页的编辑按钮不生效（保留编辑权限），编辑按钮对老板隐藏
                 document.getElementById('recharge-edit-btn').classList.remove('hidden');
@@ -2073,6 +2147,8 @@
                 ]},
                 { group: '系统设置', items: [
                     { key: 'quote-manage', label: '台词管理' },
+                    { key: 'ai-prompt', label: '提示词管理' },
+                    { key: 'ai-faq', label: 'AI 问答库' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2102,7 +2178,9 @@
                     { key: 'player', label: '打手信息' }
                 ]},
                 { group: '系统设置', items: [
-                    { key: 'quote-manage', label: '台词管理' }
+                    { key: 'quote-manage', label: '台词管理' },
+                    // 提示词管理不在此处：提示词含各角色权限清单与安全规则，仅管理员可见
+                    { key: 'ai-faq', label: 'AI 问答库' }
                 ]},
                 { group: '个人中心', items: [
                     { key: 'profile', label: '我的账户' }
@@ -2390,6 +2468,299 @@
                 const res = await apiRequest('/api/config/' + key + '/reset', 'POST');
                 alert(res.message);
                 await loadSystemConfig();
+            } catch (e) { alert(e.message); }
+        }
+
+        // ==================== AI 提示词管理（仅管理员） ====================
+        // 提示词存数据库（ai_prompts），保存后立即生效、无需重启。
+        // 这里只做"改文本 + 预览"两件事：预览按角色真实拼一次完整提示词，
+        // 是调提示词最有效的手段（改一句效果差很多，必须能看到最终结果）。
+        let aiPromptCache = [];
+
+        async function loadAiPrompts() {
+            const box = document.getElementById('ai-prompt-list');
+            if (!box) return;
+            box.innerHTML = '<div class="loading">加载中...</div>';
+            try {
+                const res = await apiRequest('/api/ai/prompts');
+                aiPromptCache = (res && res.items) || [];
+                renderAiPrompts();
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function renderAiPrompts() {
+            const box = document.getElementById('ai-prompt-list');
+            if (!box) return;
+            if (!aiPromptCache.length) {
+                box.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">暂无提示词段落</div>';
+                return;
+            }
+            box.innerHTML = aiPromptCache.map(p => ''
+                + '<div class="border border-gray-200 rounded-lg p-4">'
+                + '  <div class="flex justify-between items-start gap-3 flex-wrap mb-2">'
+                + '    <div class="min-w-0">'
+                + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(p.title || p.section_key)
+                + '        <span class="text-xs text-gray-400 font-normal ml-1">' + escapeHtml(p.section_key) + '</span>'
+                + (p.modified ? '<span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-amber-100 text-amber-700">已改</span>' : '')
+                + (p.enabled ? '' : '<span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-gray-200 text-gray-600">已停用</span>')
+                + '      </div>'
+                + '      <div class="text-xs text-gray-500 mt-1">'
+                + '        v' + p.version + '　优先级 ' + p.priority + '　角色 ' + escapeHtml(p.role_label)
+                + (p.updated_by ? '　最后由 ' + escapeHtml(p.updated_by) + ' 改于 ' + escapeHtml(p.updated_at) : '')
+                + '      </div>'
+                + '    </div>'
+                + '    <div class="flex gap-2 shrink-0">'
+                + '      <button onclick="toggleAiPrompt(\'' + p.section_key + '\',' + (p.enabled ? 0 : 1) + ')"'
+                + '        class="px-2 py-1 text-xs rounded ' + (p.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600') + '">'
+                + (p.enabled ? '启用中' : '已停用') + '</button>'
+                + '      <button onclick="resetAiPrompt(\'' + p.section_key + '\')" class="px-2 py-1 text-xs rounded bg-amber-100 text-amber-700 hover:bg-amber-200">恢复默认</button>'
+                + '    </div>'
+                + '  </div>'
+                + '  <textarea id="prompt-ta-' + p.section_key + '" rows="' + Math.min(16, Math.max(4, Math.ceil((p.content || '').length / 90))) + '"'
+                + '    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500">'
+                + escapeHtml(p.content || '') + '</textarea>'
+                + '  <div class="flex justify-between items-center mt-2 gap-3 flex-wrap">'
+                + '    <div class="text-xs text-gray-400">字符数：<span id="prompt-len-' + p.section_key + '">' + (p.content || '').length + '</span>'
+                + (p.default_content ? '' : '　（自定义段落，无出厂内容）') + '</div>'
+                + '    <button onclick="saveAiPrompt(\'' + p.section_key + '\')" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存</button>'
+                + '  </div>'
+                + '</div>').join('');
+
+            // 实时字数：让管理员对 token 有直觉
+            aiPromptCache.forEach(p => {
+                const ta = document.getElementById('prompt-ta-' + p.section_key);
+                const sp = document.getElementById('prompt-len-' + p.section_key);
+                if (ta && sp) ta.addEventListener('input', () => { sp.textContent = ta.value.length; });
+            });
+        }
+
+        async function saveAiPrompt(key) {
+            const ta = document.getElementById('prompt-ta-' + key);
+            if (!ta) return;
+            try {
+                const res = await apiRequest('/api/ai/prompts/' + key, 'PUT', { content: ta.value });
+                alert(res.message + '（版本 v' + res.item.version + '）');
+                await loadAiPrompts();
+                await previewAiPrompt();   // 顺手刷新预览，立刻看到效果
+            } catch (e) { alert(e.message); }
+        }
+
+        async function toggleAiPrompt(key, enabled) {
+            try {
+                await apiRequest('/api/ai/prompts/' + key, 'PUT', { enabled: enabled });
+                await loadAiPrompts();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function resetAiPrompt(key) {
+            if (!confirm('确定恢复这一段为出厂内容？当前修改会丢失。')) return;
+            try {
+                const res = await apiRequest('/api/ai/prompts/' + key + '/reset', 'POST');
+                alert(res.message);
+                await loadAiPrompts();
+                await previewAiPrompt();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function previewAiPrompt() {
+            const role = document.getElementById('ai-preview-role').value;
+            const q = document.getElementById('ai-preview-question').value.trim();
+            const meta = document.getElementById('ai-preview-meta');
+            const box = document.getElementById('ai-preview-box');
+            meta.textContent = '拼接中…';
+            try {
+                const res = await apiRequest('/api/ai/prompts/preview?role=' + encodeURIComponent(role)
+                    + '&question=' + encodeURIComponent(q));
+                meta.innerHTML = '角色 <b>' + escapeHtml(res.role_label) + '</b>'
+                    + '　样例账号 ' + escapeHtml(res.sample_user)
+                    + '　总长度 <b>' + res.length + '</b> 字符'
+                    + '　问答库命中 <b>' + res.faq_hit_count + '</b> 条'
+                    + (res.faq_hits && res.faq_hits.length
+                        ? '<div class="mt-1 text-gray-600">命中：' + res.faq_hits.map(escapeHtml).join('、') + '</div>'
+                        : '');
+                box.value = res.prompt;
+                box.classList.remove('hidden');
+            } catch (e) {
+                meta.textContent = '预览失败：' + e.message;
+                box.classList.add('hidden');
+            }
+        }
+
+        // ==================== AI 问答库（管理员 / 客服） ====================
+        let faqCache = [];
+        let faqMissCache = [];
+
+        async function loadAiFaqs() {
+            const box = document.getElementById('faq-table');
+            if (!box) return;
+            box.innerHTML = '<div class="loading">加载中...</div>';
+            try {
+                const res = await apiRequest('/api/ai/faqs');
+                faqCache = (res && res.items) || [];
+                renderFaqTable();
+                await loadFaqMisses();
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        async function loadFaqMisses() {
+            const box = document.getElementById('faq-miss-box');
+            if (!box) return;
+            try {
+                const res = await apiRequest('/api/ai/faqs/misses');
+                faqMissCache = (res && res.items) || [];
+            } catch (e) { faqMissCache = []; }
+            if (!faqMissCache.length) { box.innerHTML = ''; return; }
+            const rows = faqMissCache.map(m => ''
+                + '<div class="flex items-start gap-2">'
+                + '  <span class="text-xs text-gray-400 shrink-0 w-10">' + m.count + ' 次</span>'
+                + '  <div class="flex-1 min-w-0 break-words">' + escapeHtml(m.question)
+                + '    <span class="text-xs text-gray-400">（' + escapeHtml(m.role_label) + '）</span></div>'
+                + '  <div class="flex gap-2 shrink-0">'
+                + '    <button onclick="openFaqAddFromMiss(' + m.id + ')" class="text-xs text-blue-600 hover:underline">据此新增</button>'
+                + '    <button onclick="deleteFaqMiss(' + m.id + ')" class="text-xs text-gray-400 hover:underline">忽略</button>'
+                + '  </div>'
+                + '</div>').join('');
+            box.innerHTML = ''
+                + '<div class="border border-amber-300 bg-amber-50 rounded-lg p-4">'
+                + '  <div class="flex justify-between items-center mb-2">'
+                + '    <div class="text-sm font-medium text-amber-700">用户常问但没有命中问答库（' + faqMissCache.length + '）</div>'
+                + '    <button onclick="clearFaqMisses()" class="text-xs text-amber-700 hover:underline shrink-0">全部清空</button>'
+                + '  </div>'
+                + '  <div class="text-sm text-amber-800 space-y-2">' + rows + '</div>'
+                + '  <div class="text-xs text-amber-600/80 mt-3">这些提问没有命中任何问答，AI 只能靠提示词里的规则自由发挥。'
+                + '点「据此新增」补一条标准答法，下次就会被命中。</div>'
+                + '</div>';
+        }
+
+        function renderFaqTable() {
+            const box = document.getElementById('faq-table');
+            const cnt = document.getElementById('faq-count');
+            if (!box) return;
+            const kw = (document.getElementById('faq-search') || {}).value || '';
+            const k = kw.trim().toLowerCase();
+            const list = k
+                ? faqCache.filter(f => (f.question + f.keywords + f.answer + f.category).toLowerCase().includes(k))
+                : faqCache;
+            if (cnt) cnt.textContent = '共 ' + faqCache.length + ' 条' + (k ? '，匹配 ' + list.length + ' 条' : '');
+            if (!list.length) {
+                box.innerHTML = '<div class="text-sm text-gray-400 py-6 text-center">没有匹配的问答</div>';
+                return;
+            }
+            box.innerHTML = list.map(f => ''
+                + '<div class="border border-gray-200 rounded-lg p-4">'
+                + '  <div class="flex justify-between items-start gap-3 flex-wrap">'
+                + '    <div class="flex-1 min-w-0">'
+                + '      <div class="text-sm font-medium text-gray-800 break-words">' + escapeHtml(f.question)
+                + (f.category ? '<span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-600">' + escapeHtml(f.category) + '</span>' : '')
+                + '<span class="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-50 text-blue-700">' + escapeHtml(f.role_label) + '</span>'
+                + (f.hit_count ? '<span class="ml-2 text-xs text-gray-400">命中 ' + f.hit_count + ' 次</span>' : '')
+                + '      </div>'
+                + '      <div class="text-xs text-gray-500 mt-1 break-words">关键词：' + escapeHtml(f.keywords || '（未设置，永远不会被命中）') + '</div>'
+                + '      <div class="text-sm text-gray-600 mt-2 whitespace-pre-line break-words">' + escapeHtml(f.answer) + '</div>'
+                + '    </div>'
+                + '    <div class="flex gap-2 shrink-0">'
+                + '      <button onclick="toggleFaq(' + f.id + ',' + (f.enabled ? 0 : 1) + ')"'
+                + '        class="px-2 py-1 text-xs rounded ' + (f.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600') + '">'
+                + (f.enabled ? '启用中' : '已停用') + '</button>'
+                + '      <button onclick="editFaq(' + f.id + ')" class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200">编辑</button>'
+                + '      <button onclick="deleteFaq(' + f.id + ')" class="px-2 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200">删除</button>'
+                + '    </div>'
+                + '  </div>'
+                + '</div>').join('');
+        }
+
+        // 用 prompt 逐字段询问（与「台词管理」保持同一交互风格）
+        async function openFaqAdd(prefillQuestion) {
+            const question = prompt('标准问法（后台识别用，例如：打手怎么提现？）', prefillQuestion || '');
+            if (question === null || !question.trim()) return;
+            const answer = prompt('标准答法（命中后原样注入 AI 提示词；可用 {参数名} 引用系统参数）');
+            if (answer === null || !answer.trim()) return;
+            const keywords = prompt('命中关键词，逗号分隔（用户提问里出现任一个即命中，例如：提现,取钱,多久到账）');
+            if (keywords === null) return;
+            const category = prompt('分类（可留空，例如：提现）') || '';
+            const role = prompt('生效角色：留空=全角色，或填 admin / service / boss / player', '') || '';
+            try {
+                await apiRequest('/api/ai/faqs', 'POST', {
+                    question: question.trim(), answer: answer.trim(),
+                    keywords: keywords.trim(), category: category.trim(), role: role.trim()
+                });
+                await loadAiFaqs();
+            } catch (e) { alert(e.message); }
+        }
+
+        function openFaqAddFromMiss(id) {
+            const m = faqMissCache.find(x => x.id === id);
+            if (!m) return;
+            openFaqAdd(m.question);
+        }
+
+        async function editFaq(id) {
+            const f = faqCache.find(x => x.id === id);
+            if (!f) return;
+            const question = prompt('标准问法：', f.question);
+            if (question === null) return;
+            if (!question.trim()) { alert('标准问法不能为空'); return; }
+            const answer = prompt('标准答法：', f.answer);
+            if (answer === null) return;
+            if (!answer.trim()) { alert('标准答法不能为空'); return; }
+            const keywords = prompt('命中关键词（逗号分隔）：', f.keywords || '');
+            if (keywords === null) return;
+            const category = prompt('分类：', f.category || '');
+            if (category === null) return;
+            const role = prompt('生效角色（留空=全角色，或 admin/service/boss/player）：', f.role || '');
+            if (role === null) return;
+            try {
+                await apiRequest('/api/ai/faqs/' + id, 'PUT', {
+                    question: question.trim(), answer: answer.trim(),
+                    keywords: keywords.trim(), category: category.trim(), role: role.trim()
+                });
+                await loadAiFaqs();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function toggleFaq(id, enabled) {
+            try {
+                await apiRequest('/api/ai/faqs/' + id, 'PUT', { enabled: enabled });
+                await loadAiFaqs();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function deleteFaq(id) {
+            if (!confirm('确定删除这条问答？删除后相关提问将不再命中。')) return;
+            try {
+                await apiRequest('/api/ai/faqs/' + id, 'DELETE');
+                await loadAiFaqs();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function batchImportFaqs() {
+            const ta = document.getElementById('faq-batch-input');
+            const content = (ta ? ta.value : '').trim();
+            if (!content) { alert('请先粘贴要导入的内容'); return; }
+            try {
+                const res = await apiRequest('/api/ai/faqs/batch-import', 'POST', { content: content });
+                alert(res.message);
+                if (ta) ta.value = '';
+                await loadAiFaqs();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function deleteFaqMiss(id) {
+            try {
+                await apiRequest('/api/ai/faqs/misses/' + id, 'DELETE');
+                await loadFaqMisses();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function clearFaqMisses() {
+            if (!confirm('清空全部「未命中提问」记录？')) return;
+            try {
+                await apiRequest('/api/ai/faqs/misses/clear', 'POST');
+                await loadFaqMisses();
             } catch (e) { alert(e.message); }
         }
 

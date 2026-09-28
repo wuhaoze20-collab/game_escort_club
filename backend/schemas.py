@@ -322,3 +322,33 @@ class BanRequestCreate(BaseModel):
 
 class BanDecisionRequest(BaseModel):
     note: str = ""
+
+# ——— AI 提示词段落（值来自「提示词管理」页，仅管理员可改） ———
+# 全部字段都是可选的：前端只提交改动过的字段，未提交的保持原值。
+# 这样"只改一个开关"不会因为漏传 content 而把正文清空。
+class AiPromptUpdate(BaseModel):
+    content: Optional[str] = None
+    title: Optional[str] = None
+    role: Optional[str] = None      # '' / admin / service / boss / player
+    priority: Optional[int] = None
+    enabled: Optional[int] = None
+
+# ——— AI 问答库（FAQ，管理员+客服可维护） ———
+class AiFaqCreate(BaseModel):
+    question: str
+    answer: str
+    keywords: str = ""
+    category: str = ""
+    role: str = ""
+    enabled: Optional[int] = 1
+
+class AiFaqUpdate(BaseModel):
+    question: Optional[str] = None
+    answer: Optional[str] = None
+    keywords: Optional[str] = None
+    category: Optional[str] = None
+    role: Optional[str] = None
+    enabled: Optional[int] = None
+
+class AiFaqBatchImport(BaseModel):
+    content: str  # 每行一条：「标准问法|标准答法|关键词|分类|角色」

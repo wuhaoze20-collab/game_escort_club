@@ -175,7 +175,9 @@ class SystemConfig(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     config_key = Column(String(50), unique=True, index=True, nullable=False)
-    config_value = Column(String(255), nullable=False)  # 统一以字符串存储，读取时按 value_type 转换
+    config_value = Column(Text, nullable=False)  # 统一以字符串存储，读取时按 value_type 转换
+    # ⚠️ 必须是 Text 而非 String(255)：ai_extra_instruction 这类参数要放整段提示词文本，
+    #    255 会直接报 Data too long（历史上踩过）。新增参数若内容可能很长，都用这一列。
     value_type = Column(String(20), default="str")  # int/float/str/bool/json
     label = Column(String(100), default="")  # 后台显示名
     description = Column(String(255), default="")  # 说明（含单位）
@@ -202,6 +204,71 @@ class AiMessage(Base):
     prompt_tokens = Column(Integer, default=0)  # 本次实际消耗（assistant 消息上记录）
     completion_tokens = Column(Integer, default=0)
     error = Column(String(255), default="")  # 调用失败时的原因（便于排查）
+    tools_used = Column(String(255), default="")  # 本条回答用到的工具名（逗号分隔，便于审计）
+    created_at = Column(DateTime, default=datetime.now)
+
+
+# AI 系统提示词分段表（把原先硬编码在 ai_service.py 里的提示词搬进数据库）
+#
+# 为什么搬进库：提示词需要反复试错（改一句效果差很多），硬编码意味着每次都要改代码 +
+# 重启后端，迭代速度被拖死。搬进库后管理员可在「提示词管理」页直接改、立即生效、可回滚。
+#
+# 设计要点：
+# · 默认值仍保留在 ai_service.PROMPT_SECTIONS 里作为出厂内容与兜底（表为空时用代码默认值），
+#   因此本表为空不会导致 AI 失效。
+# · `role` 为空表示对所有角色生效；填了角色则只注入给该角色（用于角色专属话术）。
+# · `priority` 决定拼接顺序，小的在前。仅影响本表内部顺序；动态块（角色菜单、
+#   平台资料、当前时间）固定排在本表所有段落之后。
+# · `version` 每次保存 +1，配合 ai_messages 可回溯"哪一版提示词答错了"。
+class AiPrompt(Base):
+    __tablename__ = "ai_prompts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    section_key = Column(String(50), unique=True, index=True, nullable=False)  # 段落标识
+    title = Column(String(100), default="")  # 后台显示名
+    content = Column(Text, nullable=False)  # 段落正文
+    role = Column(String(20), default="")  # ''=全角色；admin/service/boss/player=仅该角色
+    priority = Column(Integer, default=100)  # 拼接顺序（小在前）
+    enabled = Column(Integer, default=1)  # 1=注入 0=不注入
+    version = Column(Integer, default=1)  # 每次保存 +1
+    updated_by = Column(String(50), default="")  # 最后修改人
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+# AI 问答库（FAQ）：按关键词命中后只注入相关几条，替代"每次塞全部资料"
+#
+# 为什么需要：`build_knowledge_base()` 会把 8 个内容模块全部塞进提示词。资料一多，
+# 既贵（每次请求都带全文）又会让模型"中间迷失"（长提示词中段利用率下降）。
+# 把高频业务规则做成 FAQ + 关键词命中，只注入 Top N 条，更省也更准。
+class AiFaq(Base):
+    __tablename__ = "ai_faqs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(String(255), nullable=False)  # 标准问法（后台显示用）
+    keywords = Column(String(255), default="")  # 逗号分隔的关键词，用于匹配用户提问
+    answer = Column(Text, nullable=False)  # 标准答法（命中后原样注入提示词）
+    category = Column(String(50), default="")  # 分类（价格/资金/账号…），便于管理
+    role = Column(String(20), default="")  # ''=全角色；否则仅该角色命中
+    enabled = Column(Integer, default=1)
+    hit_count = Column(Integer, default=0)  # 命中次数，用于发现"该补哪类问答"
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+# AI 未命中提问记录：关键词匹配有一条固有短板 —— 管理员不知道"哪些提问没被覆盖"，
+# 于是问答库只能越写越多却不知道补哪里。这里把没命中任何 FAQ 的提问聚合记下来，
+# 管理员在「问答库」页就能看到"用户实际在问什么"，据此新增问答。
+#
+# 按提问原文聚合（同一句只累加 count），因此不会无限膨胀；后台可一键清空。
+class AiFaqMiss(Base):
+    __tablename__ = "ai_faq_misses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(String(255), unique=True, index=True, nullable=False)  # 提问原文（截断）
+    role = Column(String(20), default="")  # 首次记录时的提问角色
+    count = Column(Integer, default=1)  # 累计出现次数
+    last_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     created_at = Column(DateTime, default=datetime.now)
 
 # 拉黑申请表（客服发起，需管理员审核通过才真正执行拉黑）

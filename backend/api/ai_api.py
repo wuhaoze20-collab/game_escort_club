@@ -1,9 +1,11 @@
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import ai_service
+import ai_tools
 import config_service
 from auth import get_current_user
 from database import get_db
@@ -13,6 +15,7 @@ from schemas import AiChatRequest, AiChatResponse
 router = APIRouter(prefix="/api/ai", tags=["AI 客服"])
 
 MAX_MESSAGE_LEN = 1000  # 单条提问字数上限，防止把整个知识库挤掉
+MAX_TOOL_ROUNDS = 3     # 工具调用最多几轮，防止模型反复调同一个工具烧 token
 
 
 def _today_start() -> datetime:
@@ -114,20 +117,70 @@ def ai_chat(
                .all())
     history.reverse()
 
-    messages = [{"role": "system", "content": ai_service.build_system_prompt(db, current_user)}]
+    # 传 text 进去：FAQ 按需注入要用本轮提问做关键词匹配
+    messages = [{"role": "system", "content": ai_service.build_system_prompt(db, current_user, text)}]
     for m in history:
         # 调用失败的助手消息（内容为空）不放进上下文，避免污染
         if m.role == "assistant" and not (m.content or "").strip():
             continue
         messages.append({"role": m.role, "content": m.content})
 
-    # 调用千问（内部已做超时与错误分类，不会抛异常）
-    result = ai_service.chat(
-        messages,
-        model=config_service.get_config("ai_model", db),
-        temperature=float(config_service.get_config("ai_temperature", db)),
-        max_tokens=int(config_service.get_config("ai_max_tokens", db)),
-    )
+    # 按角色暴露工具（无权限的工具根本不给模型看，减少它乱猜）
+    tools = ai_tools.available_tools(current_user.role)
+    model = config_service.get_config("ai_model", db)
+    temperature = float(config_service.get_config("ai_temperature", db))
+    max_tokens = int(config_service.get_config("ai_max_tokens", db))
+
+    # —— 工具调用循环 ——
+    # 模型可能连续要求多个工具（先查余额再查订单）。最多跑 MAX_TOOL_ROUNDS 轮，
+    # 避免模型陷入"反复调同一个工具"的死循环把 token 烧光。
+    used_tools = []
+    prompt_tokens = completion_tokens = 0
+    result = {"ok": False, "reply": "", "error": "未执行", "model": model}
+    for _round in range(MAX_TOOL_ROUNDS):
+        result = ai_service.chat(messages, model=model, temperature=temperature,
+                                 max_tokens=max_tokens, tools=tools or None)
+        prompt_tokens += result.get("prompt_tokens", 0)
+        completion_tokens += result.get("completion_tokens", 0)
+        if not result["ok"]:
+            break
+        tool_calls = result.get("tool_calls") or []
+        if not tool_calls:
+            break
+
+        # 把模型这一轮的"要求调工具"消息原样带上，再逐个追加工具结果
+        messages.append({
+            "role": "assistant",
+            "content": result.get("reply") or "",
+            "tool_calls": tool_calls,
+        })
+        for tc in tool_calls:
+            fn = (tc.get("function") or {})
+            name = fn.get("name") or ""
+            raw_args = fn.get("arguments") or "{}"
+            try:
+                args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+                if not isinstance(args, dict):
+                    args = {}
+            except Exception:
+                args = {}
+            outcome = ai_tools.run_tool(name, args, db, current_user)
+            used_tools.append(name)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id") or name,
+                "content": outcome["result"],
+            })
+    else:
+        # 跑满轮数还没收敛：补一次不带工具的调用，强制它用已有信息作答
+        result = ai_service.chat(messages, model=model, temperature=temperature,
+                                 max_tokens=max_tokens, tools=None)
+        prompt_tokens += result.get("prompt_tokens", 0)
+        completion_tokens += result.get("completion_tokens", 0)
+
+    # 多轮累加 token（覆盖单轮的统计，否则只记了最后一轮）
+    result["prompt_tokens"] = prompt_tokens
+    result["completion_tokens"] = completion_tokens
 
     # 失败也落库，便于排查（内容为空，error 记原因）
     db.add(AiMessage(
@@ -137,6 +190,7 @@ def ai_chat(
         prompt_tokens=result["prompt_tokens"],
         completion_tokens=result["completion_tokens"],
         error=result["error"][:255],
+        tools_used=",".join(used_tools)[:255],
     ))
     conv.updated_at = datetime.now()
     db.commit()

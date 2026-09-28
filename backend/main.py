@@ -24,6 +24,7 @@ from sqlalchemy import text
 from database import engine, SessionLocal, Base, DB_ENGINE
 from seed_default_accounts import seed_default_accounts
 from seed_quotes import seed_quotes
+from seed_ai_content import seed_ai_prompts, seed_ai_faqs
 import config_service
 
 # 导入路由
@@ -39,27 +40,42 @@ from api.notification_api import router as notification_router
 from api.quote_api import router as quote_router
 from api.config_api import router as config_router
 from api.ai_api import router as ai_router
+from api.ai_prompt_api import router as ai_prompt_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
 
 
 # 轻量迁移：旧库自动补充新增列 / 修正列类型（避免删库丢数据）
+#
+# 新增列一律加进 ADD_COLUMNS，格式 (表名, 列名, DDL)。判定走 information_schema，
+# 已存在则跳过，因此每次启动都可安全执行、不会重复 ALTER、不会覆盖数据。
+ADD_COLUMNS = (
+    ("users", "failed_attempts",
+     "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
+    ("users", "lock_until",
+     "ALTER TABLE users ADD COLUMN lock_until DATETIME NULL"),
+    ("users", "account_status",
+     "ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"),
+    # AI 回答用到的工具名（逗号分隔）。用于审计"AI 到底做了哪些查询"，
+    # 出问题时能定位是模型编造还是工具返回了错数据。
+    ("ai_messages", "tools_used",
+     "ALTER TABLE ai_messages ADD COLUMN tools_used VARCHAR(255) DEFAULT ''"),
+)
+
+
 def migrate_db():
     with engine.connect() as conn:
         if DB_ENGINE == "mysql":
             # MySQL：通过 information_schema 检查列是否存在
-            for col, ddl in (
-                ("failed_attempts", "ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"),
-                ("lock_until", "ALTER TABLE users ADD COLUMN lock_until DATETIME NULL"),
-                ("account_status", "ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"),
-            ):
+            for table, col, ddl in ADD_COLUMNS:
                 exists = conn.execute(
                     text("SELECT COUNT(*) FROM information_schema.columns "
-                         "WHERE table_schema = DATABASE() AND table_name='users' AND column_name=:c"),
-                    {"c": col}
+                         "WHERE table_schema = DATABASE() AND table_name=:t AND column_name=:c"),
+                    {"t": table, "c": col}
                 ).scalar()
                 if not exists:
+                    print(f"[migrate] {table}.{col} 缺失，自动补齐…")
                     conn.execute(text(ddl))
             conn.commit()
 
@@ -82,20 +98,44 @@ def migrate_db():
                 print("[migrate] boss_info.balance 已升级为 DECIMAL(10,2)")
         else:
             # SQLite：通过 PRAGMA 检查列是否存在
-            cols = [r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()]
-            if "failed_attempts" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
-            if "lock_until" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN lock_until DATETIME"))
-            if "account_status" not in cols:
-                conn.execute(text("ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"))
+            for table, col, _ddl in ADD_COLUMNS:
+                existing = [r[1] for r in
+                            conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
+                if col not in existing:
+                    # SQLite 的动态类型不需要精确 DDL，这里按列名给一个宽松类型即可
+                    kind = "INTEGER" if col in ("failed_attempts",) else "VARCHAR(255) DEFAULT ''"
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {kind}"))
             # SQLite 是动态类型，列本身无需改类型（Numeric 由 SQLAlchemy 侧处理）
             conn.commit()
 
 
+# 列宽迁移：把 VARCHAR(255) 的列放宽为 TEXT。
+# 为什么需要：`system_config.config_value` 早期是 VARCHAR(255)，而
+# `ai_extra_instruction` 要放整段提示词文本，写入时直接抛
+# DataError(1406, "Data too long for column")。凡"内容可能很长"的配置列都要放宽。
+def migrate_columns_to_text():
+    if DB_ENGINE != "mysql":
+        return  # SQLite 是动态类型，无需处理
+    targets = [("system_config", "config_value"), ("content_config", "config_value")]
+    with engine.connect() as conn:
+        for table, column in targets:
+            data_type = conn.execute(
+                text("SELECT DATA_TYPE FROM information_schema.columns "
+                     "WHERE table_schema = DATABASE() AND table_name=:t AND column_name=:c"),
+                {"t": table, "c": column}
+            ).scalar()
+            if data_type and str(data_type).lower() not in ("text", "mediumtext", "longtext"):
+                print(f"[migrate] {table}.{column} 当前为 {data_type}，放宽为 TEXT…")
+                conn.execute(text(
+                    f"ALTER TABLE {table} MODIFY COLUMN {column} TEXT NOT NULL"))
+                conn.commit()
+                print(f"[migrate] {table}.{column} 已放宽为 TEXT")
+
+
+migrate_columns_to_text()
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.8.0")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.9.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -122,6 +162,7 @@ app.include_router(notification_router)
 app.include_router(quote_router)
 app.include_router(config_router)
 app.include_router(ai_router)
+app.include_router(ai_prompt_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")
@@ -156,6 +197,13 @@ def init_quotes_and_config():
         added_configs = config_service.ensure_defaults(db)
         if added_configs:
             print(f"系统参数表初始化完成：补齐 {added_configs} 项参数")
+        # AI 提示词段落与问答库（同样幂等：表内已有数据则整体跳过）
+        added_prompts = seed_ai_prompts(db)
+        if added_prompts:
+            print(f"AI 提示词段落初始化完成：导入 {added_prompts} 段")
+        added_faqs = seed_ai_faqs(db)
+        if added_faqs:
+            print(f"AI 问答库初始化完成：导入 {added_faqs} 条")
     except Exception as e:
         print(f"[init_quotes_and_config] 初始化异常: {e}")
     finally:

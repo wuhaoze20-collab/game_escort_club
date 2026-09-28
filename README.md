@@ -11,7 +11,7 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 77 个接口）
+│   ├── api/                     # 接口路由（共 89 个接口）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
@@ -24,17 +24,22 @@ game_escort_club/
 │   │   ├── notification_api.py  # 站内消息通知
 │   │   ├── quote_api.py         # 台词增删改查 + 批量导入
 │   │   ├── config_api.py        # 系统参数读取/修改/恢复默认/静默失败留痕清理
-│   │   └── ai_api.py            # AI 客服（千问）：对话/会话/历史
+│   │   ├── ai_api.py            # AI 客服（千问）：对话/会话/历史 + 工具调用循环
+│   │   └── ai_prompt_api.py     # AI 提示词段落与问答库管理 + 提示词预览
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（16 张表）
+│   ├── models.py                # 数据库表模型（19 张表）
 │   ├── schemas.py               # 请求/响应数据模型
 │   ├── auth.py                  # JWT 鉴权与角色权限校验
 │   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
-│   ├── ai_service.py            # AI 客服服务层：拼知识库提示词 + 调用千问
-│   ├── main.py                  # 程序入口（建表 + 自动补列 + 挂载路由与静态目录）
+│   ├── ai_service.py            # AI 提示词装配（数据库段落 + FAQ 注入）+ 调用千问
+│   ├── ai_tools.py              # AI 工具（Function Calling）：查询余额/订单/价格等
+│   ├── main.py                  # 程序入口（建表 + 自动补列/改类型 + 挂载路由与静态目录）
 │   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
 │   ├── seed_quotes.py           # 默认台词初始化（290 条，仅首次导入）
+│   ├── seed_ai_content.py       # 默认提示词段落（5 段）与问答库（22 条）初始化
 │   ├── seed_demo_data.py        # 演示数据填充脚本（可选，手动执行）
+│   ├── check_consistency.py     # 一致性自检：前端菜单 / 后端路由 / AI 角色上下文
+│   ├── check_ai_tools.py        # AI 工具安全性自检：权限边界 + 身份绑定
 │   ├── backup_db.py             # MySQL 备份脚本（mysqldump，默认保留最近 7 份）
 │   ├── requirements.txt         # Python 依赖清单
 │   ├── .env.example             # 环境变量模板（复制为 .env 后填 API Key）
@@ -56,7 +61,7 @@ game_escort_club/
 
 ## 架构说明
 
-### 数据模型（16 张表）
+### 数据模型（19 张表）
 
 | 表 | 作用 | 关键字段与状态 |
 |---|---|---|
@@ -74,7 +79,10 @@ game_escort_club/
 | `quotes` | 顶部台词栏的台词 | `text`、`source`(出处)、`enabled`(1/0，停用不参与轮换)、`sort_order`。**前台台词栏的唯一数据源**，后台「台词管理」可增删改 |
 | `system_config` | 业务参数（键值表） | `config_key` 唯一、`config_value`(字符串存)、`value_type`(int/float/str/json)、`label`/`description`。**抽成比例、冷却天数、各类上限等全部在此**，改完立即生效 |
 | `ai_conversations` | AI 客服会话 | `username`(归属用户)、`title`(由首条提问生成)、`updated_at`。**接口层强制校验归属**，不能读别人的会话 |
-| `ai_messages` | AI 客服消息 | `conversation_id`、`role`(user/assistant)、`content`、`prompt_tokens`/`completion_tokens`(用量统计)、`error`(调用失败原因) |
+| `ai_messages` | AI 客服消息 | `conversation_id`、`role`(user/assistant/tool)、`content`、`prompt_tokens`/`completion_tokens`(用量统计)、`error`(调用失败原因)、`tools_used`(本条回答用到的工具名，用于审计) |
+| `ai_prompts` | **AI 系统提示词段落** | `section_key` 唯一、`content`(段落正文)、`role`(空=全角色，否则仅该角色生效)、`priority`(拼接顺序)、`enabled`、`version`(每次保存+1)、`updated_by`。**提示词不再硬编码在代码里**，后台「提示词管理」可改、立即生效、可恢复出厂 |
+| `ai_faqs` | **AI 问答库** | `question`、`keywords`(逗号分隔，命中用)、`answer`(标准答法)、`category`、`role`(生效角色)、`enabled`、`hit_count`。按提问关键词命中 Top N 条注入提示词，替代"每次塞全部资料" |
+| `ai_faq_misses` | **未命中提问记录** | `question` 唯一、`role`、`count`(累计次数)、`last_at`。问答库的反馈闭环：管理员据此看到"用户常问但没覆盖"的问题并补问答 |
 | `ban_requests` | 客服发起的拉黑申请 | `target_username`/`target_role`、`requested_by`、`reason`、`status`(pending/approved/rejected)、`note`、`processed_by`/`processed_at`。**单独建表而非在 `users` 上加列**：同一账号可能被多次申请（驳回后可再申请），需要留历史 |
 
 > **金额单位与字段类型**（易错，改动前务必先看这里）：
@@ -145,6 +153,8 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 |---|---|---|---|
 | **台词**（290 条，驱动顶部台词栏） | `quotes` 表 | 系统设置 → 台词管理 | 管理员 / 客服 |
 | **业务参数**（18 项） | `system_config` 表 | 系统设置 → 系统参数 | 管理员（客服只读） |
+| **AI 提示词**（5 段） | `ai_prompts` 表 | 系统设置 → 提示词管理 | **管理员**（含各角色权限清单与安全规则，故不对客服开放） |
+| **AI 问答库**（22 条出厂） | `ai_faqs` 表 | 系统设置 → AI 问答库 | 管理员 / 客服 |
 
 **业务参数清单**（`config_service.CONFIG_META`，含默认值与类型校验）：
 
@@ -168,8 +178,9 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 | `ai_daily_limit` | 30 | 每人每日提问上限（0 = 不限制） |
 | `ai_temperature` | 0.3 | 回答随机度，客服场景建议偏低 |
 | `ai_max_tokens` | 800 | 单次回答最大长度 |
-| `ai_extra_instruction` | 空 | 附加到系统提示词末尾的临时话术要求 |
+| `ai_extra_instruction` | 见下 | 附加到系统提示词末尾的临时话术（**出厂内容为常见问答标准答法与语气要求**，可整段改写或清空） |
 | `ai_history_rounds` | 6 | 每次携带的历史对话轮数 |
+| `ai_faq_top_n` | 4 | 问答库按关键词命中的条数上限（0 = 关闭按需注入） |
 
 > 修改参数会**立即生效**（写入即失效缓存）。填了非法值会被拒绝并提示原因（例如比例越界、类型不符），不会写进库。
 > 台词改动会同步影响所有角色的顶部台词栏（前端登录时拉取一次，之后本地 10 秒轮换，不会高频请求后端）。
@@ -194,22 +205,58 @@ venv\Scripts\python.exe main.py
 
 > **不配置也能正常启动**：AI 功能会自动关闭（前端不显示气泡），其它功能完全不受影响。
 
-**工作原理**：每次提问时，后端拼一份系统提示词塞给千问，内容包含四部分：
+**工作原理**：每次提问时，后端拼一份系统提示词塞给千问，按以下顺序组装：
 
-1. **平台知识库** —— `content_config` 的 8 个内容模块（公告/须知/价格/充值/会员/支付/处罚/赛事）
-2. **该用户的真实侧边栏菜单结构** —— 分组与菜单项名称
-3. **该用户的权限** —— 能做什么、**没有权限做什么**
-4. **该用户可做操作的真实路径** —— 如「左侧菜单『店铺运营』→『充值中心』→ 点金额卡片 → 选支付方式 → 确认充值」
+| 顺序 | 内容 | 来源 | 谁能改 |
+|---|---|---|---|
+| ① | **提示词段落**（角色设定、回答规则 1-6、界面与路径 7-10、权限 11-13、安全 14-16） | `ai_prompts` 表 | **管理员**（「系统设置 → 提示词管理」，改完立即生效、可恢复出厂） |
+| ② | 当前用户（称呼、角色） | 运行时 | — |
+| ③ | **该用户的真实侧边栏菜单 + 权限 + 操作路径** | `ai_service.ROLE_MENUS/CAPS/FLOWS` | 改代码（须与前端保持一致） |
+| ④ | **平台知识库** | `content_config` 的 8 个内容模块 | 管理员/客服（内容页编辑） |
+| ⑤ | **问答库命中片段**（按提问关键词挑出 Top N 条） | `ai_faqs` 表 | **管理员/客服**（「AI 问答库」） |
+| ⑥ | 当前时间 | 运行时 | — |
+| ⑦ | 【补充指示】常见问答标准答法与语气要求 | `system_config.ai_extra_instruction` | 管理员（「系统参数」） |
 
 因此：
 
 - **在后台改了价格/公告/充值福利，AI 的回答会自动跟着变** —— 不需要改任何代码
+- **改提示词也不用改代码、不用重启**（V3.9.0 起提示词存数据库），并可在同一页「预览」按角色真实拼一次提示词
 - **AI 是按角色区分的**：打手问"怎么充值"，回答是"充值中心是老板专属，打手账号没有充值入口、无法充值"，**不会**给出一套充值步骤；老板问同样的问题才会拿到真实路径
 - 提示词明确要求"平台资料里没有的就说不确定、**绝不编造价格规则**"
+
+### AI 工具（Function Calling）—— 让 AI 从"会说"到"会查"
+
+V3.9.0 起 AI 可以调用**只读查询工具**，用户问"我还有多少钱""我那单到哪了"时不再只能让用户自己去页面看：
+
+| 工具 | 作用 | 允许角色 |
+|---|---|---|
+| `query_my_orders` | 查**自己**的订单（可按状态过滤） | 老板 / 打手 |
+| `query_my_balance` | 查**自己**的余额（老板=大狗币；打手=后台金额+可提现） | 老板 / 打手 |
+| `query_price` | 查平台价目表（可按游戏/段位过滤） | 全部角色 |
+| `query_my_withdrawals` | 查**自己**的提现记录与可提现金额 | 打手 |
+| `query_monthly_profit` | 查本月盈利与订单总额 | **仅管理员** |
+
+> ⚠️ **三条铁律（`backend/ai_tools.py` 的注释里有详细说明）**：
+> 1. **身份只来自令牌，绝不接受 AI "听来"的参数。** 所有工具函数签名都是 `(db, user)`，
+>    **没有 `username` 参数** —— 就算模型被诱导去查别人，它也无从表达这个意图。
+> 2. **权限与 HTTP 接口同源**：`TOOL_ROLES` 必须与各接口的 `require_roles` 一致，
+>    且每次执行前再校验一次（模型可能编造工具名或越权调用）。
+> 3. **全部只读**：没有下单/提现/拉黑这类写操作。写操作必须由用户在界面上二次确认，
+>    不能让 AI 直接改库。
+>
+> 提示词里的"你没有权限"只是**话术**，上述工具层校验才是安全边界。
 
 > ⚠️ **维护耦合（重要）**：`backend/ai_service.py` 里的 `ROLE_MENUS` / `ROLE_CAPS` / `ROLE_FLOWS`
 > 是菜单与权限的**副本**。**改了前端菜单或接口权限，必须同步这三处**，否则 AI 会按旧结构回答，
 > 给出不存在的菜单项、或越权的操作步骤。前端 `menuConfig` 处也留了同样的提醒注释。
+>
+> **不用靠记 —— 跑一次自检脚本即可**（它会逐字比对，并顺带检查前端调的接口是否真实存在）：
+>
+> ```powershell
+> cd backend
+> venv\Scripts\python.exe check_consistency.py            # 打印报告
+> venv\Scripts\python.exe check_consistency.py --strict   # 有不一致时以非 0 退出（提交前用）
+> ```
 
 **几个容易踩的坑**：
 
@@ -220,7 +267,7 @@ venv\Scripts\python.exe main.py
 | **必须设超时** | 已内置（默认 60 秒）。千问不通时请求会在超时后返回可读提示，不会把后端拖死 |
 | **有每日上限** | 默认每人每天 30 条（`ai_daily_limit`，后台可调），防止被刷导致费用失控 |
 | **不要改成 async** | 调用用的是同步 `requests`，与项目其它接口一致（FastAPI 会放进线程池）。改成 `async def` 会阻塞事件循环 |
-| **菜单/权限改动要同步** | 见上方维护耦合说明；漏改会让 AI 给出错误路径或越权步骤 |
+| **菜单/权限改动要同步** | 漏改会让 AI 给出错误路径或越权步骤。**别靠记 —— 跑 `python check_consistency.py` 自检**，它会逐字比对 ROLE_MENUS 与前端 menuConfig、并抽查 ROLE_FLOWS 里的菜单路径是否真实存在 |
 
 ### 异常留痕（`ops_alerts`）
 
@@ -341,7 +388,7 @@ venv\Scripts\python main.py
 > C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\main.py
 > ```
 
-- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、25 项系统参数）
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、26 项系统参数、5 段 AI 提示词、22 条 AI 问答）
 - 后端服务地址：`http://localhost:8000`
 - 在线接口文档（Swagger）：`http://localhost:8000/docs`
 
@@ -507,7 +554,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **77 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **89 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
@@ -629,18 +676,44 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | GET | /api/ai/status | 查询是否可用、模型、今日剩余次数（前端据此决定是否显示气泡） | 所有登录用户 |
-| POST | /api/ai/chat | 发消息并获取回复（带上会话上下文） | 所有登录用户 |
+| POST | /api/ai/chat | 发消息并获取回复（带上会话上下文；按角色挂载工具，可查余额/订单/价格） | 所有登录用户 |
 | GET | /api/ai/conversations | 我的会话列表 | 所有登录用户 |
 | GET | /api/ai/conversations/{id}/messages | 某会话的历史消息 | **仅会话归属者** |
 | DELETE | /api/ai/conversations/{id} | 删除会话及其消息 | **仅会话归属者** |
 
+### AI 提示词与问答库（12）
+> 提示词段落**仅管理员**可见可改（内容含各角色权限清单与安全规则）；
+> 问答库**管理员 + 客服**均可维护（问答是面向用户的业务口径，客服最清楚用户在问什么）。
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/ai/prompts | 列出全部提示词段落（含出厂内容、版本、修改人、是否已改） | 管理员 |
+| PUT | /api/ai/prompts/{section_key} | 修改某段（内容/标题/生效角色/优先级/启用），每次保存 version+1 | 管理员 |
+| POST | /api/ai/prompts/{section_key}/reset | 该段恢复出厂内容 | 管理员 |
+| GET | /api/ai/prompts/preview | **按角色真实拼一次完整提示词**（可带一句提问检验问答库命中） | 管理员 |
+| GET | /api/ai/faqs | 问答库列表 | 管理员/客服 |
+| POST | /api/ai/faqs | 新增问答（答法里的 `{参数名}` 会校验是否为有效系统参数） | 管理员/客服 |
+| PUT | /api/ai/faqs/{faq_id} | 修改问答（问法/答法/关键词/分类/角色/启停） | 管理员/客服 |
+| DELETE | /api/ai/faqs/{faq_id} | 删除问答 | 管理员/客服 |
+| POST | /api/ai/faqs/batch-import | 批量导入（每行 `问法\|答法\|关键词\|分类\|角色`，后三项可省略，自动跳过重复） | 管理员/客服 |
+| GET | /api/ai/faqs/misses | 用户常问但**没有命中**问答库的提问（按次数排序） | 管理员/客服 |
+| DELETE | /api/ai/faqs/misses/{miss_id} | 忽略某条未命中记录 | 管理员/客服 |
+| POST | /api/ai/faqs/misses/clear | 清空全部未命中记录 | 管理员/客服 |
+
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（16 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+1. 数据库表结构在 `backend/models.py`（19 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
    - `migrate_db()` 除补列外还做**列类型迁移**：例如 `boss_info.balance` 若仍是 `int`，会在启动时自动 `ALTER` 成 `DECIMAL(10,2)`（包含 `NULL` 归零）。迁移前先查 `information_schema` 判断当前类型，**已是目标类型则不执行**，因此可反复重启而不会重复改表
+   - 新增列一律加进 `main.py` 顶部的 `ADD_COLUMNS` 元组，格式 `(表名, 列名, DDL)`；判定走 `information_schema`，已存在则跳过
    - 新增需要小数或不同精度的金额字段时，请同时在 `models.py` 声明正确类型、在 `schemas.py` 用 `float`（用 `int` 会把小数**静默截断**），并在 `migrate_db()` 里补一段类型迁移
-2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；两者都在启动时幂等调用，**已存在的数据不会被覆盖**
+2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；AI 提示词与问答库在 `backend/seed_ai_content.py`。三者都在启动时幂等调用（**各自整体判空**），**已存在的数据不会被覆盖** —— 所以后台删掉的问答或改坏的提示词，重启不会自己回来
 3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
-4. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY` 并收紧 CORS 配置
+   - ⚠️ 新增的配置项若**内容可能很长**（如整段提示词），存量库需要放宽列宽：`main.py` 的 `migrate_columns_to_text()` 已把 `system_config.config_value` 与 `content_config.config_value` 改为 `TEXT`，因为 255 会直接报 `Data too long`（V3.9.0 踩过）
+   - ⚠️ **改了出厂默认值不会影响已初始化的库**（seed 幂等：表非空即整体跳过）。需要让存量库也拿到新内容时，要么在后台界面上改，要么写一个一次性同步脚本按 `question`/`section_key` 找到已有行只更新目标字段（**不要整行覆盖**，否则会冲掉后台的编辑）
+4. **改了前端菜单或接口权限后，跑一次一致性自检**：`venv\Scripts\python.exe check_consistency.py`。它检查 5 件事——ROLE_MENUS 与 menuConfig 是否逐字一致、每个菜单 key 是否都有对应页面、有没有不可达页面、前端调用的接口是否真实存在、ROLE_FLOWS/CAPS 里写的菜单路径是否真实。加 `--strict` 可在不一致时以非 0 退出（适合放进提交前检查），加 `--out 文件名` 可把 UTF-8 报告写文件（Windows 控制台是 GBK，直接重定向会变乱码）
+   - **改了 `ai_tools.py` 后另外跑** `venv\Scripts\python.exe check_ai_tools.py`：它检查 15 项工具层安全边界——敏感工具是否只暴露给有权角色、`TOOLS` 与 `TOOL_ROLES` 是否同步、**所有工具函数签名里有没有身份参数**（这条是防越权的根本）、越权与编造工具名在运行时是否真被拒、结果里是否泄露他人账号、是否都是只读工具。同样支持 `--strict` / `--out`
+5. **AI 的提示词、问答库、工具是三处独立的扩展点**，改动位置分别是：提示词段落（`ai_prompts` 表 / 出厂内容在 `ai_service.PROMPT_SECTIONS`）、问答（`ai_faqs` 表 / 出厂内容在 `seed_ai_content.DEFAULT_FAQS`）、工具（`ai_tools.py` 的 `TOOLS` + `TOOL_ROLES`）。**新增工具必须同步这两个常量并登记到 README 的工具表**
+6. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY`（用环境变量覆盖）并收紧 CORS 配置
+   - ⚠️ 注意：`load_dotenv` 目前只在 `ai_service._load_env()` 里**懒加载**，而 `auth.py` 在 import 阶段就读了 `SECRET_KEY`，因此**把 `SECRET_KEY` 写进 `.env` 不会生效**，必须设**系统环境变量**（或把 `load_dotenv` 提到 `main.py` 最前面）。换密钥会让所有已签发令牌失效，需在无人使用时操作
 
 ## 数据库配置（MySQL）
 
