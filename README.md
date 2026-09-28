@@ -556,6 +556,10 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 共 **89 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
+> 另有一个应用级路由 `GET /`（返回 `frontend/index.html`），它不算业务接口，故未计入 89。
+> 因此 `check_consistency.py` 报告的是 **90 条路由**、归一化后 **85 个路径**（差额来自同一路径的不同方法，
+> 如 `GET`/`POST /api/player/tags`），与 `/openapi.json` 的 `paths` 数量一致。
+
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|

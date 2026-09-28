@@ -105,15 +105,16 @@ def parse_routes():
     """返回 (route_set, path_set)。
 
     route_set 元素是 (方法, 完整路径)，用于统计"多少条路由"；
-    path_set 只有路径（已归一化参数），用于检查"前端调的路径存不存在" ——
+    path_set 只有归一化后的路径，用于检查"前端调的路径存不存在" ——
     后者必须去重，否则 GET/POST 同一个路径（如 /api/player/tags）会被当成两条。
+
+    注意：除 `backend/api/*.py` 的 router 外，还要收 `main.py` 里直接挂在 app 上的
+    应用级路由（当前只有 `GET /` 返回首页），否则总数会与 /openapi.json 对不上。
     """
     route_set = set()
     path_set = set()
-    if not os.path.isdir(API_DIR):
-        err("找不到 backend/api 目录")
-        return route_set, path_set
-    for fn in sorted(os.listdir(API_DIR)):
+
+    for fn in sorted(os.listdir(API_DIR)) if os.path.isdir(API_DIR) else []:
         if not fn.endswith(".py"):
             continue
         src = open(os.path.join(API_DIR, fn), encoding="utf-8").read()
@@ -122,6 +123,17 @@ def parse_routes():
         for m in re.finditer(r'@router\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)["\']', src):
             route_set.add((m.group(1).upper(), prefix + m.group(2)))
             path_set.add(norm_path(prefix + m.group(2)))
+
+    # 应用级路由（@app.get(...) 等），如 main.py 的首页 "/"
+    main_py = os.path.join(BASE_DIR, "main.py")
+    if os.path.isfile(main_py):
+        src = open(main_py, encoding="utf-8").read()
+        for m in re.finditer(r'@app\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)["\']', src):
+            route_set.add((m.group(1).upper(), m.group(2)))
+            path_set.add(norm_path(m.group(2)))
+
+    if not route_set:
+        err("没有解析到任何路由（backend/api 目录或 main.py 有问题？）")
     return route_set, path_set
 
 
@@ -280,8 +292,7 @@ def main():
     print("一致性自检：前端菜单 / 后端路由 / AI 角色上下文")
     print("=" * 66)
     print(f"前端角色 {len(menus)} 个 · 页面 {len(pages)} 个 · 接口调用 {len(calls)} 个")
-    print(f"后端路由 {total_routes} 条（去重后 {total_paths} 个路径；"
-          f"差额来自同一路径的不同方法，如 GET/POST /api/player/tags）")
+    print(f"后端路由 {total_routes} 条（含 main.py 的应用级路由；与 /openapi.json 的 paths 数应当一致）")
     print()
 
     check_a(menus, ai_service)
@@ -320,7 +331,8 @@ def main():
                 "一致性自检：前端菜单 / 后端路由 / AI 角色上下文",
                 "=" * 66,
                 f"前端角色 {len(menus)} 个 · 页面 {len(pages)} 个 · 接口调用 {len(calls)} 个",
-                f"后端路由 {total_routes} 条（去重后 {total_paths} 个路径）",
+                f"后端路由 {total_routes} 条 · 归一化路径 {total_paths} 个"
+                f"（差额来自同一路径的不同方法，如 GET/POST /api/player/tags）",
                 "",
             ]
             with open(sys.argv[i + 1], "w", encoding="utf-8") as f:
