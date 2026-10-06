@@ -1302,6 +1302,23 @@
                     <p class="text-sm text-gray-500 mb-4">抽成比例、提现冷却、登录锁定、各类上限等业务规则集中在此。修改后<b>立即生效</b>，无需改代码或重启服务。</p>
                     <div id="config-alerts"></div>
                     <div id="config-table" class="space-y-3"><div class="loading">加载中...</div></div>
+
+                    <!-- AI 知识库索引（向量检索）：用户协议 / 打手规范 / 退款规则这类长篇文档
+                         由后端 seed_kb_docs.py 提供，不在上面的参数表里编辑；这里只做
+                         「看状态」与「重建索引」。重建会调用千问 embedding 接口（按量计费），
+                         所以默认不动手，且未改动的片段会自动跳过、重复点不重复花钱。 -->
+                    <div class="border border-gray-200 rounded-lg p-4 mt-3">
+                        <div class="flex justify-between items-center mb-2">
+                            <div class="text-sm font-medium text-gray-800">AI 知识库索引（向量检索）</div>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button onclick="loadKbIndexStatus()" class="text-xs text-gray-700 hover:underline">刷新状态</button>
+                                <button onclick="rebuildKbIndex()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
+                            </div>
+                        </div>
+                        <div id="kb-index-status" class="text-xs text-gray-500">加载中...</div>
+                        <div id="kb-index-msg" class="text-xs text-gray-500 mt-1"></div>
+                        <div class="text-xs text-gray-500 mt-2">开关与召回条数在下方参数表（<b>知识库向量检索</b> / <b>知识库召回条数</b>）。改完文档要点一次「重建索引」才会被 AI 检索到。</div>
+                    </div>
                 </section>
 
                 <!-- 16.6 提示词管理（仅管理员） -->
@@ -2388,6 +2405,7 @@
                 configCache = (res && res.items) || [];
                 configAlerts = (res && res.alerts) || [];
                 renderConfigTable();
+                loadKbIndexStatus();
             } catch (e) {
                 box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
             }
@@ -2429,6 +2447,45 @@
                 await apiRequest('/api/config/alerts/clear', 'POST');
                 await loadSystemConfig();
             } catch (e) { alert(e.message); }
+        }
+
+        // ==================== AI 知识库索引（向量检索）====================
+        // 长篇规则文档（用户协议 / 打手规范 / 退款规则）由后端 seed_kb_docs.py 提供，
+        // 正文单独切块并向量化后才能被 AI 检索到。重建会调用千问 embedding 接口（按量计费），
+        // 故不放在启动时自动执行；未改动的片段按 content_hash 自动跳过，重复点不会重复花钱。
+        async function loadKbIndexStatus() {
+            const box = document.getElementById('kb-index-status');
+            if (!box) return;
+            try {
+                const s = await apiRequest('/api/ai/kb/stats');
+                const pend = s.pending_total || 0;
+                box.innerHTML = '已向量化 <b>' + (s.ready_chunks || 0) + '</b> / ' + (s.total_chunks || 0) + ' 段'
+                    + '（' + (s.enabled ? '向量检索已开启' : '向量检索已关闭')
+                    + '，模型 ' + escapeHtml(s.embedding_model || '-')
+                    + '，最多召回 ' + (s.top_k || 0) + ' 段）'
+                    + (pend
+                        ? '　<span class="text-amber-600">有 ' + pend + ' 个来源待重建</span>'
+                        : '　<span class="text-green-600">索引是最新的</span>');
+            } catch (e) {
+                box.innerHTML = '<span class="text-red-500">读取失败：' + escapeHtml(e.message) + '</span>';
+            }
+        }
+
+        async function rebuildKbIndex() {
+            const msg = document.getElementById('kb-index-msg');
+            if (!confirm('重建向量索引会调用千问 embedding 接口（按量计费），未改动的片段会自动跳过。确认继续？')) return;
+            const btns = document.querySelectorAll('#page-system-config button');
+            btns.forEach(b => { b.disabled = true; });
+            if (msg) msg.textContent = '正在重建索引，请稍候（首次可能要十几秒）...';
+            try {
+                const res = await apiRequest('/api/ai/kb/rebuild', 'POST');
+                if (msg) msg.textContent = (res && res.message) || '重建完成';
+            } catch (e) {
+                if (msg) msg.textContent = '重建失败：' + e.message;
+            } finally {
+                btns.forEach(b => { b.disabled = false; });
+                loadKbIndexStatus();
+            }
         }
 
         function renderConfigTable() {
