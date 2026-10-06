@@ -340,11 +340,12 @@ class AiChunk(Base):
     source_type = Column(String(30), nullable=False)  # document / faq
     source_key = Column(String(120), nullable=False)  # kb_documents.doc_key 或 faq:{id}
     chunk_index = Column(Integer, default=0)  # 同一来源内的片段序号
+    parent_id = Column(Integer, nullable=True)  # 父子分块：子块指向父块id；NULL=父块或普通块
     title = Column(String(100), default="")  # 片段所属文档标题（检索结果展示用）
     role = Column(String(20), default="")  # 冗余自来源，''=全角色；否则仅该角色可检索到
     content = Column(Text, nullable=False)  # 片段正文（注入提示词的就是它）
     content_hash = Column(String(32), nullable=False)  # md5(content)，用于跳过未变内容
-    embedding = Column(Text)  # 向量 JSON 数组；NULL 表示尚未向量化
+    embedding = Column(Text)  # 向量 JSON 数组；NULL 表示尚未向量化（父块不向量化）
     dim = Column(Integer, default=0)  # 向量维度（换模型时用于识别不匹配的旧数据）
     model = Column(String(50), default="")  # 生成该向量的模型名
     enabled = Column(Integer, default=1)

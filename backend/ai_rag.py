@@ -229,7 +229,7 @@ def _hard_split(unit: str, size: int) -> list:
 
 
 def chunk_text(text: str, size: int = 500) -> list:
-    """把长文本切成片段。
+    """把长文本切成片段（普通分块，用于FAQ等小单元）。
 
     为什么不用固定字数硬切：中文长文档硬切会在句子甚至词语中间断开，片段语义支离破碎，
     向量也就没意义了（而且检索出来的片段读起来是残句，直接注入提示词更糟）。
@@ -258,6 +258,71 @@ def chunk_text(text: str, size: int = 500) -> list:
     if buf:
         chunks.append(buf)
     return chunks
+
+
+# 父子分块的章节边界：第X章
+_CHAPTER_RE = re.compile(r"(?=第[一二三四五六七八九十百零〇\d]+章)")
+# 父子分块：子块偏移量，避免与父块的 chunk_index 冲突
+_CHILD_INDEX_OFFSET = 100000
+# AutoMerging 阈值：同一父块下命中子块占比超过此值时，自动合并为父块
+_AUTOMERGE_RATIO = 0.5
+
+
+def chunk_parent_child(text: str, child_size: int = 150) -> list:
+    """父子分块（Parent-Child / Small-to-Big Chunking）。
+
+    策略：
+    · 父块：按「第X章」切分，每章一个父块（上下文完整，用于返回给大模型）
+    · 子块：每个父块内按句号/分号切成小片段（检索精准，用于建向量索引）
+    · FAQ 不做父子分块，走普通分块
+
+    返回 [(parent_content, [child_content, ...]), ...]
+    """
+    text = (text or "").strip()
+    if not text:
+        return []
+    child_size = max(60, int(child_size or 150))
+
+    # 按第X章切父块
+    parents = []
+    for chap in _CHAPTER_RE.split(text):
+        chap = chap.strip()
+        if chap:
+            parents.append(chap)
+
+    if not parents:
+        # 没有章节结构的文档：整篇作为一个父块
+        parents = [text]
+
+    result = []
+    for parent in parents:
+        # 父块内按句子切子块，再打包到接近 child_size
+        children = []
+        buf = ""
+        for sent in _SENT_RE.split(parent):
+            sent = (sent or "").strip()
+            if not sent:
+                continue
+            if len(sent) > child_size:
+                if buf:
+                    children.append(buf)
+                    buf = ""
+                for k in range(0, len(sent), child_size):
+                    children.append(sent[k:k + child_size])
+                continue
+            if not buf:
+                buf = sent
+            elif len(buf) + 1 + len(sent) <= child_size:
+                buf = buf + sent
+            else:
+                children.append(buf)
+                buf = sent
+        if buf:
+            children.append(buf)
+        if not children:
+            children = [parent]
+        result.append((parent, children))
+    return result
 
 
 # ——————————————————————————————————————————————
@@ -354,35 +419,69 @@ def collect_sources(db) -> list:
 # ——————————————————————————————————————————————
 
 def rebuild_index(db, force: bool = False) -> dict:
-    """重建向量索引，返回统计信息。
+    """重建向量索引（父子分块版），返回统计信息。
+
+    分块策略：
+    · document 类型：父子分块——父块按「第X章」切（不向量化，用于返回大模型），
+      子块按句子切（向量化，用于检索）
+    · faq 类型：普通块（直接向量化）
 
     · 内容 hash 与模型维度都没变的片段**直接跳过**，不调用 embedding 接口（省钱省时）
     · 源内容里已不存在的片段会被删除
-    · 向量化中途失败时**保留已成功的部分并返回 errors**（不整批回滚）——
-      因为 hash 跳过机制让重跑天然可以断点续传，重跑一次即可补齐
+    · 向量化中途失败时**保留已成功的部分并返回 errors**（不整批回滚）
     """
     from models import AiChunk
 
     model = _embed_model(db)
-    size = _chunk_size(db)
+    child_size = max(60, int(_chunk_size(db) * 0.3))  # 子块约为原chunk_size的30%
 
     # ① 规划出"应该有哪些片段"
+    # plan 格式：{"key": (source_type, source_key, chunk_index), "parent_id": None或父块key,
+    #           "title", "role", "content", "content_hash", "is_parent": bool}
     plan = []
     for src in collect_sources(db):
-        for idx, chunk in enumerate(chunk_text(src["content"], size)):
+        if src["source_type"] == "document":
+            # 父子分块
+            for p_idx, (parent_content, children) in enumerate(
+                    chunk_parent_child(src["content"], child_size)):
+                parent_key = (src["source_type"], src["source_key"], p_idx)
+                # 父块（不向量化）
+                plan.append({
+                    "key": parent_key,
+                    "parent_id": None,
+                    "title": src["title"],
+                    "role": src["role"],
+                    "content": parent_content,
+                    "content_hash": md5_text(parent_content),
+                    "is_parent": True,
+                })
+                # 子块（向量化）
+                for c_idx, child_content in enumerate(children):
+                    child_chunk_index = _CHILD_INDEX_OFFSET + p_idx * 1000 + c_idx
+                    plan.append({
+                        "key": (src["source_type"], src["source_key"], child_chunk_index),
+                        "parent_key": parent_key,
+                        "title": src["title"],
+                        "role": src["role"],
+                        "content": child_content,
+                        "content_hash": md5_text(child_content),
+                        "is_parent": False,
+                    })
+        else:
+            # FAQ：普通块，直接向量化
             plan.append({
-                "source_type": src["source_type"],
-                "source_key": src["source_key"],
-                "chunk_index": idx,
+                "key": (src["source_type"], src["source_key"], 0),
+                "parent_id": None,
                 "title": src["title"],
                 "role": src["role"],
-                "content": chunk,
-                "content_hash": md5_text(chunk),
+                "content": src["content"],
+                "content_hash": md5_text(src["content"]),
+                "is_parent": False,
             })
 
     existing = {(r.source_type, r.source_key, int(r.chunk_index or 0)): r
                 for r in db.query(AiChunk).all()}
-    wanted = {(p["source_type"], p["source_key"], p["chunk_index"]) for p in plan}
+    wanted = {p["key"] for p in plan}
 
     # ② 删掉已不存在的片段
     removed = 0
@@ -392,17 +491,53 @@ def rebuild_index(db, force: bool = False) -> dict:
             existing.pop(key, None)
             removed += 1
 
-    # ③ 挑出需要（重新）向量化的片段
+    # ③ 第一遍：创建/更新父块（不向量化），记录父块id
+    parent_id_map = {}  # parent_key -> parent_row.id
     skipped = 0
-    pending = []
     for p in plan:
-        key = (p["source_type"], p["source_key"], p["chunk_index"])
+        if not p.get("is_parent"):
+            continue
+        key = p["key"]
         row = existing.get(key)
         if (row is not None and not force
                 and row.content_hash == p["content_hash"]
+                and (row.title or "") == p["title"]
+                and (row.role or "") == p["role"]):
+            skipped += 1
+        else:
+            if row is None:
+                row = AiChunk(source_type=p["key"][0], source_key=p["key"][1],
+                              chunk_index=p["key"][2], content=p["content"])
+                db.add(row)
+            row.title = p["title"]
+            row.role = p["role"]
+            row.content = p["content"]
+            row.content_hash = p["content_hash"]
+            row.parent_id = None
+            row.embedding = None  # 父块不向量化
+            row.dim = 0
+            row.model = ""
+            row.enabled = 1
+        db.flush()  # 获取父块id
+        parent_id_map[key] = row.id
+
+    # ④ 第二遍：创建/更新子块和FAQ块（向量化）
+    pending = []  # [(key, row, p)]
+    for p in plan:
+        if p.get("is_parent"):
+            continue
+        key = p["key"]
+        row = existing.get(key)
+        # 确定 parent_id
+        parent_id = None
+        if "parent_key" in p:
+            parent_id = parent_id_map.get(p["parent_key"])
+        if (row is not None and not force
+                and row.content_hash == p["content_hash"]
                 and int(row.dim or 0) == EMBED_DIM
-                and (row.model or "") == model):
-            # 内容与模型都没变 → 只同步可能改过的展示字段，不花向量钱
+                and (row.model or "") == model
+                and (row.parent_id or 0) == (parent_id or 0)):
+            # 内容与模型都没变 → 只同步展示字段
             if (row.title or "") != p["title"] or (row.role or "") != p["role"] \
                     or int(row.enabled or 0) != 1:
                 row.title = p["title"]
@@ -410,22 +545,22 @@ def rebuild_index(db, force: bool = False) -> dict:
                 row.enabled = 1
             skipped += 1
             continue
-        pending.append((key, row, p))
+        pending.append((key, row, p, parent_id))
 
-    # ④ 分批向量化（失败即停，已完成的保留）
+    # ⑤ 分批向量化（失败即停，已完成的保留）
     added = updated = 0
     errors = ""
     for i in range(0, len(pending), EMBED_BATCH):
         group = pending[i:i + EMBED_BATCH]
         try:
-            vecs = embed_texts([p["content"] for _, _, p in group], model)
+            vecs = embed_texts([p["content"] for _, _, p, _ in group], model)
         except Exception as e:
             errors = str(e)
             break
-        for (key, row, p), vec in zip(group, vecs):
+        for (key, row, p, parent_id), vec in zip(group, vecs):
             if row is None:
-                row = AiChunk(source_type=p["source_type"], source_key=p["source_key"],
-                              chunk_index=p["chunk_index"], content=p["content"])
+                row = AiChunk(source_type=key[0], source_key=key[1],
+                              chunk_index=key[2], content=p["content"])
                 db.add(row)
                 added += 1
             else:
@@ -434,6 +569,7 @@ def rebuild_index(db, force: bool = False) -> dict:
             row.role = p["role"]
             row.content = p["content"]
             row.content_hash = p["content_hash"]
+            row.parent_id = parent_id
             row.embedding = json.dumps(vec)
             row.dim = EMBED_DIM
             row.model = model
@@ -441,9 +577,12 @@ def rebuild_index(db, force: bool = False) -> dict:
 
     db.commit()
 
+    parent_count = sum(1 for p in plan if p.get("is_parent"))
+    child_count = sum(1 for p in plan if not p.get("is_parent"))
     return {
         "model": model, "dim": EMBED_DIM,
-        "total": len(plan), "added": added, "updated": updated,
+        "total": len(plan), "parent_chunks": parent_count, "child_chunks": child_count,
+        "added": added, "updated": updated,
         "skipped": skipped, "removed": removed,
         "pending": max(0, len(pending) - added - updated),
         "errors": errors,
@@ -456,9 +595,17 @@ def rebuild_index(db, force: bool = False) -> dict:
 
 def search(db, question: str, role: str, top_k: int = 4,
            min_score: float = 0.35) -> list:
-    """向量检索。**失败抛异常**（由 build_rag_context 兜底降级）。
+    """向量检索（父子分块版）。**失败抛异常**（由 build_rag_context 兜底降级）。
+
+    检索逻辑：
+    1. 只检索有向量的块（子块 + FAQ块），父块不参与检索
+    2. 命中子块后找到所属父块
+    3. AutoMerging：同一父块下命中子块占比超过50%时，自动合并为整个父块
+    4. 否则返回命中子块对应的父块（去重）
+    5. FAQ块直接返回
 
     返回 [{"score": float, "chunk": AiChunk}]，按相似度降序。
+    chunk 可能是父块（合并后）或FAQ块。
     """
     from models import AiChunk
 
@@ -468,12 +615,16 @@ def search(db, question: str, role: str, top_k: int = 4,
 
     qv = embed_texts([question], _embed_model(db))[0]
 
+    # 只检索有向量的块（子块 parent_id IS NOT NULL + FAQ块 parent_id IS NULL 但有向量）
     rows = (db.query(AiChunk)
             .filter(AiChunk.enabled == 1)
+            .filter(AiChunk.embedding.isnot(None))
             .filter(AiChunk.role.in_(["", role or ""]))
             .all())
 
-    hits = []
+    # 计算所有子块和FAQ块的相似度
+    child_hits = []  # [(score, child_row)]
+    faq_hits = []    # [(score, faq_row)]
     for r in rows:
         if not r.embedding:
             continue
@@ -481,15 +632,71 @@ def search(db, question: str, role: str, top_k: int = 4,
             vec = json.loads(r.embedding)
         except Exception:
             continue
-        # 维度不匹配（换过模型又没重建索引）：跳过，否则算出来的是垃圾分数且不会报错
         if not isinstance(vec, list) or len(vec) != len(qv):
             continue
         score = _cosine(qv, vec)
         if score >= min_score:
-            hits.append({"score": round(score, 4), "chunk": r})
+            if r.parent_id:
+                child_hits.append((round(score, 4), r))
+            else:
+                faq_hits.append((round(score, 4), r))
 
-    hits.sort(key=lambda x: -x["score"])
-    return hits[:max(1, int(top_k))]
+    # 按相似度降序
+    child_hits.sort(key=lambda x: -x[0])
+    faq_hits.sort(key=lambda x: -x[0])
+
+    # —— AutoMerging：子块 → 父块 ——
+    # 统计每个父块下的子块总数
+    all_children = (db.query(AiChunk)
+                    .filter(AiChunk.enabled == 1)
+                    .filter(AiChunk.parent_id.isnot(None))
+                    .all())
+    child_count_by_parent = {}
+    for c in all_children:
+        pid = c.parent_id
+        child_count_by_parent[pid] = child_count_by_parent.get(pid, 0) + 1
+
+    # 统计每个父块下命中的子块数和最高相似度
+    parent_hits = {}  # parent_id -> {"max_score": float, "hit_count": int, "children": [rows]}
+    for score, child in child_hits:
+        pid = child.parent_id
+        if pid not in parent_hits:
+            parent_hits[pid] = {"max_score": score, "hit_count": 0, "children": []}
+        parent_hits[pid]["max_score"] = max(parent_hits[pid]["max_score"], score)
+        parent_hits[pid]["hit_count"] += 1
+        parent_hits[pid]["children"].append(child)
+
+    # 获取父块行
+    parent_ids = list(parent_hits.keys())
+    parent_rows = {}
+    if parent_ids:
+        for pr in db.query(AiChunk).filter(AiChunk.id.in_(parent_ids)).all():
+            parent_rows[pr.id] = pr
+
+    # 决定返回父块还是子块
+    result = []
+    for pid, info in parent_hits.items():
+        total = child_count_by_parent.get(pid, 1)
+        ratio = info["hit_count"] / total if total > 0 else 0
+        if ratio >= _AUTOMERGE_RATIO:
+            # 命中超过50% → AutoMerging，返回整个父块
+            parent_row = parent_rows.get(pid)
+            if parent_row:
+                result.append({"score": info["max_score"], "chunk": parent_row,
+                               "merged": True, "hit_ratio": round(ratio, 2)})
+        else:
+            # 否则返回命中的子块对应的父块（去重，每个父块只返回一次）
+            parent_row = parent_rows.get(pid)
+            if parent_row:
+                result.append({"score": info["max_score"], "chunk": parent_row,
+                               "merged": False, "hit_ratio": round(ratio, 2)})
+
+    # FAQ块直接加入
+    for score, faq in faq_hits:
+        result.append({"score": score, "chunk": faq, "merged": False, "hit_ratio": 1.0})
+
+    result.sort(key=lambda x: -x["score"])
+    return result[:max(1, int(top_k))]
 
 
 def stats(db) -> dict:
@@ -497,11 +704,19 @@ def stats(db) -> dict:
     from models import AiChunk
     rows = db.query(AiChunk).all()
     by_type = {}
+    parent_count = 0
+    child_count = 0
     for r in rows:
         by_type[r.source_type] = by_type.get(r.source_type, 0) + 1
+        if r.parent_id is None and r.source_type == "document":
+            parent_count += 1
+        elif r.parent_id is not None:
+            child_count += 1
     ready = [r for r in rows if r.embedding]
     return {
         "total_chunks": len(rows),
+        "parent_chunks": parent_count,
+        "child_chunks": child_count,
         "ready_chunks": len(ready),
         "missing_chunks": len(rows) - len(ready),
         "by_type": by_type,
@@ -529,7 +744,7 @@ def drop_source(db, source_type: str, source_key: str) -> int:
 def pending_sources(db) -> list:
     """哪些来源的内容与索引不一致（即「需要重建索引」）。
 
-    判定方式：把每个来源重新切一遍片段，与 ai_chunks 里现存的逐条比对
+    判定方式：把每个来源重新切一遍片段（父子分块），与 ai_chunks 里现存的逐条比对
     （数量、content_hash、维度、模型）。**只做本地计算，不调用 embedding 接口**，
     因此后台页面可以随时刷新查看。
     """
@@ -539,26 +754,45 @@ def pending_sources(db) -> list:
     for r in db.query(AiChunk).all():
         existing[(r.source_type, r.source_key, int(r.chunk_index or 0))] = r
 
-    size = _chunk_size(db)
+    child_size = max(60, int(_chunk_size(db) * 0.3))
     model = _embed_model(db)
     out = []
     seen = set()
     for src in collect_sources(db):
         st, sk = src["source_type"], src["source_key"]
         seen.add((st, sk))
-        chunks = chunk_text(src["content"], size)
+        # 用父子分块重新规划
+        expected_keys = set()
+        if st == "document":
+            for p_idx, (parent_content, children) in enumerate(
+                    chunk_parent_child(src["content"], child_size)):
+                expected_keys.add((st, sk, p_idx))
+                for c_idx, _ in enumerate(children):
+                    child_idx = _CHILD_INDEX_OFFSET + p_idx * 1000 + c_idx
+                    expected_keys.add((st, sk, child_idx))
+        else:
+            expected_keys.add((st, sk, 0))
+
         missing = 0
-        for idx, ch in enumerate(chunks):
-            row = existing.get((st, sk, idx))
-            if (row is None or not row.embedding
-                    or row.content_hash != md5_text(ch)
-                    or int(row.dim or 0) != EMBED_DIM
-                    or (row.model or "") != model):
+        for key in expected_keys:
+            row = existing.get(key)
+            if row is None:
                 missing += 1
+                continue
+            # 父块只检查 content_hash
+            if key[2] < _CHILD_INDEX_OFFSET and st == "document":
+                if row.content_hash != md5_text(row.content or ""):
+                    missing += 1
+            else:
+                # 子块和FAQ检查向量
+                if (not row.embedding
+                        or int(row.dim or 0) != EMBED_DIM
+                        or (row.model or "") != model):
+                    missing += 1
         if missing:
             out.append({
                 "source_type": st, "source_key": sk, "title": src["title"],
-                "expected": len(chunks), "outdated": missing,
+                "expected": len(expected_keys), "outdated": missing,
             })
     # 已被删除的来源：索引里还留着碎片
     orphans = {}
@@ -597,19 +831,24 @@ def _keyword_faq_hits(db, question: str, role: str, limit: int = 20) -> list:
 def build_rag_context(db, user, question: str, record_miss: bool = True,
                       top_k: int = None, min_score: float = None,
                       debug: dict = None) -> str:
-    """检索并渲染成提示词片段。**任何失败都退回关键词匹配，绝不抛异常。**
+    """检索并渲染成提示词片段（支持查询优化：重写+分解+后退）。**任何失败都退回关键词匹配，绝不抛异常。**
+
+    查询优化流程：
+    1. 用 query_optimizer 生成多个查询（原问题+改写+子查询+后退）
+    2. 对每个查询分别做关键词匹配和向量检索
+    3. 所有查询的检索结果用 RRF 融合（同一文档被多个查询命中，分数累加）
+    4. 取 top_k 条注入提示词
 
     为什么做 RRF 融合而不是二选一：
-    · 向量检索擅长"换个说法也能找到"（用户问"钱什么时候到账"，文档写"结算周期"），
-      但短句、专有名词、精确术语上反而不如字面匹配；
+    · 向量检索擅长"换个说法也能找到"，但短句、专有名词上不如字面匹配；
     · 关键词匹配正好相反。
-    两者排名用 RRF（Reciprocal Rank Fusion）融合 —— 它只看排名不看分数，
-    因此不需要在"关键词得分"和"余弦相似度"这两个量纲完全不同的分数之间找换算系数。
+    · 多查询检索让召回更全面，RRF 让多次命中的文档排名更靠前。
 
     **安全性**：即使向量检索完全失败（没配 Key、索引没建、接口挂了），关键词结果仍会
     照常输出，所以打开本功能不会让召回比原来更差。
     """
     import ai_service
+    import query_optimizer
     from models import AiChunk, AiFaq
 
     question = (question or "").strip()
@@ -617,71 +856,97 @@ def build_rag_context(db, user, question: str, record_miss: bool = True,
         return ""
     role = getattr(user, "role", "") or ""
 
-    kw_hits = _keyword_faq_hits(db, question, role)
+    # —— ① 查询优化：生成多个检索查询 ——
+    queries = query_optimizer.generate_queries(db, question, debug)
+    if not queries:
+        queries = [{"query": question, "type": "original"}]
 
-    vec_hits, vector_error = [], ""
-    try:
-        vec_hits = search(db, question, role,
-                          top_k=_top_k(db) if top_k is None else max(1, int(top_k)),
-                          min_score=(_min_score(db) if min_score is None
-                                     else float(min_score)))
-    except Exception as e:
-        vector_error = str(e)
-        print(f"[rag] 向量检索失败，本轮退回关键词匹配：{e}")
+    # —— ② 对每个查询分别检索 ——
+    all_kw_hits = []   # [(score, faq_row, query_index, rank_in_query)]
+    all_vec_hits = []  # [{"score", "chunk", "query_index", "rank_in_query", "merged", "hit_ratio"}]
+    vector_errors = []
 
-    if not kw_hits and not vec_hits:
+    tk = _top_k(db) if top_k is None else max(1, int(top_k))
+    ms = _min_score(db) if min_score is None else float(min_score)
+
+    for qi, qinfo in enumerate(queries):
+        q = qinfo["query"]
+        # 关键词匹配
+        kw = _keyword_faq_hits(db, q, role)
+        for rank, (s, r) in enumerate(kw):
+            all_kw_hits.append((s, r, qi, rank))
+        # 向量检索
+        try:
+            vec = search(db, q, role, top_k=tk, min_score=ms)
+            for rank, h in enumerate(vec):
+                all_vec_hits.append({
+                    "score": h["score"], "chunk": h["chunk"],
+                    "query_index": qi, "rank_in_query": rank,
+                    "merged": h.get("merged", False),
+                    "hit_ratio": h.get("hit_ratio", 0),
+                })
+        except Exception as e:
+            vector_errors.append(f"[{qinfo.get('type','?')}] {e}")
+            print(f"[rag] 向量检索失败（查询{qi}: {q[:30]}），本轮该查询退回关键词匹配：{e}")
+
+    if not all_kw_hits and not all_vec_hits:
         if record_miss:
             ai_service._record_faq_miss(db, question, role)
         return ""
 
-    # —— RRF 融合 ——
-    # 候选池：key → {"faq": AiFaq 行 或 None, "chunk": AiChunk 行 或 None}
+    # —— ③ RRF 融合（所有查询的排名都算入，同一文档多次命中分数累加）——
     pool = {}
     ranks = {}
 
-    for rank, (_, r) in enumerate(kw_hits):
+    for _s, r, _qi, rank in all_kw_hits:
         key = ("faq", str(r.id), 0)
         pool.setdefault(key, {})["faq"] = r
         ranks[key] = ranks.get(key, 0.0) + 1.0 / (RRF_K + rank + 1)
 
-    for rank, hit in enumerate(vec_hits):
-        c = hit["chunk"]
+    for h in all_vec_hits:
+        c = h["chunk"]
         key = (c.source_type, c.source_key, int(c.chunk_index or 0))
         pool.setdefault(key, {})["chunk"] = c
-        ranks[key] = ranks.get(key, 0.0) + 1.0 / (RRF_K + rank + 1)
+        ranks[key] = ranks.get(key, 0.0) + 1.0 / (RRF_K + h["rank_in_query"] + 1)
 
     ordered = sorted(ranks.items(), key=lambda kv: -kv[1])
 
-    # —— 调试信息（「知识库检索测试」页用；正式问答不传 debug，零开销）——
-    # 没有这些分列数据就无法调试检索质量：只看 AI 的最终回答，永远分不清是
-    # "根本没检索到" 还是 "检索到了但模型没用"。
+    # —— ④ 调试信息（「知识库检索测试」页用）——
     if debug is not None:
-        # 这里也过一遍 render_placeholders：否则「检索测试」页会把 {xxx%} 原样显示出来，
-        # 管理员会误以为占位符没被替换（实际注入提示词时已替换）
+        # 按查询分组展示检索结果
+        per_query = []
+        for qi, qinfo in enumerate(queries):
+            q_kw = [(s, r) for s, r, qidx, _ in all_kw_hits if qidx == qi]
+            q_vec = [h for h in all_vec_hits if h["query_index"] == qi]
+            per_query.append({
+                "query": qinfo["query"],
+                "type": qinfo.get("type", "?"),
+                "keyword_hits": [{"id": r.id,
+                                  "question": ai_service.render_placeholders(r.question, db),
+                                  "score": int(s)}
+                                 for s, r in q_kw[:5]],
+                "vector_hits": [{
+                    "title": h["chunk"].title or "",
+                    "score": h["score"],
+                    "merged": h.get("merged", False),
+                    "hit_ratio": h.get("hit_ratio", 0),
+                    "content": ai_service.render_placeholders(h["chunk"].content or "", db)[:100],
+                } for h in q_vec[:5]],
+            })
         debug.update({
-            "vector_error": vector_error,
-            "keyword_hits": [{"id": r.id,
-                              "question": ai_service.render_placeholders(r.question, db),
-                              "score": int(s)}
-                             for s, r in kw_hits],
-            "vector_hits": [{
-                "source_type": h["chunk"].source_type,
-                "source_key": h["chunk"].source_key,
-                "chunk_index": int(h["chunk"].chunk_index or 0),
-                "title": h["chunk"].title or "",
-                "score": h["score"],
-                "content": ai_service.render_placeholders(h["chunk"].content or "", db),
-            } for h in vec_hits],
+            "vector_error": "; ".join(vector_errors) if vector_errors else "",
+            "all_queries": [{"query": q["query"], "type": q.get("type", "?")} for q in queries],
+            "per_query_results": per_query,
             "fused_keys": [{
                 "source_type": k[0], "source_key": k[1], "chunk_index": k[2],
                 "rrf": round(v, 6),
-            } for k, v in ordered],
+            } for k, v in ordered[:20]],
             "injected_items": 0,
             "injected_chars": 0,
         })
 
-    # —— 渲染（最多 top_k 条，且受 ai_rag_max_chars 总长限制）——
-    top_k_cap = _top_k(db) if top_k is None else max(1, int(top_k))
+    # —— ⑤ 渲染（最多 top_k 条，且受 ai_rag_max_chars 总长限制）——
+    top_k_cap = tk
     limit = _max_chars(db)
     lines, used, picked_faqs = [], 0, []
     for key, _score in ordered:
@@ -694,14 +959,11 @@ def build_rag_context(db, user, question: str, record_miss: bool = True,
             text = ("· 问：" + ai_service.render_placeholders(faq_row.question, db)
                     + "\n  答：" + ai_service.render_placeholders(faq_row.answer, db))
         elif chunk is not None:
-            # 文档正文同样过一遍占位符：管理员在长文档里写 {club_commission_rate%}
-            # 时能自动跟随系统参数，避免文档里的数字悄悄过期
             text = (f"· 【{chunk.title or '知识库'}】\n  "
                     + ai_service.render_placeholders(chunk.content, db))
         else:
             continue
 
-        # 至少保留第一条，否则限量太小时会一条都进不去、检索等于白做
         if limit and lines and used + len(text) > limit:
             break
         lines.append(text)
@@ -716,7 +978,7 @@ def build_rag_context(db, user, question: str, record_miss: bool = True,
     if not lines:
         return ""
 
-    # 命中计数与调用方的 session 一起在本次请求末尾 commit
+    # 命中计数
     for r in picked_faqs:
         try:
             r.hit_count = int(r.hit_count or 0) + 1
@@ -724,7 +986,6 @@ def build_rag_context(db, user, question: str, record_miss: bool = True,
             pass
 
     header = "【知识库检索结果（与用户本轮提问相关，优先按这里的口径回答）】"
-    if vector_error:
-        # 让管理员在后台能看出"这轮为什么只用了关键词"，而不是静默降级
-        print(f"[rag] 本轮仅关键词匹配（向量检索不可用）：{vector_error}")
+    if vector_errors:
+        print(f"[rag] 本轮部分查询向量检索不可用：{'; '.join(vector_errors)}")
     return header + "\n" + "\n".join(lines)
