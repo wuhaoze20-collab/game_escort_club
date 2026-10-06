@@ -35,7 +35,7 @@ VALID_ROLES = ("", "admin", "service", "boss", "player")
 ROLE_LABELS = {"": "全角色", "admin": "管理员", "service": "客服",
                "boss": "老板", "player": "打手"}
 
-_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)\}")
+_PLACEHOLDER_RE = re.compile(r"\{([a-z][a-z0-9_]*)(%?)\}")
 
 
 def _check_role(role: str) -> str:

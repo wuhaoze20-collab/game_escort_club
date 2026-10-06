@@ -25,6 +25,7 @@ from database import engine, SessionLocal, Base, DB_ENGINE
 from seed_default_accounts import seed_default_accounts
 from seed_quotes import seed_quotes
 from seed_ai_content import seed_ai_prompts, seed_ai_faqs
+from seed_kb_docs import seed_kb_docs
 import config_service
 
 # 导入路由
@@ -41,6 +42,7 @@ from api.quote_api import router as quote_router
 from api.config_api import router as config_router
 from api.ai_api import router as ai_router
 from api.ai_prompt_api import router as ai_prompt_router
+from api.ai_rag_api import router as ai_rag_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -135,7 +137,7 @@ def migrate_columns_to_text():
 migrate_columns_to_text()
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="3.9.0")
+app = FastAPI(title="大狗嚼电竞管理系统", version="3.10.0")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com
@@ -163,6 +165,7 @@ app.include_router(quote_router)
 app.include_router(config_router)
 app.include_router(ai_router)
 app.include_router(ai_prompt_router)
+app.include_router(ai_rag_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")
@@ -204,6 +207,13 @@ def init_quotes_and_config():
         added_faqs = seed_ai_faqs(db)
         if added_faqs:
             print(f"AI 问答库初始化完成：导入 {added_faqs} 条")
+        # 知识库文档（用户协议/打手规范/退款规则）。只导入正文，**不在此处建索引** ——
+        # 建索引要调 embedding 接口（有成本、可能因没配 Key 而失败），
+        # 应由管理员在「知识库索引」页显式点「重建索引」触发。
+        added_docs = seed_kb_docs(db)
+        if added_docs:
+            print(f"知识库文档初始化完成：导入 {added_docs} 篇"
+                  f"（尚未建立向量索引，请到「系统设置 → 知识库索引」点「重建索引」）")
     except Exception as e:
         print(f"[init_quotes_and_config] 初始化异常: {e}")
     finally:

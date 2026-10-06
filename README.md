@@ -11,7 +11,7 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 89 个接口）
+│   ├── api/                     # 接口路由（共 99 个接口）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
@@ -25,18 +25,21 @@ game_escort_club/
 │   │   ├── quote_api.py         # 台词增删改查 + 批量导入
 │   │   ├── config_api.py        # 系统参数读取/修改/恢复默认/静默失败留痕清理
 │   │   ├── ai_api.py            # AI 客服（千问）：对话/会话/历史 + 工具调用循环
-│   │   └── ai_prompt_api.py     # AI 提示词段落与问答库管理 + 提示词预览
+│   │   ├── ai_prompt_api.py     # AI 提示词段落与问答库管理 + 提示词预览
+│   │   └── ai_rag_api.py        # AI 知识库文档管理 + 向量索引重建 + 检索测试
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（19 张表）
+│   ├── models.py                # 数据库表模型（21 张表）
 │   ├── schemas.py               # 请求/响应数据模型
 │   ├── auth.py                  # JWT 鉴权与角色权限校验
 │   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
-│   ├── ai_service.py            # AI 提示词装配（数据库段落 + FAQ 注入）+ 调用千问
+│   ├── ai_service.py            # AI 提示词装配（数据库段落 + 知识库检索注入）+ 调用千问
+│   ├── ai_rag.py                # RAG：文档分块 / 千问 embedding / 余弦检索 / RRF 混合
 │   ├── ai_tools.py              # AI 工具（Function Calling）：查询余额/订单/价格等
 │   ├── main.py                  # 程序入口（建表 + 自动补列/改类型 + 挂载路由与静态目录）
 │   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
 │   ├── seed_quotes.py           # 默认台词初始化（290 条，仅首次导入）
 │   ├── seed_ai_content.py       # 默认提示词段落（5 段）与问答库（22 条）初始化
+│   ├── seed_kb_docs.py          # 默认知识库长文档（3 篇：用户协议/打手规范/退款规则）
 │   ├── seed_demo_data.py        # 演示数据填充脚本（可选，手动执行）
 │   ├── check_consistency.py     # 一致性自检：前端菜单 / 后端路由 / AI 角色上下文
 │   ├── check_ai_tools.py        # AI 工具安全性自检：权限边界 + 身份绑定
@@ -61,7 +64,7 @@ game_escort_club/
 
 ## 架构说明
 
-### 数据模型（19 张表）
+### 数据模型（21 张表）
 
 | 表 | 作用 | 关键字段与状态 |
 |---|---|---|
@@ -83,6 +86,8 @@ game_escort_club/
 | `ai_prompts` | **AI 系统提示词段落** | `section_key` 唯一、`content`(段落正文)、`role`(空=全角色，否则仅该角色生效)、`priority`(拼接顺序)、`enabled`、`version`(每次保存+1)、`updated_by`。**提示词不再硬编码在代码里**，后台「提示词管理」可改、立即生效、可恢复出厂 |
 | `ai_faqs` | **AI 问答库** | `question`、`keywords`(逗号分隔，命中用)、`answer`(标准答法)、`category`、`role`(生效角色)、`enabled`、`hit_count`。按提问关键词命中 Top N 条注入提示词，替代"每次塞全部资料" |
 | `ai_faq_misses` | **未命中提问记录** | `question` 唯一、`role`、`count`(累计次数)、`last_at`。问答库的反馈闭环：管理员据此看到"用户常问但没覆盖"的问题并补问答 |
+| `kb_documents` | **知识库长文档** | `doc_key` 唯一(检索来源标识)、`title`、`category`、`content`(纯文本正文)、`role`(空=全角色，否则仅该角色可检索到)、`enabled`、`sort_order`、`version`、`updated_by`。**长篇非结构化文本放这里，不放 `content_config`** —— 后者存的是结构化 JSON，且 8 个模块是无条件全量注入的；长文档全量注入会挤爆上下文并触发"中间迷失" |
+| `ai_chunks` | **向量索引片段** | `source_type`(document/faq)、`source_key`、`chunk_index`、`content`、`content_hash`(md5)、`embedding`(**TEXT 列存 JSON 数组**)、`dim`、`model`、`enabled`；`(source_type, source_key, chunk_index)` 联合唯一。`content_hash` + `dim` + `model` 三者全一致才跳过重新向量化，**是成本控制的核心**（改一篇文档只重算它自己） |
 | `ban_requests` | 客服发起的拉黑申请 | `target_username`/`target_role`、`requested_by`、`reason`、`status`(pending/approved/rejected)、`note`、`processed_by`/`processed_at`。**单独建表而非在 `users` 上加列**：同一账号可能被多次申请（驳回后可再申请），需要留历史 |
 
 > **金额单位与字段类型**（易错，改动前务必先看这里）：
@@ -155,6 +160,9 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 | **业务参数**（18 项） | `system_config` 表 | 系统设置 → 系统参数 | 管理员（客服只读） |
 | **AI 提示词**（5 段） | `ai_prompts` 表 | 系统设置 → 提示词管理 | **管理员**（含各角色权限清单与安全规则，故不对客服开放） |
 | **AI 问答库**（22 条出厂） | `ai_faqs` 表 | 系统设置 → AI 问答库 | 管理员 / 客服 |
+| **知识库长文档**（3 篇出厂：用户协议 / 打手规范 / 退款规则） | `kb_documents` 表 | 系统设置 → 知识库索引 | **管理员** |
+
+> 「知识库索引」页还负责**重建向量索引**与**检索测试**，详见下文「AI 知识库与向量检索（RAG）」。
 
 **业务参数清单**（`config_service.CONFIG_META`，含默认值与类型校验）：
 
@@ -181,13 +189,16 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 | `ai_extra_instruction` | 见下 | 附加到系统提示词末尾的临时话术（**出厂内容为常见问答标准答法与语气要求**，可整段改写或清空） |
 | `ai_history_rounds` | 6 | 每次携带的历史对话轮数 |
 | `ai_faq_top_n` | 4 | 问答库按关键词命中的条数上限（0 = 关闭按需注入） |
+| `ai_rag_*`（6 项） | — | 向量检索开关、Top K、相似度阈值、embedding 模型、分块字数、注入字数上限。**详见下文 RAG 一节** |
 
 > 修改参数会**立即生效**（写入即失效缓存）。填了非法值会被拒绝并提示原因（例如比例越界、类型不符），不会写进库。
 > 台词改动会同步影响所有角色的顶部台词栏（前端登录时拉取一次，之后本地 10 秒轮换，不会高频请求后端）。
 
 ### AI 客服（接入通义千问）
 
-登录后右下角有一个**悬浮气泡**，点开即可对话。它是**客服答疑型**：只依据数据库里的内容配置回答，不查个人订单数据。
+登录后右下角有一个**悬浮气泡**，点开即可对话。它是**客服答疑型**：依据数据库里的内容配置与知识库回答；
+开启 Function Calling 后还能查**提问者自己**的订单、余额与价格（**只读，且身份只来自令牌**）。
+用户协议、打手规范、退款规则等长文档在打开 RAG 开关后走**向量检索**按需注入。
 
 **配置步骤（三步）**：
 
@@ -213,7 +224,7 @@ venv\Scripts\python.exe main.py
 | ② | 当前用户（称呼、角色） | 运行时 | — |
 | ③ | **该用户的真实侧边栏菜单 + 权限 + 操作路径** | `ai_service.ROLE_MENUS/CAPS/FLOWS` | 改代码（须与前端保持一致） |
 | ④ | **平台知识库** | `content_config` 的 8 个内容模块 | 管理员/客服（内容页编辑） |
-| ⑤ | **问答库命中片段**（按提问关键词挑出 Top N 条） | `ai_faqs` 表 | **管理员/客服**（「AI 问答库」） |
+| ⑤ | **知识库检索片段** —— 关闭 RAG 时只按提问关键词从问答库挑 Top N 条；**打开 RAG 后**为「关键词命中 + 向量检索」RRF 融合结果（问答库 + 长文档片段同池竞争） | `ai_faqs` / `kb_documents` → `ai_chunks` | **管理员/客服**（「AI 问答库」）；长文档与向量索引进 **管理员**（「知识库索引」） |
 | ⑥ | 当前时间 | 运行时 | — |
 | ⑦ | 【补充指示】常见问答标准答法与语气要求 | `system_config.ai_extra_instruction` | 管理员（「系统参数」） |
 
@@ -245,6 +256,76 @@ V3.9.0 起 AI 可以调用**只读查询工具**，用户问"我还有多少钱"
 >    不能让 AI 直接改库。
 >
 > 提示词里的"你没有权限"只是**话术**，上述工具层校验才是安全边界。
+
+### AI 知识库与向量检索（RAG）
+
+V3.10.0 起，长篇非结构化文本（**用户服务协议、打手服务规范、退款与争议处理规则**）有了专门的去处，
+并通过**千问 embedding + 向量检索**按需注入提示词，而不是全文塞进上下文。
+
+**为什么不能只靠全量注入**：8 个内容模块（公告/须知/价格…）是无条件全量注入的，总长不过几千字；
+但一篇用户协议就是 5 千字，三篇约 1.4 万字。全塞进去既贵（每次提问都付费）又差
+（长上下文会「中间迷失」，模型反而抓不住当前问题相关的那几条）。
+
+**分工原则（务必遵守）**：
+
+| 数据类型 | 例子 | 用什么 |
+|---|---|---|
+| 结构化 / 需要精确 | 价格表、我的余额、本月盈利、我的订单 | **SQL 或 Function Calling 工具** |
+| 短篇非结构化 | 公告、充值福利、会员权益 | 全量注入（现状即可） |
+| **长篇非结构化** | 用户协议、服务规范、退款规则 | **向量检索（本节）** |
+
+> ⚠️ **绝不用向量检索替代结构化查询**。把 `query_price` 换成向量检索，结果会从"精确匹配"
+> 退化成"语义相近"，**可能报出错的价格**——这是事故，不是体验问题。
+
+**检索流程**（`backend/ai_rag.py` 的 `build_rag_context`）：
+
+```
+用户提问
+  ├─ 关键词命中（复用问答库的 _faq_score）      → 排名 A
+  └─ 向量检索（embedding 余弦相似度 ≥ min_score）→ 排名 B
+        └─ RRF 融合（Reciprocal Rank Fusion, k=60）→ 取前 top_k 条 → 注入提示词
+```
+
+**为什么用 RRF 而不是加权求和**：关键词得分（命中词长度之和，量纲是"字符数"）与余弦相似度
+（0~1）根本不可比，硬要加权就得拍一个换算系数，且每次调参都要重测。RRF 只看**排名**、
+不需要换算，是混合检索的标准做法。
+
+**两条硬护栏**（各自对应一个真实事故）：
+
+| 护栏 | 不做会怎样 |
+|---|---|
+| `ai_rag_min_score` 阈值（默认 0.35） | 低分片段被硬塞进提示词，模型会**照着不相关的内容编答案**——比不注入更差 |
+| `dim` + `model` 必须与查询向量一致 | 换了 embedding 模型后新旧向量混算，相似度全是垃圾**而且不报错**，检索静默失效 |
+| embedding 失败时降级回关键词 | 千问接口一抖，整个 AI 聊天全挂；降级后至少问答库还工作 |
+| `content_hash` 一致则跳过 | 每次点重建都重算全库，账单与延迟失控（实测 52 段全跳过只需 0 元、秒回） |
+
+**配置步骤**：
+
+1. 按上文配好 `.env` 的 `DASHSCOPE_API_KEY`（与 AI 聊天同一个 Key），重启后端
+2. 用管理员登录 →「系统设置 → **知识库索引**」→ 点 **重建索引**（会真实调用千问 embedding，产生少量费用）
+3. 在**检索测试**区选角色、输入一句真实提问，检查命中质量（页面会列出关键词分、向量相似度、
+   融合后实际注入的文本）——确认无误后再打开开关
+4. 回到「系统参数」把 **`ai_rag_enabled` 改为 `true`**。**出厂默认是关闭的**，
+   即装即用不会因为没建索引而报错
+
+**相关系统参数**（6 项，均在「系统参数」页可改）：
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `ai_rag_enabled` | `false` | **总开关。出厂关闭**，避免新环境没建索引就启用 |
+| `ai_rag_top_k` | `4` | 融合后最多注入几段 |
+| `ai_rag_min_score` | `0.35` | 相似度低于此值的向量命中直接丢弃 |
+| `ai_rag_embedding_model` | `text-embedding-v3` | 换模型必须点「重建索引」全量重算 |
+| `ai_rag_chunk_size` | `500` | 文档分块目标字数（按语义单元打包，避免中文硬切出残句） |
+| `ai_rag_max_chars` | `3000` | 注入片段的总字数上限（至少保留第一条） |
+
+> **`{占位符}` 与 `{占位符%}`**：文档正文与问答答法里都可以写 `{config_key}`，注入时替换成系统参数当前值。
+> 比例类参数（库里存的是 `0.3` 这种 0~1 小数）**必须写 `{config_key%}`**，会渲染成「30%」；
+> 写成 `{config_key}` 会渲染成「0.3」，AI 照念后用户会理解成 0.3 元或 0.3%（V3.10.0 踩过）。
+
+> **为什么向量存在 TEXT 列而不是 VECTOR 列**：MySQL **9.0 才引入 `VECTOR` 类型**，本项目用的 8.2 没有。
+> 片段量级只有几十到几百条，用纯 Python 算余弦完全够快，比引入 faiss/chromadb 更可靠
+> （不加部署负担、不新增依赖）。片段上万条时再考虑迁移。
 
 > ⚠️ **维护耦合（重要）**：`backend/ai_service.py` 里的 `ROLE_MENUS` / `ROLE_CAPS` / `ROLE_FLOWS`
 > 是菜单与权限的**副本**。**改了前端菜单或接口权限，必须同步这三处**，否则 AI 会按旧结构回答，
@@ -388,7 +469,7 @@ venv\Scripts\python main.py
 > C:\Users\18642\game_escort_club\backend\venv\Scripts\python.exe C:\Users\18642\game_escort_club\backend\main.py
 > ```
 
-- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、26 项系统参数、5 段 AI 提示词、22 条 AI 问答）
+- 启动成功标志：终端出现 `Uvicorn running on http://127.0.0.1:8000`，且首次启动自动完成**建表 + 初始化默认数据**（11 个测试账号、公告/价格等默认内容、6 名打手、290 条台词、32 项系统参数、5 段 AI 提示词、22 条 AI 问答、3 篇知识库文档）
 - 后端服务地址：`http://localhost:8000`
 - 在线接口文档（Swagger）：`http://localhost:8000/docs`
 
@@ -554,9 +635,9 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **89 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **99 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
-> 另有一个应用级路由 `GET /`（返回 `frontend/index.html`），它不算业务接口，故未计入 89。
+> 另有一个应用级路由 `GET /`（返回 `frontend/index.html`），它不算业务接口，故未计入 99。
 > 因此 `check_consistency.py` 报告的是 **90 条路由**、归一化后 **85 个路径**（差额来自同一路径的不同方法，
 > 如 `GET`/`POST /api/player/tags`），与 `/openapi.json` 的 `paths` 数量一致。
 
@@ -704,18 +785,37 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | DELETE | /api/ai/faqs/misses/{miss_id} | 忽略某条未命中记录 | 管理员/客服 |
 | POST | /api/ai/faqs/misses/clear | 清空全部未命中记录 | 管理员/客服 |
 
+### AI 知识库与向量检索（10）
+> **文档管理仅管理员**（正文包含平台规则原话，且改动直接影响 AI 口径）；
+> **阅读接口四角色都可**——「用户协议」是给所有用户看的页面。
+
+| 方法 | 路径 | 说明 | 权限 |
+|---|---|---|---|
+| GET | /api/ai/kb/documents | 文档列表（含正文、字数、版本、修改人、是否已过期未重建） | 管理员 |
+| POST | /api/ai/kb/documents | 新增文档（`doc_key` 唯一，须为字母开头的标识符） | 管理员 |
+| PUT | /api/ai/kb/documents/{doc_key} | 修改文档（**全字段可选**；改了正文/角色/启停会返回 `index_stale` 提示重建） | 管理员 |
+| DELETE | /api/ai/kb/documents/{doc_key} | 删除文档，并连带清掉它的全部索引片段 | 管理员 |
+| GET | /api/ai/kb/library | 我**有权阅读**的文档列表（仅 `enabled` 且角色匹配，**不含正文**） | 所有登录用户 |
+| GET | /api/ai/kb/library/{doc_key} | 阅读某篇文档正文（无权限一律 404，**不泄露其它角色文档的存在性**） | 所有登录用户 |
+| POST | /api/ai/kb/rebuild | **重建向量索引**（真实调用千问 embedding；`?force=true` 忽略 hash 强制重算） | 管理员 |
+| GET | /api/ai/kb/stats | 索引统计（片段数/已向量化/字数/模型/维度/待重建来源） | 管理员 |
+| GET | /api/ai/kb/chunks | 查看某来源切出的片段（调试分块效果用） | 管理员 |
+| POST | /api/ai/kb/search | **检索测试**：返回关键词命中、向量相似度、融合结果与实际注入文本 | 管理员 |
+
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（19 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+1. 数据库表结构在 `backend/models.py`（21 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
    - `migrate_db()` 除补列外还做**列类型迁移**：例如 `boss_info.balance` 若仍是 `int`，会在启动时自动 `ALTER` 成 `DECIMAL(10,2)`（包含 `NULL` 归零）。迁移前先查 `information_schema` 判断当前类型，**已是目标类型则不执行**，因此可反复重启而不会重复改表
    - 新增列一律加进 `main.py` 顶部的 `ADD_COLUMNS` 元组，格式 `(表名, 列名, DDL)`；判定走 `information_schema`，已存在则跳过
    - 新增需要小数或不同精度的金额字段时，请同时在 `models.py` 声明正确类型、在 `schemas.py` 用 `float`（用 `int` 会把小数**静默截断**），并在 `migrate_db()` 里补一段类型迁移
-2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；AI 提示词与问答库在 `backend/seed_ai_content.py`。三者都在启动时幂等调用（**各自整体判空**），**已存在的数据不会被覆盖** —— 所以后台删掉的问答或改坏的提示词，重启不会自己回来
+2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；AI 提示词与问答库在 `backend/seed_ai_content.py`；知识库长文档在 `backend/seed_kb_docs.py`。都在启动时幂等调用（**各自整体判空**），**已存在的数据不会被覆盖** —— 所以后台删掉的问答或改坏的提示词，重启不会自己回来
+   - ⚠️ **`seed_kb_docs.py` 里的 3 篇文档写的全是平台真实规则**（抽成 30%、提现冷却 30 天、单笔充值上限 10 万元等）。**改了业务规则必须同步改这个文件**，否则新环境初始化出来的文档就是错的，AI 会照着一份过时的协议回答。存量库则需要在「知识库索引」页手工改（seed 幂等不会覆盖）
+   - ⚠️ 启动时**只写入文档、不建索引**：建索引要真实调用 embedding 接口有成本，且没配 Key 时会失败。必须由管理员在「知识库索引」页显式点「重建索引」
 3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
    - ⚠️ 新增的配置项若**内容可能很长**（如整段提示词），存量库需要放宽列宽：`main.py` 的 `migrate_columns_to_text()` 已把 `system_config.config_value` 与 `content_config.config_value` 改为 `TEXT`，因为 255 会直接报 `Data too long`（V3.9.0 踩过）
    - ⚠️ **改了出厂默认值不会影响已初始化的库**（seed 幂等：表非空即整体跳过）。需要让存量库也拿到新内容时，要么在后台界面上改，要么写一个一次性同步脚本按 `question`/`section_key` 找到已有行只更新目标字段（**不要整行覆盖**，否则会冲掉后台的编辑）
 4. **改了前端菜单或接口权限后，跑一次一致性自检**：`venv\Scripts\python.exe check_consistency.py`。它检查 5 件事——ROLE_MENUS 与 menuConfig 是否逐字一致、每个菜单 key 是否都有对应页面、有没有不可达页面、前端调用的接口是否真实存在、ROLE_FLOWS/CAPS 里写的菜单路径是否真实。加 `--strict` 可在不一致时以非 0 退出（适合放进提交前检查），加 `--out 文件名` 可把 UTF-8 报告写文件（Windows 控制台是 GBK，直接重定向会变乱码）
    - **改了 `ai_tools.py` 后另外跑** `venv\Scripts\python.exe check_ai_tools.py`：它检查 15 项工具层安全边界——敏感工具是否只暴露给有权角色、`TOOLS` 与 `TOOL_ROLES` 是否同步、**所有工具函数签名里有没有身份参数**（这条是防越权的根本）、越权与编造工具名在运行时是否真被拒、结果里是否泄露他人账号、是否都是只读工具。同样支持 `--strict` / `--out`
-5. **AI 的提示词、问答库、工具是三处独立的扩展点**，改动位置分别是：提示词段落（`ai_prompts` 表 / 出厂内容在 `ai_service.PROMPT_SECTIONS`）、问答（`ai_faqs` 表 / 出厂内容在 `seed_ai_content.DEFAULT_FAQS`）、工具（`ai_tools.py` 的 `TOOLS` + `TOOL_ROLES`）。**新增工具必须同步这两个常量并登记到 README 的工具表**
+5. **AI 的提示词、问答库、长文档、工具是四处独立的扩展点**，改动位置分别是：提示词段落（`ai_prompts` 表 / 出厂内容在 `ai_service.PROMPT_SECTIONS`）、问答（`ai_faqs` 表 / 出厂内容在 `seed_ai_content.DEFAULT_FAQS`）、长文档（`kb_documents` 表 / 出厂内容在 `seed_kb_docs.DEFAULT_KB_DOCS`，改完要重建索引）、工具（`ai_tools.py` 的 `TOOLS` + `TOOL_ROLES`）。**新增工具必须同步这两个常量并登记到 README 的工具表**
 6. 生产环境请修改 `backend/auth.py` 的 `SECRET_KEY`（用环境变量覆盖）并收紧 CORS 配置
    - ⚠️ 注意：`load_dotenv` 目前只在 `ai_service._load_env()` 里**懒加载**，而 `auth.py` 在 import 阶段就读了 `SECRET_KEY`，因此**把 `SECRET_KEY` 写进 `.env` 不会生效**，必须设**系统环境变量**（或把 `load_dotenv` 提到 `main.py` 最前面）。换密钥会让所有已签发令牌失效，需在无人使用时操作
 

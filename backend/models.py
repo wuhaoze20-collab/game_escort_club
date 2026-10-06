@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Numeric
+from sqlalchemy import (Column, Integer, String, Float, DateTime, Text,
+                        ForeignKey, Numeric, UniqueConstraint)
 from datetime import datetime
 from database import Base
 
@@ -288,3 +289,68 @@ class BanRequest(Base):
     processed_by = Column(String(50), default="")  # 审核人
     created_at = Column(DateTime, default=datetime.now)
     processed_at = Column(DateTime, nullable=True)
+
+
+# 知识库文档表（长篇纯文本：用户服务协议、打手服务规范、退款与争议规则等）
+#
+# 为什么不塞进 content_config：
+# · content_config 的 8 个模块是**结构化 JSON**，前端有对应的表格/卡片渲染函数，
+#   而且每轮都被 build_knowledge_base() 全量注入提示词。长文档是**纯文本**、动辄上万字，
+#   全量注入既贵，又会让模型"中间迷失"（长提示词中段利用率下降）。
+# · 长文档的正确用法是「切成片段 + 按提问检索相关片段」，因此需要被独立索引
+#   （见 ai_rag.py）。混进 content_config 会同时破坏前端的结构化渲染和
+#   content_api 的 VALID_CONFIG_KEYS 白名单校验。
+class KbDocument(Base):
+    __tablename__ = "kb_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doc_key = Column(String(50), unique=True, index=True, nullable=False)  # 文档标识
+    title = Column(String(100), nullable=False)  # 文档标题
+    category = Column(String(50), default="")  # 分类（协议条款/服务规范/交易规则…）
+    content = Column(Text, nullable=False)  # 正文（纯文本，用换行分段）
+    role = Column(String(20), default="")  # ''=所有角色可见；否则仅该角色
+    enabled = Column(Integer, default=1)  # 1=可被检索与查看 0=停用
+    sort_order = Column(Integer, default=0)  # 排序（小在前）
+    version = Column(Integer, default=1)  # 每次保存 +1
+    updated_by = Column(String(50), default="")  # 最后修改人
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+# AI 知识库向量索引表（RAG 检索层）
+#
+# 为什么需要向量检索：`content_config` 的内容可以全量塞进提示词（总共才 3 千字符），
+# 但长篇文档不行 —— 三份协议类文档就上万字。全量注入会让提示词膨胀十几倍，
+# 既贵又降低模型对中段内容的利用率。向量检索能只把"和本轮提问真正相关的几个片段"
+# 送进提示词。
+#
+# 存储方式（**MySQL 8.2 没有 VECTOR 列类型**，那是 MySQL 9.0 才引入的）：
+# · 向量以 JSON 数组存进 TEXT 列，相似度在 Python 里算余弦。
+# · 语料量级（几千到几万字符 → 几十到几百个 chunk）下，暴力遍历比引入
+#   faiss/chromadb 更简单可靠，也不增加部署负担。
+# · 若将来 chunk 数上万，再换 MySQL 9 的 VECTOR 或外部向量库；
+#   届时 `model` + `dim` 两列可用于识别并重建旧向量。
+#
+# `content_hash` 是关键的成本控制：只有内容真的变了才重新调用 embedding 接口，
+# 否则后台每保存一次文档都要把整库重算一遍（又慢又花钱）。
+class AiChunk(Base):
+    __tablename__ = "ai_chunks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_type = Column(String(30), nullable=False)  # document / faq
+    source_key = Column(String(120), nullable=False)  # kb_documents.doc_key 或 faq:{id}
+    chunk_index = Column(Integer, default=0)  # 同一来源内的片段序号
+    title = Column(String(100), default="")  # 片段所属文档标题（检索结果展示用）
+    role = Column(String(20), default="")  # 冗余自来源，''=全角色；否则仅该角色可检索到
+    content = Column(Text, nullable=False)  # 片段正文（注入提示词的就是它）
+    content_hash = Column(String(32), nullable=False)  # md5(content)，用于跳过未变内容
+    embedding = Column(Text)  # 向量 JSON 数组；NULL 表示尚未向量化
+    dim = Column(Integer, default=0)  # 向量维度（换模型时用于识别不匹配的旧数据）
+    model = Column(String(50), default="")  # 生成该向量的模型名
+    enabled = Column(Integer, default=1)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_key", "chunk_index",
+                         name="uk_ai_chunk_src"),
+    )

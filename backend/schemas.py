@@ -352,3 +352,28 @@ class AiFaqUpdate(BaseModel):
 
 class AiFaqBatchImport(BaseModel):
     content: str  # 每行一条：「标准问法|标准答法|关键词|分类|角色」
+
+# ——— AI 知识库文档（长篇纯文本，供向量检索；仅管理员可维护） ———
+class KbDocumentCreate(BaseModel):
+    doc_key: str          # 文档标识（英文/数字/下划线），同时作为检索来源 key
+    title: str
+    content: str
+    category: str = ""
+    role: str = ""        # ''=所有角色可检索；否则仅该角色
+    enabled: Optional[int] = 1
+    sort_order: int = 0
+
+class KbDocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[str] = None
+    role: Optional[str] = None
+    enabled: Optional[int] = None
+    sort_order: Optional[int] = None
+
+# ——— 知识库检索测试（仅管理员，用于验证检索质量） ———
+class AiRagSearchRequest(BaseModel):
+    question: str
+    role: str = ""
+    top_k: Optional[int] = None
+    min_score: Optional[float] = None

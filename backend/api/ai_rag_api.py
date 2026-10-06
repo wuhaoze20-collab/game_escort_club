@@ -1,0 +1,387 @@
+# -*- coding: utf-8 -*-
+"""AI 知识库（长篇文档）与向量检索的管理接口。
+
+职责：
+· 知识库文档的增删改查 —— **仅管理员**。这些是面向用户的协议与规则文本，法律含义强，
+   与「提示词管理」同一考虑：属于系统级内容，不适合交给客服改。
+· 向量索引的重建 / 统计 / 检索测试 —— 仅管理员。
+
+两个刻意的设计选择：
+1. 文档的**管理**仅管理员，但文档的**阅读**对所有已登录角色开放（`/library` 一组接口）。
+   用户协议本来就是给用户看的；这个页面同时兼作"改完文档肉眼确认效果"的入口。
+2. 文档带 `role` 字段：空 = 所有角色都可检索可阅读；填了角色则只有该角色看得到
+   （例如《打手服务规范与行为准则》只给打手看）。
+
+⚠️ 修改文档后索引会**立即失效**（见 `_invalidate`）。宁可让这篇文档暂时检索不到，
+也不能让 AI 拿着过期条款回答用户 —— 所以不提供"静默过期"的选项。
+"""
+
+import re
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+import ai_rag
+import config_service
+from auth import require_roles
+from database import get_db
+from models import AiChunk, KbDocument, User
+from schemas import AiRagSearchRequest, KbDocumentCreate, KbDocumentUpdate
+
+router = APIRouter(prefix="/api/ai/kb", tags=["AI 知识库与向量检索"])
+
+VALID_ROLES = ("", "admin", "service", "boss", "player")
+ROLE_LABELS = {"": "全角色", "admin": "管理员", "service": "客服",
+               "boss": "老板", "player": "打手"}
+
+# doc_key 限制为英文/数字/下划线/短横线：它同时是检索来源 key，
+# 允许中文或空格会在日志、调试输出和 URL 里造成麻烦
+_DOC_KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-]{1,49}$")
+
+
+def _check_role(role: str) -> str:
+    role = (role or "").strip()
+    if role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"无效的角色：{role or '(空)'}")
+    return role
+
+
+def _check_doc_key(key: str) -> str:
+    key = (key or "").strip()
+    if not _DOC_KEY_RE.match(key):
+        raise HTTPException(
+            status_code=400,
+            detail="文档标识只能由字母开头、包含字母/数字/下划线/短横线，长度 2~50"
+                   "（它会作为检索来源 key，不能用中文或空格）",
+        )
+    return key
+
+
+def _serialize_doc(d: KbDocument, with_content: bool = True) -> dict:
+    out = {
+        "id": d.id,
+        "doc_key": d.doc_key,
+        "title": d.title or "",
+        "category": d.category or "",
+        "role": d.role or "",
+        "role_label": ROLE_LABELS.get(d.role or "", d.role or "全角色"),
+        "enabled": int(d.enabled or 0),
+        "sort_order": int(d.sort_order or 0),
+        "version": int(d.version or 1),
+        "chars": len(d.content or ""),
+        "updated_by": d.updated_by or "",
+        "updated_at": d.updated_at.strftime("%Y-%m-%d %H:%M") if d.updated_at else "",
+    }
+    if with_content:
+        out["content"] = d.content or ""
+    return out
+
+
+def _invalidate(db, doc_key: str):
+    """文档变更后删掉它的向量片段，并返回受影响片段数。
+
+    不自动重建：重建要调 embedding 接口（有成本、可能失败、耗时随文档变长而增加），
+    放在保存请求里会让接口超时。改为让管理员显式点「重建索引」——
+    且 hash 跳过机制保证只对改动过的片段花钱。
+    """
+    n = ai_rag.drop_source(db, "document", doc_key)
+    db.commit()
+    return n
+
+
+# ══════════════════════════════════════════════
+# 文档管理（仅管理员）
+# ══════════════════════════════════════════════
+
+@router.get("/documents")
+def list_documents(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    rows = (db.query(KbDocument)
+            .order_by(KbDocument.sort_order.asc(), KbDocument.id.asc()).all())
+    return {"total": len(rows), "items": [_serialize_doc(d) for d in rows]}
+
+
+@router.post("/documents")
+def create_document(
+    request: KbDocumentCreate,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    key = _check_doc_key(request.doc_key)
+    title = (request.title or "").strip()
+    content = (request.content or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="请填写文档标题")
+    if not content:
+        raise HTTPException(status_code=400, detail="文档正文不能为空")
+    if db.query(KbDocument).filter(KbDocument.doc_key == key).first():
+        raise HTTPException(status_code=400, detail=f"文档标识已存在：{key}")
+
+    row = KbDocument(
+        doc_key=key, title=title[:100], content=content,
+        category=(request.category or "").strip()[:50],
+        role=_check_role(request.role),
+        enabled=1 if request.enabled is None else (1 if int(request.enabled) else 0),
+        sort_order=int(request.sort_order or 0),
+        version=1, updated_by=current_user.username,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"message": "已新增文档。请点「重建索引」后它才会被 AI 检索到",
+            "item": _serialize_doc(row)}
+
+
+@router.put("/documents/{doc_key}")
+def update_document(
+    doc_key: str,
+    request: KbDocumentUpdate,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    row = db.query(KbDocument).filter(KbDocument.doc_key == doc_key).first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"文档不存在：{doc_key}")
+
+    changed = content_changed = False
+    if request.title is not None:
+        t = request.title.strip()
+        if not t:
+            raise HTTPException(status_code=400, detail="文档标题不能为空")
+        if t[:100] != (row.title or ""):
+            row.title = t[:100]
+            changed = True
+    if request.content is not None:
+        c = request.content.strip()
+        if not c:
+            raise HTTPException(status_code=400, detail="文档正文不能为空；不想让它生效请把「启用」关掉")
+        if c != (row.content or ""):
+            row.content = c
+            changed = content_changed = True
+    if request.category is not None:
+        row.category = request.category.strip()[:50]
+    if request.role is not None:
+        r = _check_role(request.role)
+        if r != (row.role or ""):
+            row.role = r
+            changed = content_changed = True   # role 变了要让旧片段失效，否则会串角色
+    if request.enabled is not None:
+        e = 1 if int(request.enabled) else 0
+        if e != int(row.enabled or 0):
+            row.enabled = e
+            changed = content_changed = True
+    if request.sort_order is not None:
+        row.sort_order = int(request.sort_order)
+
+    if changed:
+        row.version = int(row.version or 1) + 1
+        row.updated_by = current_user.username
+    db.commit()
+
+    if content_changed:
+        _invalidate(db, row.doc_key)
+    db.refresh(row)
+
+    msg = "已保存"
+    if content_changed:
+        msg = "已保存。正文有改动，原索引已失效，请点「重建索引」后 AI 才能检索到新内容"
+    return {"message": msg, "index_stale": content_changed,
+            "item": _serialize_doc(row)}
+
+
+@router.delete("/documents/{doc_key}")
+def delete_document(
+    doc_key: str,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    row = db.query(KbDocument).filter(KbDocument.doc_key == doc_key).first()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"文档不存在：{doc_key}")
+    db.delete(row)
+    db.commit()
+    n = _invalidate(db, doc_key)
+    return {"message": f"已删除文档，同时清掉 {n} 个索引片段"}
+
+
+# ══════════════════════════════════════════════
+# 文档阅读（所有已登录角色；按 role 过滤）
+# ══════════════════════════════════════════════
+
+@router.get("/library")
+def list_library(
+    current_user: User = Depends(require_roles("admin", "service", "boss", "player")),
+    db: Session = Depends(get_db),
+):
+    role = current_user.role or ""
+    rows = (db.query(KbDocument)
+            .filter(KbDocument.enabled == 1)
+            .filter(KbDocument.role.in_(["", role]))
+            .order_by(KbDocument.sort_order.asc(), KbDocument.id.asc()).all())
+    return {"total": len(rows),
+            "items": [_serialize_doc(d, with_content=False) for d in rows]}
+
+
+@router.get("/library/{doc_key}")
+def read_document(
+    doc_key: str,
+    current_user: User = Depends(require_roles("admin", "service", "boss", "player")),
+    db: Session = Depends(get_db),
+):
+    role = current_user.role or ""
+    row = (db.query(KbDocument)
+           .filter(KbDocument.doc_key == doc_key)
+           .filter(KbDocument.enabled == 1)
+           .filter(KbDocument.role.in_(["", role]))
+           .first())
+    # 用"查不到"代替"存在但不属于你的角色"，不泄露其他角色规则文档的存在性
+    # （与 rating_api 的归属校验同一思路）
+    if not row:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    return {"item": _serialize_doc(row)}
+
+
+# ══════════════════════════════════════════════
+# 索引：重建 / 统计 / 片段查看 / 检索测试（仅管理员）
+# ══════════════════════════════════════════════
+
+@router.post("/rebuild")
+def rebuild(
+    force: bool = False,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """重建向量索引。
+
+    `force=true` 时连未改动的内容也重新向量化（换了模型、怀疑向量损坏时用）。
+    默认只处理内容变过的片段，因此可以随时点、对没改的内容零花费。
+    """
+    if not ai_rag._enabled(db) and not force:
+        # 不阻止，只提醒：允许管理员在正式启用前先把索引建好并用检索测试验证
+        pass
+    try:
+        result = ai_rag.rebuild_index(db, force=force)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重建索引失败：{e}")
+
+    if result["errors"]:
+        raise HTTPException(
+            status_code=502,
+            detail=f"向量化中途失败：{result['errors']}。"
+                   f"已完成的 {result['added'] + result['updated']} 段已保存，"
+                   f"请检查后端 .env 的 DASHSCOPE_API_KEY 与网络后**再点一次**重建"
+                   f"（未改动的片段会跳过，不会重复付费）",
+        )
+    return {"message": f"索引重建完成：新增 {result['added']} 段、更新 {result['updated']} 段、"
+                       f"跳过 {result['skipped']} 段、删除 {result['removed']} 段",
+            "result": result}
+
+
+@router.get("/stats")
+def index_stats(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    s = ai_rag.stats(db)
+    pending = ai_rag.pending_sources(db)
+    return {
+        "enabled": ai_rag._enabled(db),
+        "top_k": ai_rag._top_k(db),
+        "min_score": ai_rag._min_score(db),
+        "embedding_model": ai_rag._embed_model(db),
+        "chunk_size": ai_rag._chunk_size(db),
+        "max_chars": ai_rag._max_chars(db),
+        "total_chunks": s["total_chunks"],
+        "ready_chunks": s["ready_chunks"],
+        "missing_chunks": s["missing_chunks"],
+        "chars": s["chars"],
+        "by_type": s["by_type"],
+        "models": s["models"],
+        "dims": s["dims"],
+        "last_built": (s["last_built"].strftime("%Y-%m-%d %H:%M")
+                       if s["last_built"] else ""),
+        "pending_sources": pending,
+        "pending_total": len(pending),
+    }
+
+
+@router.get("/chunks")
+def list_chunks(
+    source_type: str = "document",
+    source_key: str = "",
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """查看某个来源被切成了哪些片段 —— 分块效果不好时靠它定位。"""
+    q = db.query(AiChunk).filter(AiChunk.source_type == source_type)
+    if source_key:
+        q = q.filter(AiChunk.source_key == source_key)
+    rows = q.order_by(AiChunk.source_key.asc(), AiChunk.chunk_index.asc()).all()
+    return {"total": len(rows), "items": [{
+        "id": r.id,
+        "source_type": r.source_type,
+        "source_key": r.source_key,
+        "chunk_index": int(r.chunk_index or 0),
+        "title": r.title or "",
+        "role": r.role or "",
+        "chars": len(r.content or ""),
+        "content": r.content or "",
+        "ready": bool(r.embedding),
+        "dim": int(r.dim or 0),
+        "model": r.model or "",
+        "updated_at": r.updated_at.strftime("%Y-%m-%d %H:%M") if r.updated_at else "",
+    } for r in rows]}
+
+
+@router.post("/search")
+def search_test(
+    request: AiRagSearchRequest,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """检索测试：把"关键词命中 / 向量命中 / 最终注入提示词的文本"全列出来。
+
+    没有这个页面就无法调试检索质量 —— 只看 AI 的最终回答，永远分不清是
+    "没检索到" 还是 "检索到了但模型没用"。
+    """
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="请输入要测试的提问")
+    role = _check_role(request.role) if request.role else (current_user.role or "")
+
+    # 优先用该角色的真实账号，这样 role 过滤与真实问答完全一致
+    sample = db.query(User).filter(User.role == role).first()
+    if sample is None:
+        class _Stub:
+            pass
+        sample = _Stub()
+        sample.username = sample.nickname = f"（无{ROLE_LABELS.get(role, role)}账号）"
+        sample.role = role
+        sample.role_name = ROLE_LABELS.get(role, role)
+
+    debug = {}
+    text = ai_rag.build_rag_context(
+        db, sample, question, record_miss=False,
+        top_k=request.top_k, min_score=request.min_score,
+        debug=debug,
+    )
+    db.commit()   # 把命中的 hit_count 落库
+
+    return {
+        "question": question,
+        "role": role,
+        "role_label": ROLE_LABELS.get(role, role),
+        "sample_user": getattr(sample, "username", "") or "",
+        "enabled": ai_rag._enabled(db),
+        "top_k": ai_rag._top_k(db) if request.top_k is None else request.top_k,
+        "min_score": ai_rag._min_score(db) if request.min_score is None else request.min_score,
+        "vector_error": debug.get("vector_error", ""),
+        "keyword_hits": debug.get("keyword_hits", []),
+        "vector_hits": debug.get("vector_hits", []),
+        "fused_keys": debug.get("fused_keys", []),
+        "injected_items": debug.get("injected_items", 0),
+        "injected_chars": debug.get("injected_chars", 0),
+        "injected_text": text,
+    }
