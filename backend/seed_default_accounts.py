@@ -6,8 +6,8 @@
 数据实体统一写入 MySQL，后端主程序不再内嵌任何账户数据。
 
 - 12 个默认账户：管理员1 / 客服1 / 老板3 / 打手6（密码统一 123456，bcrypt 哈希存储）
-- 3 个老板初始信息（消费金额/大狗币余额/点单次数）
-- 6 个打手初始信息（接单数/投诉数/好评率/后台金额/简介/等级）
+- 3 个老板初始信息（大狗币余额；消费金额/点单次数由实际订单动态计算）
+- 6 个打手初始信息（后台金额/简介/等级；接单数/投诉数/好评率由实际订单与评价动态计算）
 - 内容配置（公告/下单须知/价格/充值福利/会员福利/支付方式/处罚通告）
 
 幂等：已存在则跳过，可重复执行；不会覆盖已修改的数据。
@@ -36,21 +36,21 @@ DEFAULT_USERS = [
     {"username": "dashou_06", "password": "123456", "role": "player", "role_name": "打手", "nickname": "星火", "avatar": "avatar_mingxing.jpg"},
 ]
 
-# ========== 默认老板信息（balance 为大狗币，1大狗币=1元） ==========
+# ========== 默认老板信息（balance 为大狗币，1大狗币=1元；消费金额/点单次数由实际订单动态计算，不硬编码） ==========
 DEFAULT_BOSS = [
-    {"username": "laoban", "consume_amount": 520000, "balance": 1280, "order_count": 36},
-    {"username": "laoban_02", "consume_amount": 310000, "balance": 500, "order_count": 18},
-    {"username": "laoban_03", "consume_amount": 890000, "balance": 2300, "order_count": 62},
+    {"username": "laoban", "balance": 1280},
+    {"username": "laoban_02", "balance": 500},
+    {"username": "laoban_03", "balance": 2300},
 ]
 
-# ========== 默认打手信息（含等级划分） ==========
+# ========== 默认打手信息（含等级划分；接单数/投诉数/好评率由实际订单与评价动态计算，不硬编码） ==========
 DEFAULT_PLAYER = [
-    {"username": "dashou", "order_count": 128, "complaint_count": 3, "good_rate": 97.2, "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！", "level_type": "技术陪", "tech_level": "魔王护"},
-    {"username": "dashou_02", "order_count": 95, "complaint_count": 1, "good_rate": 98.5, "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。", "level_type": "技术陪", "tech_level": "211"},
-    {"username": "dashou_03", "order_count": 210, "complaint_count": 7, "good_rate": 95.8, "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。", "level_type": "娱乐陪", "tech_level": ""},
-    {"username": "dashou_04", "order_count": 76, "complaint_count": 0, "good_rate": 99.1, "backend_amount": 156000, "intro": "王者荣耀国服百星打野，985技术陪全程语音指导，稳上分不炸车，高端局也能带飞。", "level_type": "技术陪", "tech_level": "985"},
-    {"username": "dashou_05", "order_count": 54, "complaint_count": 2, "good_rate": 96.4, "backend_amount": 98000, "intro": "大专技术陪，主玩王者/和平精英，价格实惠服务到位，性价比之选，欢迎新老板体验。", "level_type": "技术陪", "tech_level": "大专"},
-    {"username": "dashou_06", "order_count": 168, "complaint_count": 4, "good_rate": 96.9, "backend_amount": 452000, "intro": "明星级护航，原神满命深渊、王者巅峰赛顶级对局，高端局专属陪玩，全天可约。", "level_type": "技术陪", "tech_level": "明星护"},
+    {"username": "dashou", "backend_amount": 368000, "intro": "大家好，我是打手小达，主玩王者荣耀、和平精英，擅长上分护航，王者100星以上，服务耐心，欢迎老板点单！", "level_type": "技术陪", "tech_level": "魔王护"},
+    {"username": "dashou_02", "backend_amount": 285000, "intro": "英雄联盟大师段位，主玩打野位，可以语音沟通，稳扎稳打不浪，陪你上分到天亮。", "level_type": "技术陪", "tech_level": "211"},
+    {"username": "dashou_03", "backend_amount": 620000, "intro": "全能型打手，王者/联盟/原神都可接单，多年护航经验，口碑老店，品质保障。", "level_type": "娱乐陪", "tech_level": ""},
+    {"username": "dashou_04", "backend_amount": 156000, "intro": "王者荣耀国服百星打野，985技术陪全程语音指导，稳上分不炸车，高端局也能带飞。", "level_type": "技术陪", "tech_level": "985"},
+    {"username": "dashou_05", "backend_amount": 98000, "intro": "大专技术陪，主玩王者/和平精英，价格实惠服务到位，性价比之选，欢迎新老板体验。", "level_type": "技术陪", "tech_level": "大专"},
+    {"username": "dashou_06", "backend_amount": 452000, "intro": "明星级护航，原神满命深渊、王者巅峰赛顶级对局，高端局专属陪玩，全天可约。", "level_type": "技术陪", "tech_level": "明星护"},
 ]
 
 # ========== 默认内容配置（公告/须知/价格/充值/会员/支付/处罚） ==========

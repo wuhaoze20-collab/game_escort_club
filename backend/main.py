@@ -234,5 +234,4 @@ app.mount("/bizhiku", StaticFiles(directory=BIZHIKU_DIR), name="bizhiku")
 
 if __name__ == "__main__":
     import uvicorn
-    # app_dir 让 reload 的子进程也能找到本模块，从而摆脱对工作目录的依赖
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, app_dir=BASE_DIR)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

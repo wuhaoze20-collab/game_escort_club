@@ -79,7 +79,7 @@ def main():
             db.add(user)
             pi = PlayerInfo(
                 username=uname, order_count=0, complaint_count=0,
-                good_rate=100.0, backend_amount=0,
+                good_rate=None, backend_amount=0,
                 intro=intro, level_type=ltype, tech_level=tech,
             )
             db.add(pi)

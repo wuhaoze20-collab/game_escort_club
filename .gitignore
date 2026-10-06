@@ -30,3 +30,17 @@ pip_install_log*
 # 背景视频：体积大不提交。但 frontend/index.html 会引用 bizhiku/登录背景.mp4 与 bizhiku/背景.mp4，
 # 因此新克隆的仓库必须自行放入这两个文件，否则页面背景视频静默 404（不影响其它功能）
 bizhiku/
+
+node_modules/
+frontend/node_modules/
+
+# 临时文件
+_git_status.txt
+frontend/pip-build-tracker-*/
+frontend/pip-unpack-*/
+frontend/tmp*
+frontend/z8g6fem1
+backend/backend_out.log
+backend/backend_err.log
+backend/_test_rag.py
+backend/_api_test.py

@@ -4,11 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大狗嚼电竞管理系统</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="tailwind.css">
     <style>
         .page-section { display: none; }
         .page-section.active { display: block; }
         .loading { text-align: center; padding: 40px; color: #9ca3af; }
+        /* 显式定义 hidden，不依赖 Tailwind CDN（防止 CDN 未生成导致弹窗暴露） */
+        .hidden { display: none !important; }
+        /* 通知红点强制圆形 */
+        #notification-badge { border-radius: 9999px !important; }
 
         /* ==================== 主题系统（暗色默认 / 明亮可选） ==================== */
                 :root, :root[data-theme="dark"] {
@@ -1201,7 +1205,7 @@
                     <button onclick="loadRegistrationList()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                 </div>
                 <div id="registration-review-empty" class="text-center text-gray-400 py-8 hidden">暂无待审核的注册申请</div>
-                <div class="overflow-x-auto">
+                <div id="registration-review-table" class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-gray-50 text-left text-gray-500">
@@ -1815,7 +1819,9 @@
                 const list = await apiRequest('/api/admin/registration-list');
                 const tbody = document.getElementById('registration-review-list');
                 const empty = document.getElementById('registration-review-empty');
+                const tableWrap = document.getElementById('registration-review-table');
                 empty.classList.toggle('hidden', list.length > 0);
+                tableWrap.classList.toggle('hidden', list.length === 0);
                 const roleMap = { boss: '老板', player: '打手', service: '客服' };
                 const levelDesc = (it) => it.level_type === '技术陪' ? `技术陪·${it.tech_level}` : '娱乐陪';
                 tbody.innerHTML = list.map(u => `
@@ -3212,6 +3218,11 @@
         // 更新充值页余额显示
         async function updateRechargeBalance() {
             try {
+                // 管理员不显示大狗币余额
+                if (currentUser && currentUser.role === 'admin') {
+                    document.getElementById('recharge-balance-box').classList.add('hidden');
+                    return;
+                }
                 const info = await apiRequest('/api/boss/me');
                 document.getElementById('recharge-balance').textContent = info.balance;
                 document.getElementById('recharge-balance-box').classList.remove('hidden');
@@ -3684,16 +3695,18 @@
                 }));
                 container.innerHTML = withRatings.map(p => `
                     <div class="border border-gray-200 rounded-xl p-4 hover:border-blue-400 hover:shadow-md transition cursor-pointer" onclick="selectPlayer('${p.username}', '${encodeURIComponent(p.nickname || p.username)}')">
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="flex items-center gap-2">
+                        <div class="mb-2">
+                            <div class="flex items-center gap-2 mb-2">
                                 <img src="${p.avatar ? 'avatars/' + p.avatar : 'avatars/avatar_yule.jpg'}" onclick="viewAvatar(this.src)" class="w-9 h-9 rounded-full object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition" title="点击查看大图">
                                 <span>
                                     <span class="block font-semibold text-gray-800">${escapeHtml(p.nickname || p.username)}</span>
                                     <span class="block text-xs text-gray-400">@${p.username}</span>
                                 </span>
-                                <span class="text-xs px-2 py-0.5 rounded-full ${p.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${p.level_type === '技术陪' ? `技术陪·${p.tech_level}` : '娱乐陪'}</span>
-                            </span>
-                            <span class="text-sm text-blue-600 bg-blue-50 px-2 py-0.5 rounded">好评 ${p.good_rate != null ? p.good_rate + '%' : '-'}</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm px-3 py-1.5 rounded-full whitespace-nowrap ${p.level_type === '技术陪' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${p.level_type === '技术陪' ? `技术陪·${p.tech_level}` : '娱乐陪'}</span>
+                                <span class="text-sm px-3 py-1.5 rounded-full whitespace-nowrap bg-blue-50 text-blue-600">好评 ${p.good_rate != null ? p.good_rate + '%' : '-'}</span>
+                            </div>
                         </div>
                         <div class="flex gap-4 text-xs text-gray-500 mb-2">
                             <span>接单 <b class="text-gray-700">${p.order_count}</b> 单</span>

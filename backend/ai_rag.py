@@ -2,10 +2,13 @@
 """知识库向量检索（RAG）。
 
 职责：
-· 把 `kb_documents`（长篇协议/规范）与 `ai_faqs`（问答库）切成片段、调用千问
-  embedding 接口向量化、存进 `ai_chunks`；
+· 把 `docs/agreements/` 下的 Word 长文档（协议/规范）与 `ai_faqs`（问答库）切成片段、
+  调用千问 embedding 接口向量化、存进 `ai_chunks`；
 · 提问时把问题也向量化，与库中片段算余弦相似度，取最相关的若干条注入提示词；
 · 与原有的**关键词匹配**做 RRF 融合，保证打开 RAG 后召回不会比原来更差。
+
+长文档管理：直接编辑 docs/agreements/ 下的 .docx 文件，然后在后台点「重建索引」。
+不再使用数据库 kb_documents 表存储长文档。
 
 关键设计约束：
 1. **绝不因为检索失败而让 AI 失效**。embedding 接口挂了、索引没建、表被清空 ——
@@ -261,33 +264,73 @@ def chunk_text(text: str, size: int = 500) -> list:
 # 收集待索引内容
 # ——————————————————————————————————————————————
 
+# 长文档（用户协议/服务规范等）以 Word 文件形式存放在项目根目录的 docs/agreements/
+# 不再使用数据库 kb_documents 表。修改协议直接编辑 .docx 文件，然后点「重建索引」。
+AGREEMENTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "agreements")
+
+
+def _read_docx(filepath: str) -> tuple:
+    """读取一个 Word 文件，返回 (title, content)。
+
+    标题取第一个 Heading 段落；没有则用文件名（不含扩展名）。
+    正文为所有段落文本按换行拼接。
+    """
+    from docx import Document
+    doc = Document(filepath)
+    title = ""
+    paragraphs = []
+    for p in doc.paragraphs:
+        text = (p.text or "").strip()
+        if not text:
+            paragraphs.append("")
+            continue
+        # 第一个标题样式段落（Title/Heading）作为文档标题
+        style_name = (p.style.name or "") if p.style else ""
+        if not title and ("Heading" in style_name or "Title" in style_name or "标题" in style_name):
+            title = text
+            continue
+        paragraphs.append(text)
+    if not title:
+        title = os.path.splitext(os.path.basename(filepath))[0]
+    content = "\n".join(paragraphs).strip()
+    return title, content
+
+
 def collect_sources(db) -> list:
     """收集所有需要索引的原始内容。
 
     返回 [{"source_type", "source_key", "title", "role", "content"}]：
-    · source_type='document' ← kb_documents 的一篇长文档
+    · source_type='document' ← docs/agreements/ 下的 Word 长文档
     · source_type='faq'      ← ai_faqs 的一条问答（本身就是最小语义单元，不再切分）
     """
-    from models import AiFaq, KbDocument
+    from models import AiFaq
 
     out = []
-    try:
-        docs = (db.query(KbDocument)
-                .filter(KbDocument.enabled == 1)
-                .order_by(KbDocument.sort_order.asc(), KbDocument.id.asc())
-                .all())
-    except Exception as e:
-        print(f"[rag] 读取 kb_documents 失败：{e}")
-        docs = []
-    for d in docs:
-        out.append({
-            "source_type": "document",
-            "source_key": d.doc_key,
-            "title": d.title or d.doc_key,
-            "role": d.role or "",
-            "content": d.content or "",
-        })
 
+    # ① 从 docs/agreements/ 读取 Word 长文档
+    if os.path.isdir(AGREEMENTS_DIR):
+        docx_files = sorted(f for f in os.listdir(AGREEMENTS_DIR) if f.lower().endswith(".docx"))
+        for fname in docx_files:
+            fpath = os.path.join(AGREEMENTS_DIR, fname)
+            try:
+                title, content = _read_docx(fpath)
+            except Exception as e:
+                print(f"[rag] 读取 Word 文件失败 {fname}: {e}")
+                continue
+            if not content:
+                continue
+            source_key = os.path.splitext(fname)[0]
+            out.append({
+                "source_type": "document",
+                "source_key": source_key,
+                "title": title,
+                "role": "",  # Word 文档默认所有角色可见
+                "content": content,
+            })
+    else:
+        print(f"[rag] 协议文档目录不存在：{AGREEMENTS_DIR}")
+
+    # ② 从数据库读取 FAQ 问答库
     try:
         faqs = db.query(AiFaq).filter(AiFaq.enabled == 1).order_by(AiFaq.id.asc()).all()
     except Exception as e:

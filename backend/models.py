@@ -52,7 +52,7 @@ class PlayerInfo(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     order_count = Column(Integer, default=0)  # 接单次数
     complaint_count = Column(Integer, default=0)  # 投诉次数
-    good_rate = Column(Float, default=100.0)  # 好评率
+    good_rate = Column(Float, default=None)  # 好评率（无评价时为None，前端显示"-"）
     backend_amount = Column(Integer, default=0)  # 后台金额（单位：分，金额以分计故为整数）
     intro = Column(Text, default="")  # 打手自我介绍
     level_type = Column(String(20), default="娱乐陪")  # 等级大类：娱乐陪 / 技术陪
