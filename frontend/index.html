@@ -1351,9 +1351,7 @@
                         按<b>关键词命中</b>后，只把相关的几条注入 AI 提示词（而不是每次都塞全部资料），更省也更准。
                         <b>角色</b>决定这条问答对谁生效 —— 同一件事对不同角色的正确答法常常相反
                         （例如"怎么充值"：老板是操作路径，打手是"你没有这个权限"）。
-                        答法里可以写 <code class="bg-gray-100 px-1 rounded">{参数名}</code> 引用系统参数，改参数时文案会自动跟着变；
-                        比例类参数（库里存的是 0.3 这种小数）写成 <code class="bg-gray-100 px-1 rounded">{参数名%}</code>，
-                        会渲染成「30%」而不是「0.3」。
+                        答法里可以写 <code class="bg-gray-100 px-1 rounded">{参数名}</code> 引用系统参数，改参数时文案会自动跟着变。
                     </p>
 
                     <!-- 批量导入 -->
@@ -1377,120 +1375,7 @@
                     <div id="faq-table" class="space-y-2"><div class="loading">加载中...</div></div>
                 </section>
 
-                <!-- 16.8 用户协议与平台规则（全部角色可看；内容即 AI 知识库） -->
-                <section id="page-agreement" class="page-section bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-gray-800">用户协议与平台规则</h2>
-                        <button onclick="loadAgreementDocs()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-4">
-                        平台正式条款，可随时查阅。这些文档同时是 <b>AI 客服的知识库</b> ——
-                        由管理员在「系统设置 → 知识库索引」维护，保存并重建索引后，
-                        AI 回答相关问题时就会引用这里的原文，而不是自己编。
-                    </p>
-                    <div class="flex flex-col md:flex-row gap-5">
-                        <div class="md:w-60 flex-shrink-0">
-                            <div id="agreement-list" class="space-y-1.5"><div class="loading">加载中...</div></div>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div id="agreement-title" class="text-base font-semibold text-gray-800"></div>
-                            <div id="agreement-meta" class="text-xs text-gray-400 mb-3"></div>
-                            <div id="agreement-body"
-                                class="text-sm text-gray-700 leading-relaxed whitespace-pre-line border-t border-gray-100 pt-3 max-h-[65vh] overflow-y-auto">
-                                请在左侧选择一份文档。
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- 16.9 知识库索引（仅管理员：文档维护 + 向量索引 + 检索测试） -->
-                <section id="page-kb-index" class="page-section bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-gray-800">知识库索引（向量检索）</h2>
-                        <div class="flex gap-2">
-                            <button onclick="loadAiKbStats();loadKbDocs();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
-                            <button onclick="openKbDocAdd()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">新增文档</button>
-                            <button onclick="rebuildKbIndex(false)" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
-                        </div>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-4">
-                        长篇规则文档走<b>向量检索</b>：提问时先按语义找出最相关的几段，只把这几段注入 AI 提示词。
-                        与「问答库」的分工 —— <b>短问答用问答库（关键词），长文档用知识库（向量）</b>；
-                        而余额、价格、订单这类精确数据仍走工具查询，<b>不要</b>改写成文档让 AI 去检索。
-                        改完正文必须点「重建索引」；没改动的片段会自动跳过，不会重复花钱。
-                    </p>
-
-                    <!-- 开关与索引统计 -->
-                    <div id="kb-stats" class="bg-gray-50 rounded-lg p-4 mb-4"><div class="loading">加载中...</div></div>
-
-                    <!-- 待重建提醒 -->
-                    <div id="kb-pending" class="mb-4"></div>
-
-                    <!-- 文档编辑面板（默认隐藏） -->
-                    <div id="kb-doc-editor" class="hidden border-2 border-purple-200 rounded-lg p-4 mb-4 bg-purple-50/40">
-                        <div class="text-sm font-medium text-gray-700 mb-3" id="kb-editor-title">新增文档</div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                            <label class="text-xs text-gray-500">文档标识（英文/数字/下划线，建后不可改）
-                                <input id="kb-doc-key" type="text" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500">
-                            </label>
-                            <label class="text-xs text-gray-500">标题
-                                <input id="kb-doc-title" type="text" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500">
-                            </label>
-                            <label class="text-xs text-gray-500">分类（自定义，仅用于分组显示）
-                                <input id="kb-doc-category" type="text" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500">
-                            </label>
-                            <label class="text-xs text-gray-500">适用角色
-                                <select id="kb-doc-role" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500">
-                                    <option value="">全角色（都可阅读、可被检索）</option>
-                                    <option value="admin">仅管理员</option>
-                                    <option value="service">仅客服</option>
-                                    <option value="boss">仅老板</option>
-                                    <option value="player">仅打手</option>
-                                </select>
-                            </label>
-                            <label class="text-xs text-gray-500">排序（小的在前）
-                                <input id="kb-doc-sort" type="number" value="0" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500">
-                            </label>
-                            <label class="text-xs text-gray-500 flex items-center gap-2 mt-5">
-                                <input id="kb-doc-enabled" type="checkbox" checked class="w-4 h-4"> 启用（关掉后不显示、不检索）
-                            </label>
-                        </div>
-                        <label class="text-xs text-gray-500">正文（纯文本，支持换行；不要写 Markdown 符号）
-                            <textarea id="kb-doc-content" rows="12" oninput="updateKbDocChars()"
-                                class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-purple-500"></textarea>
-                        </label>
-                        <div id="kb-doc-chars" class="text-xs text-gray-400 mt-1"></div>
-                        <div class="flex justify-end gap-2 mt-3">
-                            <button onclick="closeKbEditor()" class="px-4 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">取消</button>
-                            <button onclick="saveKbDoc()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">保存</button>
-                        </div>
-                    </div>
-
-                    <div id="kb-doc-list" class="space-y-3"><div class="loading">加载中...</div></div>
-
-                    <!-- 检索测试：没有它就无法调试检索质量 -->
-                    <div class="bg-gray-50 rounded-lg p-4 mt-6">
-                        <div class="text-sm font-medium text-gray-700 mb-1">检索测试</div>
-                        <p class="text-xs text-gray-500 mb-2">
-                            模拟一次真实提问，看它召回了哪些片段、最终会往提示词里塞什么。
-                            只看 AI 的最终回答，永远分不清是「没检索到」还是「检索到了但模型没用」。
-                        </p>
-                        <div class="flex flex-wrap gap-2 items-center mb-2">
-                            <select id="kb-search-role" class="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="boss">老板</option>
-                                <option value="player">打手</option>
-                                <option value="service">客服</option>
-                                <option value="admin">管理员</option>
-                            </select>
-                            <input id="kb-search-question" type="text" placeholder="例如：抽成是多少？"
-                                class="flex-1 min-w-[240px] px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                            <button onclick="testKbSearch()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">测试</button>
-                        </div>
-                        <div id="kb-search-result" class="text-xs"></div>
-                    </div>
-                </section>
-
-                <!-- 16.10 头像查看弹窗（点击任意头像查看完整大图） -->
+                <!-- 16.8 头像查看弹窗（点击任意头像查看完整大图） -->
                 <div id="avatar-view-modal" class="fixed inset-0 z-50 hidden">
                     <div class="modal-overlay absolute inset-0" onclick="closeAvatarView()"></div>
                     <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -2238,7 +2123,6 @@
                 { group: '店铺运营', items: [
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
-                    { key: 'agreement', label: '用户协议' },
                     { key: 'price', label: '价格预览' },
                     { key: 'recharge', label: '充值中心' },
                     { key: 'payment', label: '支付方式' },
@@ -2265,7 +2149,6 @@
                     { key: 'quote-manage', label: '台词管理' },
                     { key: 'ai-prompt', label: '提示词管理' },
                     { key: 'ai-faq', label: 'AI 问答库' },
-                    { key: 'kb-index', label: '知识库索引' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2276,7 +2159,6 @@
                 { group: '店铺运营', items: [
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
-                    { key: 'agreement', label: '用户协议' },
                     { key: 'price', label: '价格预览' },
                     // 充值中心（老板专属充值入口）与支付方式不在客服菜单中
                     { key: 'matches', label: '赛事专栏' },
@@ -2308,7 +2190,6 @@
                 { group: '店铺运营', items: [
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
-                    { key: 'agreement', label: '用户协议' },
                     { key: 'price', label: '价格预览' },
                     { key: 'recharge', label: '充值中心' },
                     { key: 'matches', label: '赛事专栏' },
@@ -2325,7 +2206,6 @@
                 { group: '店铺运营', items: [
                     { key: 'notice', label: '店铺公告' },
                     { key: 'order-guide', label: '下单须知' },
-                    { key: 'agreement', label: '用户协议' },
                     { key: 'price', label: '价格预览' },
                     // 充值中心仅老板可充值、管理员/客服可改配置；打手看这页是纯静态空壳，故不显示
                     { key: 'matches', label: '赛事专栏' },
@@ -2884,364 +2764,6 @@
             } catch (e) { alert(e.message); }
         }
 
-        // ==================== 用户协议与平台规则（全部角色可看） ====================
-        // 这些文档同时是 AI 知识库的语料来源：管理员在「知识库索引」里维护，
-        // 保存 + 重建索引后 AI 才会引用新内容。
-        // 阅读接口按角色过滤，属于别的角色的规则文档（如《打手服务规范》）不会出现在本列表。
-        let agreementDocs = [];
-        let agreementCurrentKey = '';
-        let agreementLoaded = false;
-
-        async function loadAgreementDocs() {
-            const list = document.getElementById('agreement-list');
-            if (!list) return;
-            list.innerHTML = '<div class="loading">加载中...</div>';
-            try {
-                const res = await apiRequest('/api/ai/kb/library');
-                agreementDocs = res.items || [];
-                agreementLoaded = true;
-            } catch (e) {
-                list.innerHTML = '<div class="text-sm text-red-500 px-2">加载失败：' + escapeHtml(e.message) + '</div>';
-                return;
-            }
-            if (!agreementDocs.length) {
-                list.innerHTML = '<div class="text-sm text-gray-400 px-2">暂无文档。</div>';
-                document.getElementById('agreement-title').textContent = '';
-                document.getElementById('agreement-meta').textContent = '';
-                document.getElementById('agreement-body').textContent = '管理员还没有维护任何协议文档。';
-                return;
-            }
-            const keep = agreementDocs.some(d => d.doc_key === agreementCurrentKey);
-            renderAgreementList();
-            openAgreementDoc(keep ? agreementCurrentKey : agreementDocs[0].doc_key);
-        }
-
-        // 不用 sidebar-link 类名：那个类会被 switchPage 的侧边栏高亮逻辑批量 toggle，
-        // 复用会让我们这里的高亮被误清掉
-        function renderAgreementList() {
-            const list = document.getElementById('agreement-list');
-            if (!list) return;
-            list.innerHTML = agreementDocs.map(d => {
-                const on = d.doc_key === agreementCurrentKey;
-                return '<button onclick="openAgreementDoc(\'' + d.doc_key + '\')" '
-                    + 'class="agreement-item w-full text-left px-3 py-2 rounded-lg text-sm transition '
-                    + (on ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50') + '">'
-                    + escapeHtml(d.title)
-                    + '<span class="block text-xs text-gray-400 mt-0.5">'
-                    + escapeHtml(d.category || '未分类') + ' · ' + d.chars + ' 字</span>'
-                    + '</button>';
-            }).join('');
-        }
-
-        async function openAgreementDoc(key) {
-            agreementCurrentKey = key;
-            renderAgreementList();
-            const body = document.getElementById('agreement-body');
-            const titleEl = document.getElementById('agreement-title');
-            const metaEl = document.getElementById('agreement-meta');
-            body.textContent = '加载中...';
-            try {
-                const res = await apiRequest('/api/ai/kb/library/' + encodeURIComponent(key));
-                const d = res.item || {};
-                titleEl.textContent = d.title || '';
-                metaEl.textContent = [d.category, d.role_label, (d.chars || 0) + ' 字',
-                    d.updated_at ? ('更新于 ' + d.updated_at) : ''].filter(Boolean).join(' · ');
-                // 用 textContent 而不是 innerHTML：协议正文是多段纯文本，
-                // 走 innerHTML 既不支持换行也有注入风险（whitespace-pre-line 负责显示换行）
-                body.textContent = d.content || '';
-            } catch (e) {
-                titleEl.textContent = '';
-                metaEl.textContent = '';
-                body.textContent = '加载失败：' + e.message;
-            }
-        }
-
-        // ==================== 知识库索引（仅管理员） ====================
-        let kbDocsCache = [];
-        let kbEditingKey = '';    // '' 表示新增
-        let kbLoaded = false;
-
-        async function loadAiKbStats() {
-            const box = document.getElementById('kb-stats');
-            if (!box) return;
-            try {
-                const s = await apiRequest('/api/ai/kb/stats');
-                renderKbStats(s);
-                const pend = document.getElementById('kb-pending');
-                if (s.pending_total > 0) {
-                    const items = (s.pending_sources || []).slice(0, 20).map(p =>
-                        '<li>' + escapeHtml(p.title || p.source_key)
-                        + '（' + escapeHtml(p.source_type) + ' / ' + escapeHtml(p.source_key)
-                        + '，' + p.outdated + ' / ' + p.expected + ' 段待重建）</li>').join('');
-                    pend.innerHTML = '<div class="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">'
-                        + '有 <b>' + s.pending_total + '</b> 个来源的内容与索引不一致（新增，或正文/角色/启停改过），'
-                        + 'AI 现在<b>检索不到</b>这些新内容 —— 请点右上角「重建索引」：'
-                        + '<ul class="list-disc ml-5 mt-1 text-xs">' + items + '</ul></div>';
-                } else {
-                    pend.innerHTML = '';
-                }
-            } catch (e) {
-                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
-            }
-        }
-
-        function renderKbStats(s) {
-            const box = document.getElementById('kb-stats');
-            const esc = escapeHtml;
-            const kv = (k, v) => '<div><span class="text-gray-500">' + k + '：</span>'
-                + '<span class="text-gray-800 font-medium">' + v + '</span></div>';
-            const byType = Object.keys(s.by_type || {}).length
-                ? Object.keys(s.by_type).map(k => esc(k) + ' ' + s.by_type[k]).join(' / ')
-                : '—';
-            const dims = (s.dims || []).map(esc).join(', ') || '—';
-            const models = (s.models || []).map(esc).join(', ') || '—';
-            const chunkInfo = s.ready_chunks + ' / ' + s.total_chunks
-                + (s.missing_chunks ? '（' + s.missing_chunks + ' 段还没向量化）' : '');
-            box.innerHTML =
-                '<div class="flex flex-wrap items-center gap-3 mb-3">'
-                + '<span class="text-sm font-medium text-gray-700">向量检索开关</span>'
-                + '<span class="px-2 py-0.5 rounded text-xs font-medium '
-                + (s.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600') + '">'
-                + (s.enabled ? '已启用' : '未启用') + '</span>'
-                + '<span class="text-xs text-gray-500">（在「系统设置 → 系统参数」改 '
-                + '<code class="bg-white px-1 rounded">ai_rag_enabled</code>；'
-                + '建议先用下方「检索测试」确认召回质量，再打开开关）</span>'
-                + '</div>'
-                + '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">'
-                + kv('向量片段', esc(chunkInfo))
-                + kv('片段总字数', esc(String(s.chars)))
-                + kv('来源分布', byType)
-                + kv('embedding 模型', models)
-                + kv('向量维度', dims)
-                + kv('召回条数 top_k', esc(String(s.top_k)))
-                + kv('相似度阈值 min_score', esc(String(s.min_score)))
-                + kv('分块大小 / 注入上限', esc(s.chunk_size + ' 字 / ' + s.max_chars + ' 字'))
-                + kv('最近一次重建', esc(s.last_built || '尚未重建'))
-                + '</div>';
-        }
-
-        async function loadKbDocs() {
-            const box = document.getElementById('kb-doc-list');
-            if (!box) return;
-            box.innerHTML = '<div class="loading">加载中...</div>';
-            try {
-                const res = await apiRequest('/api/ai/kb/documents');
-                kbDocsCache = res.items || [];
-                kbLoaded = true;
-            } catch (e) {
-                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
-                return;
-            }
-            renderKbDocList();
-        }
-
-        function renderKbDocList() {
-            const box = document.getElementById('kb-doc-list');
-            if (!box) return;
-            if (!kbDocsCache.length) {
-                box.innerHTML = '<div class="text-sm text-gray-400">还没有知识库文档。'
-                    + '点右上角「新增文档」粘贴一份规则文本，保存后点「重建索引」即可被 AI 检索。</div>';
-                return;
-            }
-            box.innerHTML = kbDocsCache.map(d =>
-                '<div class="border border-gray-200 rounded-lg p-4">'
-                + '<div class="flex flex-wrap justify-between items-start gap-2">'
-                + '<div class="min-w-0">'
-                + '<div class="font-medium text-gray-800">' + escapeHtml(d.title)
-                + ' <span class="text-xs text-gray-400 font-normal">' + escapeHtml(d.doc_key) + '</span></div>'
-                + '<div class="text-xs text-gray-500 mt-1">'
-                + escapeHtml(d.category || '未分类') + ' · ' + escapeHtml(d.role_label)
-                + ' · ' + d.chars + ' 字 · 第 ' + d.version + ' 版'
-                + (d.updated_by ? (' · ' + escapeHtml(d.updated_by) + ' 更新于 ' + escapeHtml(d.updated_at)) : '')
-                + '</div></div>'
-                + '<div class="flex items-center gap-2 flex-shrink-0">'
-                + '<span class="px-2 py-0.5 rounded text-xs '
-                + (d.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600') + '">'
-                + (d.enabled ? '启用中' : '已停用') + '</span>'
-                + '<button onclick="editKbDoc(\'' + d.doc_key + '\')" class="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition">编辑</button>'
-                + '<button onclick="deleteKbDoc(\'' + d.doc_key + '\')" class="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition">删除</button>'
-                + '</div></div>'
-                + '<details class="mt-2"><summary class="cursor-pointer text-xs text-blue-600 select-none">查看正文</summary>'
-                + '<pre class="mt-2 max-h-64 overflow-auto text-xs whitespace-pre-wrap bg-gray-50 rounded p-3 text-gray-700">'
-                + escapeHtml(d.content || '') + '</pre></details>'
-                + '</div>').join('');
-        }
-
-        function openKbDocAdd() {
-            kbEditingKey = '';
-            document.getElementById('kb-editor-title').textContent = '新增文档';
-            const keyEl = document.getElementById('kb-doc-key');
-            keyEl.value = '';
-            keyEl.disabled = false;
-            keyEl.classList.remove('bg-gray-100');
-            document.getElementById('kb-doc-title').value = '';
-            document.getElementById('kb-doc-category').value = '';
-            document.getElementById('kb-doc-role').value = '';
-            document.getElementById('kb-doc-sort').value = '0';
-            document.getElementById('kb-doc-enabled').checked = true;
-            document.getElementById('kb-doc-content').value = '';
-            updateKbDocChars();
-            document.getElementById('kb-doc-editor').classList.remove('hidden');
-            document.getElementById('kb-doc-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function editKbDoc(key) {
-            const d = kbDocsCache.find(x => x.doc_key === key);
-            if (!d) { alert('请先点「刷新」再编辑'); return; }
-            kbEditingKey = key;
-            document.getElementById('kb-editor-title').textContent = '编辑文档：' + d.title;
-            const keyEl = document.getElementById('kb-doc-key');
-            keyEl.value = d.doc_key;
-            // 文档标识是检索来源 key：改了它等于换了一篇文档，旧片段会成孤儿，故不允许改
-            keyEl.disabled = true;
-            keyEl.classList.add('bg-gray-100');
-            document.getElementById('kb-doc-title').value = d.title || '';
-            document.getElementById('kb-doc-category').value = d.category || '';
-            document.getElementById('kb-doc-role').value = d.role || '';
-            document.getElementById('kb-doc-sort').value = d.sort_order || 0;
-            document.getElementById('kb-doc-enabled').checked = !!d.enabled;
-            document.getElementById('kb-doc-content').value = d.content || '';
-            updateKbDocChars();
-            document.getElementById('kb-doc-editor').classList.remove('hidden');
-            document.getElementById('kb-doc-editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-
-        function closeKbEditor() {
-            document.getElementById('kb-doc-editor').classList.add('hidden');
-            kbEditingKey = '';
-        }
-
-        function updateKbDocChars() {
-            const el = document.getElementById('kb-doc-content');
-            const n = (el && el.value ? el.value.length : 0);
-            const box = document.getElementById('kb-doc-chars');
-            if (box) box.textContent = '当前 ' + n + ' 字（会按「分块大小」切成多段，每段单独向量化）';
-        }
-
-        async function saveKbDoc() {
-            const key = (document.getElementById('kb-doc-key').value || '').trim();
-            const title = (document.getElementById('kb-doc-title').value || '').trim();
-            const content = (document.getElementById('kb-doc-content').value || '').trim();
-            if (!kbEditingKey && !key) { alert('请填写文档标识'); return; }
-            if (!title) { alert('请填写标题'); return; }
-            if (!content) { alert('正文不能为空'); return; }
-            const body = {
-                title: title,
-                content: content,
-                category: (document.getElementById('kb-doc-category').value || '').trim(),
-                role: document.getElementById('kb-doc-role').value,
-                enabled: document.getElementById('kb-doc-enabled').checked ? 1 : 0,
-                sort_order: parseInt(document.getElementById('kb-doc-sort').value, 10) || 0
-            };
-            try {
-                let res;
-                if (kbEditingKey) {
-                    res = await apiRequest('/api/ai/kb/documents/' + encodeURIComponent(kbEditingKey), 'PUT', body);
-                } else {
-                    body.doc_key = key;
-                    res = await apiRequest('/api/ai/kb/documents', 'POST', body);
-                }
-                alert(res.message);
-                closeKbEditor();
-                await loadKbDocs();
-                await loadAiKbStats();
-            } catch (e) { alert(e.message); }
-        }
-
-        async function deleteKbDoc(key) {
-            const d = kbDocsCache.find(x => x.doc_key === key);
-            const title = d ? d.title : key;
-            if (!confirm('删除文档「' + title + '」？\n它同时会从向量索引里移除。此操作不可撤销。')) return;
-            try {
-                const res = await apiRequest('/api/ai/kb/documents/' + encodeURIComponent(key), 'DELETE');
-                alert(res.message);
-                if (kbEditingKey === key) closeKbEditor();
-                await loadKbDocs();
-                await loadAiKbStats();
-            } catch (e) { alert(e.message); }
-        }
-
-        async function rebuildKbIndex(force) {
-            const msg = force
-                ? '强制重建：连没改动的片段也重新向量化（会产生 API 费用）。确定？'
-                : '重建索引？只对新增或改过的片段调用 embedding 接口，未改动的会自动跳过。\n'
-                  + '首次建库或刚改了长文档时可能需要几十秒，请勿重复点击。';
-            if (!confirm(msg)) return;
-            const btns = document.querySelectorAll('#page-kb-index button');
-            btns.forEach(b => { b.disabled = true; });
-            const pend = document.getElementById('kb-pending');
-            pend.innerHTML = '<div class="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-800">'
-                + '正在重建索引，请稍候…（逐段调用 embedding 接口，长文档需要时间）</div>';
-            try {
-                const res = await apiRequest('/api/ai/kb/rebuild' + (force ? '?force=true' : ''), 'POST');
-                alert(res.message);
-                await loadAiKbStats();
-                await loadKbDocs();
-            } catch (e) {
-                alert(e.message);
-                await loadAiKbStats();
-            } finally {
-                btns.forEach(b => { b.disabled = false; });
-            }
-        }
-
-        async function testKbSearch() {
-            const q = (document.getElementById('kb-search-question').value || '').trim();
-            if (!q) { alert('请输入要测试的提问'); return; }
-            const box = document.getElementById('kb-search-result');
-            box.innerHTML = '<div class="text-gray-500">检索中…</div>';
-            try {
-                const res = await apiRequest('/api/ai/kb/search', 'POST', {
-                    question: q,
-                    role: document.getElementById('kb-search-role').value
-                });
-                box.innerHTML = renderKbSearchResult(res);
-            } catch (e) {
-                box.innerHTML = '<div class="text-red-500">测试失败：' + escapeHtml(e.message) + '</div>';
-            }
-        }
-
-        function renderKbSearchResult(res) {
-            const out = [];
-            if (!res.enabled) {
-                out.push('<div class="rounded border border-amber-300 bg-amber-50 p-2 text-amber-800">'
-                    + '注意：向量检索开关当前是<b>关闭</b>的，线上 AI 不会走这条路（下面仍按启用状态模拟了检索结果）。'
-                    + '要用上它，请到「系统参数」把 <code>ai_rag_enabled</code> 打开。</div>');
-            }
-            if (res.vector_error) {
-                out.push('<div class="rounded border border-red-300 bg-red-50 p-2 text-red-700 mt-2">'
-                    + '向量检索报错，已自动降级为关键词：' + escapeHtml(res.vector_error) + '</div>');
-            }
-            out.push('<div class="mt-2 text-gray-500">提问：' + escapeHtml(res.question)
-                + ' ｜ 角色：' + escapeHtml(res.role_label)
-                + '（样例账号 ' + escapeHtml(res.sample_user || '无') + '）'
-                + ' ｜ top_k=' + res.top_k + '，min_score=' + res.min_score + '</div>');
-
-            const kw = res.keyword_hits || [];
-            out.push('<div class="mt-3 font-medium text-gray-700">关键词命中（' + kw.length + ' 条）</div>');
-            out.push(kw.length
-                ? '<ul class="mt-1">' + kw.map(h => '<li>· ' + escapeHtml(h.question || '')
-                    + ' <span class="text-gray-400">（得分 ' + h.score + '）</span></li>').join('') + '</ul>'
-                : '<div class="text-gray-400">无</div>');
-
-            const vh = res.vector_hits || [];
-            out.push('<div class="mt-3 font-medium text-gray-700">向量命中（' + vh.length + ' 条）</div>');
-            out.push(vh.length
-                ? '<ul class="mt-1">' + vh.map(h => '<li>· ' + escapeHtml(h.title || h.source_key)
-                    + ' <span class="text-gray-400">片段 #' + h.chunk_index + '　相似度 ' + h.score + '</span>'
-                    + '<div class="text-gray-500 ml-3">' + escapeHtml((h.content || '').slice(0, 80)) + '…</div></li>').join('') + '</ul>'
-                : '<div class="text-gray-400">无（低于 min_score 的都会被丢掉，这是有意为之：'
-                  + '塞进不相关片段比不塞更糟，模型会照着错内容编）</div>');
-
-            out.push('<div class="mt-3 font-medium text-gray-700">最终注入提示词的文本'
-                + '（' + res.injected_items + ' 段 / ' + res.injected_chars + ' 字）</div>');
-            out.push(res.injected_text
-                ? '<pre class="mt-1 max-h-72 overflow-auto whitespace-pre-wrap bg-white border border-gray-200 rounded p-3 text-gray-700">'
-                  + escapeHtml(res.injected_text) + '</pre>'
-                : '<div class="text-gray-400">无（什么都没召回，AI 会按通用知识回答）</div>');
-            return out.join('');
-        }
-
         // ==================== AI 客服（悬浮气泡） ====================
         // 消息存数据库（ai_conversations / ai_messages），后端再依据 content_config
         // 拼知识库去问千问。未配置 API Key 时后端返回 available=false，这里就保持隐藏。
@@ -3544,10 +3066,6 @@
             // 切换界面：随机一句台词 + 确保10秒轮换定时器
             showRandomQuote();
             ensureQuoteTimer();
-
-            // 按需加载（首次进入时拉一次，避免登录时把所有接口都打一遍）
-            if (key === 'agreement' && !agreementLoaded) loadAgreementDocs();
-            if (key === 'kb-index' && !kbLoaded) { loadAiKbStats(); loadKbDocs(); }
         }
 
         // ==================== 内容加载与渲染 ====================
