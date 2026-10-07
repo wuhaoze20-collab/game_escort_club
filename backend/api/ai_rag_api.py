@@ -17,8 +17,9 @@
 """
 
 import re
+import os
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 import ai_rag
@@ -98,9 +99,27 @@ def list_documents(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    rows = (db.query(KbDocument)
-            .order_by(KbDocument.sort_order.asc(), KbDocument.id.asc()).all())
-    return {"total": len(rows), "items": [_serialize_doc(d) for d in rows]}
+    """扫描文档目录返回文件列表（与 collect_sources 索引来源保持一致）。"""
+    items = []
+    doc_dir = ai_rag.AGREEMENTS_DIR
+    if os.path.isdir(doc_dir):
+        for fname in sorted(f for f in os.listdir(doc_dir)
+                            if f.lower().endswith(ai_rag._DOC_EXTENSIONS)
+                            and not f.startswith("~$")):
+            doc_key = os.path.splitext(fname)[0]
+            try:
+                title, content = ai_rag._read_file(os.path.join(doc_dir, fname))
+            except Exception:
+                title, content = doc_key, ""
+            items.append({
+                "doc_key": doc_key,
+                "title": title or doc_key,
+                "chars": len(content or ""),
+                "role": "",
+                "role_label": "全角色",
+                "filename": fname,
+            })
+    return {"total": len(items), "items": items}
 
 
 @router.post("/documents")
@@ -197,13 +216,20 @@ def delete_document(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    row = db.query(KbDocument).filter(KbDocument.doc_key == doc_key).first()
-    if not row:
-        raise HTTPException(status_code=404, detail=f"文档不存在：{doc_key}")
-    db.delete(row)
+    """删除文档文件，同时清除其向量索引片段。"""
+    doc_dir = ai_rag.AGREEMENTS_DIR
+    deleted_file = None
+    if os.path.isdir(doc_dir):
+        for fname in os.listdir(doc_dir):
+            if os.path.splitext(fname)[0] == doc_key and fname.lower().endswith(ai_rag._DOC_EXTENSIONS):
+                os.remove(os.path.join(doc_dir, fname))
+                deleted_file = fname
+                break
+    n = ai_rag.drop_source(db, "document", doc_key)
     db.commit()
-    n = _invalidate(db, doc_key)
-    return {"message": f"已删除文档，同时清掉 {n} 个索引片段"}
+    if not deleted_file and n == 0:
+        raise HTTPException(status_code=404, detail=f"文档不存在：{doc_key}")
+    return {"message": f"已删除文档 {deleted_file or doc_key}，同时清掉 {n} 个索引片段"}
 
 
 # ══════════════════════════════════════════════
@@ -245,6 +271,160 @@ def read_document(
 
 # ══════════════════════════════════════════════
 # 索引：重建 / 统计 / 片段查看 / 检索测试（仅管理员）
+# ══════════════════════════════════════════════
+# 文件上传（仅管理员）：上传后自动存入 docs/agreements/ 并重建索引
+# ══════════════════════════════════════════════
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".html", ".htm", ".txt", ".md", ".csv", ".json"}
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+def _extract_text_from_file(filepath: str, ext: str) -> str:
+    """从上传的文件中提取纯文本，用于 RAG 索引。"""
+    ext = ext.lower()
+    if ext == ".docx":
+        from docx import Document
+        doc = Document(filepath)
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    elif ext in (".html", ".htm"):
+        from html.parser import HTMLParser
+        class _TextExtractor(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.parts = []
+                self._skip = False
+            def handle_starttag(self, tag, attrs):
+                if tag in ("script", "style"):
+                    self._skip = True
+            def handle_endtag(self, tag):
+                if tag in ("script", "style"):
+                    self._skip = False
+                if tag in ("p", "div", "br", "li", "h1", "h2", "h3", "h4", "h5", "h6"):
+                    self.parts.append("\n")
+            def handle_data(self, data):
+                if not self._skip:
+                    self.parts.append(data)
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            html_content = f.read()
+        parser = _TextExtractor()
+        parser.feed(html_content)
+        text = "".join(parser.parts)
+        return re.sub(r"\n{3,}", "\n\n", text).strip()
+    elif ext == ".txt":
+        for enc in ("utf-8", "gbk", "gb2312", "latin-1"):
+            try:
+                with open(filepath, "r", encoding=enc) as f:
+                    return f.read().strip()
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        raise HTTPException(status_code=400, detail="TXT 文件编码无法识别，请转为 UTF-8")
+    elif ext == ".pdf":
+        # 尝试常见 PDF 库，哪个装了用哪个
+        try:
+            import pdfplumber
+            text_parts = []
+            with pdfplumber.open(filepath) as pdf:
+                for page in pdf.pages:
+                    t = page.extract_text()
+                    if t:
+                        text_parts.append(t)
+            return "\n".join(text_parts).strip()
+        except ImportError:
+            pass
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(filepath)
+            return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+        except ImportError:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail="PDF 解析需要安装 pdfplumber 或 PyPDF2："
+                   "pip install pdfplumber"
+        )
+    else:
+        raise HTTPException(status_code=400, detail=f"不支持的文件类型：{ext}")
+
+
+@router.post("/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """上传文档到知识库：保存到 docs/agreements/，自动提取文本并重建向量索引。
+
+    支持 .pdf / .docx / .html / .htm / .txt，最大 20MB。
+    文件名（不含扩展名）作为 source_key，自动参与 RAG 检索。
+    """
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="文件名不能为空")
+
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的文件类型 {ext}，支持：{' / '.join(sorted(ALLOWED_EXTENSIONS))}"
+        )
+
+    # 读取文件内容并检查大小
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f"文件过大，最大 {MAX_FILE_SIZE // 1024 // 1024}MB")
+    if not content:
+        raise HTTPException(status_code=400, detail="文件内容为空")
+
+    # 确保目录存在
+    os.makedirs(ai_rag.AGREEMENTS_DIR, exist_ok=True)
+    save_path = os.path.join(ai_rag.AGREEMENTS_DIR, filename)
+
+    # 保存原始文件
+    with open(save_path, "wb") as f:
+        f.write(content)
+
+    # 提取文本（验证文件可解析）
+    try:
+        text = _extract_text_from_file(save_path, ext)
+    except HTTPException:
+        # 解析失败，删除已保存的文件
+        try:
+            os.remove(save_path)
+        except OSError:
+            pass
+        raise
+    except Exception as e:
+        try:
+            os.remove(save_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=400, detail=f"文件解析失败：{e}")
+
+    if not text or len(text.strip()) < 10:
+        try:
+            os.remove(save_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=400, detail="文件中未提取到有效文本（可能是扫描件/图片PDF）")
+
+    # 自动重建索引（新文件会被 collect_sources 收集到）
+    try:
+        result = ai_rag.rebuild_index(db, force=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件已保存，但重建索引失败：{e}")
+
+    source_key = os.path.splitext(filename)[0]
+    return {
+        "message": f"上传成功：{filename}（提取 {len(text)} 字符），索引已更新",
+        "filename": filename,
+        "source_key": source_key,
+        "chars": len(text),
+        "index_result": result,
+    }
+
+
+# ══════════════════════════════════════════════
+# 索引管理（仅管理员）
 # ══════════════════════════════════════════════
 
 @router.post("/rebuild")
@@ -315,10 +495,13 @@ def list_chunks(
     db: Session = Depends(get_db),
 ):
     """查看某个来源被切成了哪些片段 —— 分块效果不好时靠它定位。"""
+    from models import AiVector
     q = db.query(AiChunk).filter(AiChunk.source_type == source_type)
     if source_key:
         q = q.filter(AiChunk.source_key == source_key)
     rows = q.order_by(AiChunk.source_key.asc(), AiChunk.chunk_index.asc()).all()
+    # 预加载向量状态
+    vec_by_chunk = {v.chunk_id: v for v in db.query(AiVector).all()}
     return {"total": len(rows), "items": [{
         "id": r.id,
         "source_type": r.source_type,
@@ -328,9 +511,9 @@ def list_chunks(
         "role": r.role or "",
         "chars": len(r.content or ""),
         "content": r.content or "",
-        "ready": bool(r.embedding),
-        "dim": int(r.dim or 0),
-        "model": r.model or "",
+        "ready": vec_by_chunk.get(r.id) is not None,
+        "dim": int(vec_by_chunk[r.id].dim or 0) if vec_by_chunk.get(r.id) else 0,
+        "model": vec_by_chunk[r.id].model or "" if vec_by_chunk.get(r.id) else "",
         "updated_at": r.updated_at.strftime("%Y-%m-%d %H:%M") if r.updated_at else "",
     } for r in rows]}
 

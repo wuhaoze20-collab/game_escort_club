@@ -355,3 +355,22 @@ class AiChunk(Base):
         UniqueConstraint("source_type", "source_key", "chunk_index",
                          name="uk_ai_chunk_src"),
     )
+
+
+# 向量表：专门存储 embedding 向量，与 ai_chunks 一对一关联
+# 分离原因：文本内容和向量是两种不同性质的数据，分开存储结构更清晰，
+# 也便于将来替换为真正的向量数据库（只需改这张表的读写逻辑）。
+class AiVector(Base):
+    __tablename__ = "ai_vectors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chunk_id = Column(Integer, nullable=False, index=True)  # 关联 ai_chunks.id
+    embedding = Column(Text, nullable=False)  # 向量 JSON 数组字符串
+    dim = Column(Integer, default=0)  # 向量维度
+    model = Column(String(50), default="")  # 生成该向量的模型名
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("chunk_id", name="uk_ai_vector_chunk"),
+    )

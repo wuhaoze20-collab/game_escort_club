@@ -50,112 +50,112 @@ DEFAULT_AI_EXTRA_INSTRUCTION = """【常见问答标准答法】（优先照这�
 CONFIG_META: dict[str, dict] = {
     # ——— 资金与抽成 ———
     "club_commission_rate": {
-        "default": 0.3, "type": "float", "label": "俱乐部抽成比例",
+        "default": 0.3, "type": "float", "group": "资金与抽成", "label": "俱乐部抽成比例",
         "desc": "0~1 的小数，0.3 表示抽成 30%。订单结单时按此拆分俱乐部与打手收入",
     },
     "tip_max_rate": {
-        "default": 0.3, "type": "float", "label": "打赏上限比例",
+        "default": 0.3, "type": "float", "group": "资金与抽成", "label": "打赏上限比例",
         "desc": "0~1 的小数，单笔订单累计打赏不得超过订单金额的该比例",
     },
     "withdraw_cooldown_days": {
-        "default": 30, "type": "int", "label": "提现冷却天数",
+        "default": 30, "type": "int", "group": "资金与抽成", "label": "提现冷却天数",
         "desc": "打手收入入账后需满多少天才能申请提现",
     },
     "recharge_max_amount": {
-        "default": 10000000, "type": "int", "label": "单次充值上限（分）",
+        "default": 10000000, "type": "int", "group": "资金与抽成", "label": "单次充值上限（分）",
         "desc": "单位：分。默认 10000000 = 10 万元",
     },
     # ——— 登录安全 ———
     "login_max_failed_attempts": {
-        "default": 5, "type": "int", "label": "登录失败锁定阈值",
+        "default": 5, "type": "int", "group": "登录安全", "label": "登录失败锁定阈值",
         "desc": "连续输错密码多少次后锁定账户",
     },
     "login_lock_minutes": {
-        "default": 10, "type": "int", "label": "锁定时长（分钟）",
+        "default": 10, "type": "int", "group": "登录安全", "label": "锁定时长（分钟）",
         "desc": "账户被锁定后需等待多少分钟才能再次登录",
     },
     "token_expire_minutes": {
-        "default": 60 * 24, "type": "int", "label": "登录令牌有效期（分钟）",
+        "default": 60 * 24, "type": "int", "group": "登录安全", "label": "登录令牌有效期（分钟）",
         "desc": "JWT 有效期，默认 1440 分钟 = 24 小时",
     },
     # ——— 订单校验 ———
     "order_min_amount": {
-        "default": 100, "type": "int", "label": "订单金额下限（分）",
+        "default": 100, "type": "int", "group": "订单校验", "label": "订单金额下限（分）",
         "desc": "单位：分。默认 100 = 1 元",
     },
     "order_max_amount": {
-        "default": 5000000, "type": "int", "label": "单笔订单金额上限（分）",
+        "default": 5000000, "type": "int", "group": "订单校验", "label": "单笔订单金额上限（分）",
         "desc": "单位：分。默认 5000000 = 5 万元",
     },
     "order_max_duration_min": {
-        "default": 1440, "type": "int", "label": "单笔订单时长上限（分钟）",
+        "default": 1440, "type": "int", "group": "订单校验", "label": "单笔订单时长上限（分钟）",
         "desc": "单位：分钟。默认 1440 = 24 小时",
     },
     "order_remark_max_len": {
-        "default": 500, "type": "int", "label": "下单备注字数上限",
+        "default": 500, "type": "int", "group": "订单校验", "label": "下单备注字数上限",
         "desc": "老板下单备注的最大字符数",
     },
     "order_service_note_max_len": {
-        "default": 50, "type": "int", "label": "业务量说明字数上限",
+        "default": 50, "type": "int", "group": "订单校验", "label": "业务量说明字数上限",
         "desc": "如“50级”“3层”等业务量说明的最大字符数",
     },
     "game_type_max_len": {
-        "default": 50, "type": "int", "label": "游戏类型字数上限",
+        "default": 50, "type": "int", "group": "订单校验", "label": "游戏类型字数上限",
         "desc": "订单游戏类型字段的最大字符数",
     },
     # ——— 资料校验 ———
     "nickname_max_len": {
-        "default": 20, "type": "int", "label": "昵称字数上限",
+        "default": 20, "type": "int", "group": "资料校验", "label": "昵称字数上限",
         "desc": "用户昵称的最大字符数",
     },
     "tag_max_len": {
-        "default": 20, "type": "int", "label": "标签字数上限",
+        "default": 20, "type": "int", "group": "资料校验", "label": "标签字数上限",
         "desc": "打手标签的最大字符数",
     },
     "violation_nickname": {
-        "default": "违规昵称", "type": "str", "label": "违规昵称占位文案",
+        "default": "违规昵称", "type": "str", "group": "资料校验", "label": "违规昵称占位文案",
         "desc": "昵称被审核打回后，展示给该用户的替代昵称",
     },
     # ——— 打手等级 ———
     "tech_levels": {
-        "default": ["985", "211", "大专", "魔王护", "明星护"], "type": "json",
+        "default": ["985", "211", "大专", "魔王护", "明星护"], "type": "json", "group": "打手等级",
         "label": "技术陪等级列表", "desc": "JSON 数组，顺序即由低到高",
     },
     "level_types": {
-        "default": ["娱乐陪", "技术陪"], "type": "json",
+        "default": ["娱乐陪", "技术陪"], "type": "json", "group": "打手等级",
         "label": "打手等级大类", "desc": "JSON 数组，打手等级的两大类",
     },
     # ——— AI 客服（千问）———
     "ai_enabled": {
-        "default": True, "type": "bool", "label": "启用 AI 客服",
+        "default": True, "type": "bool", "group": "AI 客服", "label": "启用 AI 客服",
         "desc": "关闭后前端不显示聊天入口；仍需在 backend/.env 配置 DASHSCOPE_API_KEY 才能真正对话",
     },
     "ai_model": {
-        "default": "qwen-plus", "type": "str", "label": "千问模型名",
+        "default": "qwen-plus", "type": "str", "group": "AI 客服", "label": "千问模型名",
         "desc": "如 qwen-plus（均衡）、qwen-turbo（快且便宜）、qwen-max（最强）",
     },
     "ai_daily_limit": {
-        "default": 30, "type": "int", "label": "每人每日提问上限",
+        "default": 30, "type": "int", "group": "AI 客服", "label": "每人每日提问上限",
         "desc": "按用户按自然日统计，防止接口被刷导致费用失控；0 表示不限制",
     },
     "ai_temperature": {
-        "default": 0.3, "type": "float", "label": "回答随机度",
+        "default": 0.3, "type": "float", "group": "AI 客服", "label": "回答随机度",
         "desc": "0~2。客服场景建议偏低（0.2~0.5）以保证回答稳定、少发挥",
     },
     "ai_max_tokens": {
-        "default": 800, "type": "int", "label": "单次回答最大长度",
+        "default": 800, "type": "int", "group": "AI 客服", "label": "单次回答最大长度",
         "desc": "模型单次回复的最大 token 数，调大可回答更详细但更慢更贵",
     },
     "ai_extra_instruction": {
-        "default": DEFAULT_AI_EXTRA_INSTRUCTION, "type": "str", "label": "额外指示（附加到系统提示词末尾）",
+        "default": DEFAULT_AI_EXTRA_INSTRUCTION, "type": "str", "group": "AI 客服", "label": "额外指示（附加到系统提示词末尾）",
         "desc": "出厂内容为常见问答标准答法与语气要求。可整段改写或清空；留空则本节不注入提示词",
     },
     "ai_history_rounds": {
-        "default": 6, "type": "int", "label": "携带的历史轮数",
+        "default": 6, "type": "int", "group": "AI 客服", "label": "携带的历史轮数",
         "desc": "每次请求带上前多少轮对话作为上下文，越大越连贯但越贵",
     },
     "ai_faq_top_n": {
-        "default": 4, "type": "int", "label": "问答库命中条数上限",
+        "default": 4, "type": "int", "group": "AI 客服", "label": "问答库命中条数上限",
         "desc": "按提问关键词从「问答库」挑出最相关的几条注入提示词；0 表示关闭按需注入",
     },
     # ——— AI 知识库向量检索（RAG）———
@@ -163,30 +163,52 @@ CONFIG_META: dict[str, dict] = {
     # 且只有把「知识库索引」页里的文档索引建好之后才有意义。管理员在那页验证过
     # 检索质量、确认召回正确后再打开，避免上线即踩坑。
     "ai_rag_enabled": {
-        "default": False, "type": "bool", "label": "启用知识库向量检索",
+        "default": False, "type": "bool", "group": "AI 知识库", "label": "启用知识库向量检索",
         "desc": "打开后按提问从「知识库索引」的文档中检索相关片段注入提示词。"
                 "需先在「知识库索引」页点「重建索引」；embedding 调用失败会自动退回关键词匹配",
     },
     "ai_rag_top_k": {
-        "default": 4, "type": "int", "label": "向量检索片段条数上限",
+        "default": 4, "type": "int", "group": "AI 知识库", "label": "向量检索片段条数上限",
         "desc": "每次提问最多注入几个相关片段；调大召回更全但提示词更长更贵",
     },
     "ai_rag_min_score": {
-        "default": 0.35, "type": "float", "label": "向量检索相似度门槛",
+        "default": 0.35, "type": "float", "group": "AI 知识库", "label": "向量检索相似度门槛",
         "desc": "0~1 的余弦相似度。低于此分数的片段**不注入** —— 塞进不相关内容比不塞更糟，"
                 "模型会照着错内容编。中文短句建议 0.3~0.45",
     },
     "ai_rag_embedding_model": {
-        "default": "text-embedding-v3", "type": "str", "label": "向量化模型",
+        "default": "text-embedding-v3", "type": "str", "group": "AI 知识库", "label": "向量化模型",
         "desc": "千问 Embedding 模型名。换模型后旧向量维度不同，必须点「重建索引」全量重算",
     },
     "ai_rag_chunk_size": {
-        "default": 500, "type": "int", "label": "文档分块字符数",
+        "default": 500, "type": "int", "group": "AI 知识库", "label": "文档分块字符数",
         "desc": "长篇文档按此长度切成片段再向量化。太小会丢上下文，太大会稀释相关性",
     },
     "ai_rag_max_chars": {
-        "default": 3000, "type": "int", "label": "检索片段总字数上限",
+        "default": 3000, "type": "int", "group": "AI 知识库", "label": "检索片段总字数上限",
         "desc": "单次注入的检索结果总长度上限，防止一次命中过多把提示词撑爆",
+    },
+
+    # —— 查询优化（检索前）：默认全关，需要时手动开启，每个开关都会多调一次大模型 ——
+    "ai_query_rewrite_enabled": {
+        "default": False, "type": "bool", "group": "查询优化", "label": "查询重写",
+        "desc": "把口语化问题改写成标准检索查询",
+    },
+    "ai_query_decompose_enabled": {
+        "default": False, "type": "bool", "group": "查询优化", "label": "子查询分解",
+        "desc": "把复杂问题拆成多个子问题分别检索",
+    },
+    "ai_query_stepback_enabled": {
+        "default": False, "type": "bool", "group": "查询优化", "label": "后退提示",
+        "desc": "生成更抽象的问题获取背景规则",
+    },
+    "ai_query_expand_enabled": {
+        "default": False, "type": "bool", "group": "查询优化", "label": "查询扩展",
+        "desc": "补充同义词/相关关键词，扩大召回覆盖面",
+    },
+    "ai_query_hyde_enabled": {
+        "default": False, "type": "bool", "group": "查询优化", "label": "HyDE 假设文档",
+        "desc": "先生成假设答案，用答案措辞做向量检索",
     },
 }
 
@@ -273,6 +295,7 @@ def get_all_configs(db) -> list[dict]:
             "config_key": key,
             "config_value": current,
             "value_type": meta["type"],
+            "group": meta.get("group", "其他"),
             "label": meta["label"],
             "description": meta["desc"],
             "default_value": _dump(meta["default"], meta["type"]),

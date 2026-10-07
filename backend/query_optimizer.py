@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
-"""查询优化器：子查询分解、后退提示生成、查询重写。
+"""查询优化器：子查询分解、后退提示生成、查询重写、查询增强。
 
-三种技术可以组合使用，也可以单独启用（通过 config_service 控制）。
+五种技术可以组合使用，也可以单独启用（通过 config_service 控制）。
 所有优化都有降级保护：大模型调用失败时退回原问题，不会让检索失效。
 
 技术说明：
 1. 查询重写（Query Rewriting）：把用户口语化/模糊问题改写成更适合检索的标准查询
 2. 子查询分解（Sub-Query Decomposition）：把复杂问题拆成多个子问题，分别检索后合并
 3. 后退提示生成（Step-Back Prompting）：先问一个更抽象的问题获取背景知识，再回答原问题
+4. 查询扩展（Query Expansion）：补充同义词/相关关键词，扩大召回覆盖面
+5. HyDE（假设性文档嵌入）：先让 LLM 生成假设答案，用答案措辞去检索，缩小"问-答"表述鸿沟
 """
 
 import re
@@ -36,6 +38,20 @@ def _decompose_enabled(db) -> bool:
 def _stepback_enabled(db) -> bool:
     try:
         return bool(config_service.get_config("ai_query_stepback_enabled", db))
+    except Exception:
+        return False
+
+
+def _expand_enabled(db) -> bool:
+    try:
+        return bool(config_service.get_config("ai_query_expand_enabled", db))
+    except Exception:
+        return False
+
+
+def _hyde_enabled(db) -> bool:
+    try:
+        return bool(config_service.get_config("ai_query_hyde_enabled", db))
     except Exception:
         return False
 
@@ -194,17 +210,91 @@ def step_back_query(db, question: str) -> str:
 
 
 # ——————————————————————————————————————————————
+# 4. 查询扩展（Query Expansion）
+# ——————————————————————————————————————————————
+
+EXPAND_PROMPT = """你是知识库检索查询优化助手。针对用户问题，补充可能出现在相关文档里的同义词、近义词和相关关键词，用于扩大检索召回。
+
+规则：
+1. 输出 5-8 个和问题相关的关键词或同义说法，用空格分隔
+2. 包含核心概念的不同表述（口语说法、正式术语、简称全称）
+3. 不要输出句子、不要编号、不要解释
+4. 例如问题"怎么退款" → "退款 退钱 申请退款 售后 原路退回 退款流程 退款规则"
+
+用户问题：{question}
+
+关键词："""
+
+
+def expand_query(db, question: str) -> str:
+    """生成补充关键词，拼接到原问题形成增强查询。
+
+    返回增强后的查询字符串。失败或未启用时返回空字符串。
+    """
+    question = (question or "").strip()
+    if not question or not _expand_enabled(db):
+        return ""
+
+    prompt = EXPAND_PROMPT.format(question=question)
+    result = _llm_rewrite(prompt, max_tokens=120)
+    if result:
+        result = result.split("\n")[0].strip()
+        result = re.sub(r'^["「『]|["」』]$', '', result).strip()
+        if result:
+            # 原问题 + 补充关键词，既保留完整意图又扩大关键词命中面
+            return question + " " + result
+    return ""
+
+
+# ——————————————————————————————————————————————
+# 5. HyDE（Hypothetical Document Embeddings，假设性文档嵌入）
+# ——————————————————————————————————————————————
+
+HYDE_PROMPT = """请简短回答下面的问题（2-3句话），即使不确定也请根据常识给出一个可能的答案。你的回答将用于文档检索，不需要完美准确。
+
+问题：{question}
+
+回答："""
+
+
+def hyde_document(db, question: str) -> str:
+    """生成假设性答案文档，用答案的措辞去做向量检索。
+
+    原理：用户的"提问"和知识库里的"陈述"措辞往往不同（问题 vs 答案），
+    直接用问题检索可能匹配不准。先让 LLM 写一段"假答案"，假答案和真实文档
+    同样是陈述句、措辞更接近，用它去检索更容易命中真正相关的文档。
+
+    返回假设文档字符串。失败或未启用时返回空字符串。
+    """
+    question = (question or "").strip()
+    if not question or not _hyde_enabled(db):
+        return ""
+
+    prompt = HYDE_PROMPT.format(question=question)
+    result = _llm_rewrite(prompt, max_tokens=200)
+    if result:
+        result = result.strip()
+        result = re.sub(r'^["「『]|["」』]$', '', result).strip()
+    return result
+
+
+# ——————————————————————————————————————————————
 # 组合优化：生成所有需要检索的查询
 # ——————————————————————————————————————————————
 
 def generate_queries(db, question: str, debug: dict = None) -> list:
     """根据启用的优化技术，生成所有需要检索的查询列表。
 
-    返回 [{"query": str, "type": str}]，type 可选：
+    返回 [{"query": str, "type": str, "channels": [str]}]，type 可选：
     - "original"：原问题
     - "rewritten"：查询重写
     - "subquery"：子查询分解
     - "stepback"：后退提示
+    - "expanded"：查询扩展（原问题+补充关键词）
+    - "hyde"：假设性文档（仅用于向量检索）
+
+    channels 标记该查询适用于哪些检索通道（"keyword"/"vector"）。
+    HyDE 是陈述句不是问题，关键词匹配无意义，故只走向量通道。
 
     所有查询去重后返回。
     """
@@ -214,12 +304,14 @@ def generate_queries(db, question: str, debug: dict = None) -> list:
 
     queries = []
     seen = set()
+    ALL = ["keyword", "vector"]
 
-    def _add(q, qtype):
+    def _add(q, qtype, channels=None):
         q = (q or "").strip()
         if q and q not in seen:
             seen.add(q)
-            queries.append({"query": q, "type": qtype})
+            queries.append({"query": q, "type": qtype,
+                            "channels": channels or ALL})
 
     # 原问题始终保留
     _add(question, "original")
@@ -241,11 +333,23 @@ def generate_queries(db, question: str, debug: dict = None) -> list:
     if stepback:
         _add(stepback, "stepback")
 
+    # 4. 查询扩展（原问题 + 补充关键词，关键词与向量通道都用）
+    expanded = expand_query(db, question)
+    if expanded:
+        _add(expanded, "expanded")
+
+    # 5. HyDE 假设文档（仅向量通道）
+    hyde = hyde_document(db, question)
+    if hyde:
+        _add(hyde, "hyde", channels=["vector"])
+
     if debug is not None:
         debug["query_optimization"] = {
             "rewrite_enabled": _rewrite_enabled(db),
             "decompose_enabled": _decompose_enabled(db),
             "stepback_enabled": _stepback_enabled(db),
+            "expand_enabled": _expand_enabled(db),
+            "hyde_enabled": _hyde_enabled(db),
             "generated_queries": queries,
         }
 

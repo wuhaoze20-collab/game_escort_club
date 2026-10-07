@@ -9,6 +9,14 @@
         .page-section { display: none; }
         .page-section.active { display: block; }
         .loading { text-align: center; padding: 40px; color: #9ca3af; }
+        /* 开关按钮 */
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; cursor: pointer; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; background-color: #cbd5e1; border-radius: 24px; transition: .3s; }
+        .toggle-slider::before { content: ""; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+        .toggle-switch input:checked + .toggle-slider { background-color: #10b981; }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+        .toggle-switch input:focus + .toggle-slider { box-shadow: 0 0 0 3px rgba(16,185,129,.2); }
         /* 显式定义 hidden，不依赖 Tailwind CDN（防止 CDN 未生成导致弹窗暴露） */
         .hidden { display: none !important; }
         /* 通知红点强制圆形 */
@@ -188,9 +196,20 @@
         }
         .sidebar-group-title:hover { color: var(--gs-gold); }
         .sidebar-group-title .arrow {
-            transition: transform .2s;
-            font-size: 10px;
-            opacity: .8;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 12px;
+            opacity: .7;
+            transition: transform .2s, background .2s, opacity .2s;
+            flex-shrink: 0;
+        }
+        .sidebar-group-title:hover .arrow {
+            background: rgba(255, 70, 85, 0.15);
+            opacity: 1;
         }
         .sidebar-group-title.collapsed .arrow { transform: rotate(-90deg); }
         .sidebar-group-items.collapsed { display: none; }
@@ -1306,22 +1325,34 @@
                     <p class="text-sm text-gray-500 mb-4">抽成比例、提现冷却、登录锁定、各类上限等业务规则集中在此。修改后<b>立即生效</b>，无需改代码或重启服务。</p>
                     <div id="config-alerts"></div>
                     <div id="config-table" class="space-y-3"><div class="loading">加载中...</div></div>
+                </section>
 
-                    <!-- AI 知识库索引（向量检索）：用户协议 / 打手规范 / 退款规则这类长篇文档
-                         由后端 seed_kb_docs.py 提供，不在上面的参数表里编辑；这里只做
-                         「看状态」与「重建索引」。重建会调用千问 embedding 接口（按量计费），
-                         所以默认不动手，且未改动的片段会自动跳过、重复点不重复花钱。 -->
-                    <div class="border border-gray-200 rounded-lg p-4 mt-3">
+                <!-- 16.11 知识库管理（仅管理员）：文档上传、向量索引状态、文档列表 -->
+                <section id="page-kb-index" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">知识库管理</h2>
+                        <div class="flex items-center gap-2">
+                            <input type="file" id="kb-upload-input" accept=".pdf,.docx,.html,.htm,.txt,.md,.csv,.json" class="hidden" onchange="uploadKbDocument(this)">
+                            <button onclick="document.getElementById('kb-upload-input').click()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">上传文档</button>
+                            <button onclick="loadKbIndexStatus(); loadKbDocList();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">上传 PDF / Word / HTML / TXT / Markdown / CSV / JSON 文档，自动分块向量化后供 AI 检索。支持用户协议、打手规范、退款规则等长篇文档。</p>
+
+                    <!-- 索引状态卡片 -->
+                    <div class="border border-gray-200 rounded-lg p-4 mb-4">
                         <div class="flex justify-between items-center mb-2">
-                            <div class="text-sm font-medium text-gray-800">AI 知识库索引（向量检索）</div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <button onclick="loadKbIndexStatus()" class="text-xs text-gray-700 hover:underline">刷新状态</button>
-                                <button onclick="rebuildKbIndex()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
-                            </div>
+                            <div class="text-sm font-medium text-gray-800">向量索引状态</div>
+                            <button onclick="rebuildKbIndex()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
                         </div>
                         <div id="kb-index-status" class="text-xs text-gray-500">加载中...</div>
                         <div id="kb-index-msg" class="text-xs text-gray-500 mt-1"></div>
-                        <div class="text-xs text-gray-500 mt-2">开关与召回条数在下方参数表（<b>知识库向量检索</b> / <b>知识库召回条数</b>）。改完文档要点一次「重建索引」才会被 AI 检索到。</div>
+                    </div>
+
+                    <!-- 文档列表 -->
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="text-sm font-medium text-gray-800 mb-3">已索引文档</div>
+                        <div id="kb-doc-list" class="text-xs text-gray-500">加载中...</div>
                     </div>
                 </section>
 
@@ -2172,6 +2203,7 @@
                     { key: 'quote-manage', label: '台词管理' },
                     { key: 'ai-prompt', label: '提示词管理' },
                     { key: 'ai-faq', label: 'AI 问答库' },
+                    { key: 'kb-index', label: '知识库管理' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2253,6 +2285,7 @@
             groups.forEach(g => {
                 const title = document.createElement('div');
                 title.className = 'sidebar-group-title';
+                title.title = '点击折叠/展开';
                 title.innerHTML = '<span>' + g.group + '</span><span class="arrow">\u25be</span>';
                 const wrap = document.createElement('div');
                 wrap.className = 'sidebar-group-items';
@@ -2480,7 +2513,7 @@
         async function rebuildKbIndex() {
             const msg = document.getElementById('kb-index-msg');
             if (!confirm('重建向量索引会调用千问 embedding 接口（按量计费），未改动的片段会自动跳过。确认继续？')) return;
-            const btns = document.querySelectorAll('#page-system-config button');
+            const btns = document.querySelectorAll('#page-kb-index button');
             btns.forEach(b => { b.disabled = true; });
             if (msg) msg.textContent = '正在重建索引，请稍候（首次可能要十几秒）...';
             try {
@@ -2491,6 +2524,85 @@
             } finally {
                 btns.forEach(b => { b.disabled = false; });
                 loadKbIndexStatus();
+                loadKbDocList();
+            }
+        }
+
+        async function uploadKbDocument(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            const msg = document.getElementById('kb-index-msg');
+            const btns = document.querySelectorAll('#page-kb-index button');
+            btns.forEach(b => { b.disabled = true; });
+            if (msg) msg.textContent = '正在上传「' + file.name + '」并重建索引，请稍候...';
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const token = localStorage.getItem('token');
+                const resp = await fetch(API_BASE + '/api/ai/kb/upload', {
+                    method: 'POST',
+                    headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || data.message || ('HTTP ' + resp.status));
+                if (msg) msg.textContent = (data && data.message) || '上传成功';
+            } catch (e) {
+                if (msg) msg.textContent = '上传失败：' + e.message;
+            } finally {
+                btns.forEach(b => { b.disabled = false; });
+                input.value = '';
+                loadKbIndexStatus();
+                loadKbDocList();
+            }
+        }
+
+        async function loadKbDocList() {
+            const box = document.getElementById('kb-doc-list');
+            if (!box) return;
+            try {
+                const data = await apiRequest('/api/ai/kb/documents');
+                const items = data.items || [];
+                if (!items.length) {
+                    box.innerHTML = '<div class="text-gray-400">暂无文档</div>';
+                    return;
+                }
+                box.innerHTML = '<div class="space-y-3">' + items.map(d => `
+                    <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-gray-800">${escapeHtml(d.title || d.doc_key)}</div>
+                            <div class="text-xs text-gray-400 mt-1">标识：${escapeHtml(d.doc_key)} · ${d.chars || 0} 字符 · ${d.role ? escapeHtml(d.role) : '全角色'}</div>
+                        </div>
+                        <div class="flex items-center gap-3 shrink-0 ml-4">
+                            <button onclick="viewKbChunks('${escapeHtml(d.doc_key)}')" class="text-sm text-blue-500 hover:underline">片段</button>
+                            <button onclick="deleteKbDoc('${escapeHtml(d.doc_key)}')" class="text-sm text-red-500 hover:underline">删除</button>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            } catch (e) {
+                box.innerHTML = '<span class="text-red-500">加载失败：' + escapeHtml(e.message) + '</span>';
+            }
+        }
+
+        async function viewKbChunks(docKey) {
+            try {
+                const data = await apiRequest('/api/ai/kb/chunks?source_type=document&source_key=' + encodeURIComponent(docKey));
+                const items = data.items || [];
+                const text = items.map((c, i) => `[${i + 1}] idx=${c.chunk_index} ${c.chars}字 ready=${c.ready}\n${c.content}`).join('\n\n---\n\n');
+                alert(`「${docKey}」共 ${items.length} 个片段：\n\n${text.substring(0, 3000)}`);
+            } catch (e) {
+                alert('查看失败：' + e.message);
+            }
+        }
+
+        async function deleteKbDoc(docKey) {
+            if (!confirm('确认删除文档「' + docKey + '」？同时会清除其索引片段。')) return;
+            try {
+                await apiRequest('/api/ai/kb/documents/' + encodeURIComponent(docKey), 'DELETE');
+                loadKbIndexStatus();
+                loadKbDocList();
+            } catch (e) {
+                alert('删除失败：' + e.message);
             }
         }
 
@@ -2498,21 +2610,75 @@
             renderConfigAlerts();
             const box = document.getElementById('config-table');
             if (!box) return;
-            box.innerHTML = configCache.map(c => ''
-                + '<div class="border border-gray-200 rounded-lg p-4">'
-                + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
-                + '    <div class="flex-1 min-w-0">'
-                + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
-                + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
-                + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
-                + '    </div>'
-                + '    <div class="flex gap-2 shrink-0 items-center">'
-                + '      <input id="cfg-' + escapeHtml(c.config_key) + '" type="text" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
-                + '      <button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
-                + '      <button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>'
-                + '    </div>'
-                + '  </div>'
-                + '</div>').join('');
+            // 按 group 分组，保持 CONFIG_META 中的出现顺序
+            const groups = {};
+            const groupOrder = [];
+            configCache.forEach(c => {
+                const g = c.group || '其他';
+                if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+                groups[g].push(c);
+            });
+            box.innerHTML = groupOrder.map((g, gi) => {
+                const cards = groups[g].map(c => {
+                    const isBool = c.value_type === 'bool';
+                    const isOn = isBool && (c.config_value === '1' || c.config_value === 'true' || c.config_value === 'True');
+                    let controlHtml = '';
+                    if (isBool) {
+                        controlHtml = ''
+                            + '<label class="toggle-switch" title="点击切换">'
+                            + '  <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleConfig(\'' + escapeHtml(c.config_key) + '\', this.checked)">'
+                            + '  <span class="toggle-slider"></span>'
+                            + '</label>'
+                            + '<span class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
+                    } else {
+                        controlHtml = ''
+                            + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="text" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
+                            + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
+                            + '<button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>';
+                    }
+                    return ''
+                        + '<div class="border border-gray-200 rounded-lg p-4">'
+                        + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
+                        + '    <div class="flex-1 min-w-0">'
+                        + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
+                        + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
+                        + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
+                        + '    </div>'
+                        + '    <div class="flex gap-2 shrink-0 items-center">'
+                        + controlHtml
+                        + '    </div>'
+                        + '  </div>'
+                        + '</div>';
+                }).join('');
+                return ''
+                    + '<div class="mb-6">'
+                    + '  <h3 class="cfg-group-title text-base font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer select-none hover:text-gray-900 transition" onclick="toggleConfigGroup(' + gi + ')" title="点击折叠/展开">'
+                    + '    <span class="cfg-group-arrow inline-block transition-transform duration-200 text-sm">\u25be</span>'
+                    + '    <span>' + escapeHtml(g) + '</span>'
+                    + '    <span class="text-xs font-normal text-gray-400">(' + groups[g].length + ' 项)</span>'
+                    + '  </h3>'
+                    + '  <div class="cfg-group-body space-y-3" id="cfg-group-body-' + gi + '">' + cards + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function toggleConfigGroup(gi) {
+            const body = document.getElementById('cfg-group-body-' + gi);
+            if (!body) return;
+            const collapsed = body.style.display === 'none';
+            body.style.display = collapsed ? '' : 'none';
+            const arrow = body.previousElementSibling.querySelector('.cfg-group-arrow');
+            if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+        }
+
+        async function toggleConfig(key, checked) {
+            try {
+                await apiRequest('/api/config/' + key, 'PUT', { value: checked ? '1' : '0' });
+                await loadSystemConfig();
+            } catch (e) {
+                alert(e.message);
+                await loadSystemConfig();
+            }
         }
 
         async function saveConfig(key) {
@@ -3129,6 +3295,12 @@
             // 切换界面：随机一句台词 + 确保10秒轮换定时器
             showRandomQuote();
             ensureQuoteTimer();
+
+            // 页面特定的数据加载
+            if (key === 'kb-index') {
+                loadKbIndexStatus();
+                loadKbDocList();
+            }
         }
 
         // ==================== 内容加载与渲染 ====================
