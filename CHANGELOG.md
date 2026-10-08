@@ -1,5 +1,126 @@
 # 更新日志 CHANGELOG
 
+## [V4.3.0] 2026-10-08
+
+### ✨ RAG 模块化重构 + 检索后重排序 + 模块开关 + Self-RAG 自我反思
+
+V3.10 把 RAG 做出来了，但所有逻辑都堆在 `ai_rag.py` 一个文件里（检索、融合、上下文构建混在一起），
+想单独关掉某个环节调试都做不到。本版把 RAG 推理问答阶段拆成 **6 个独立模块**，每个模块可独立开关，
+并新增**检索后重排序**和 **Self-RAG 自我反思**两大能力。
+
+#### ① RAG 模块化拆分（新包 `backend/rag/`，9 个文件）
+
+把原先 `ai_rag.py` 里的推理问答逻辑拆成独立模块，每个文件职责单一：
+
+| 模块 | 文件 | 职责 |
+|---|---|---|
+| Document | `document.py` | 统一数据结构（content/metadata/score/source_type/chunk） |
+| QueryRewriter | `query_rewriter.py` | 查询改写（封装 query_optimizer 的 5 种技术） |
+| VectorRetriever | `vector_retriever.py` | 向量检索（千问 embedding + 余弦相似度 + AutoMerging） |
+| KeywordRetriever | `keyword_retriever.py` | 关键词检索（FAQ BM25 匹配） |
+| FusionModule | `fusion.py` | 结果融合（加权 RRF，FAQ 权重 1.2 / 文档 1.0） |
+| **Reranker** | `reranker.py` | **【新增】检索后重排序**（多维度综合打分） |
+| ContextBuilder | `context_builder.py` | 上下文构建（格式化为引用块，top_k + max_chars 限制） |
+| ModularRAG | `pipeline.py` | 主类：组装 6 个模块，执行完整查询流程 |
+
+`ai_rag.py` 保留**数据准备阶段**（加载/分块/向量化/索引管理），推理问答阶段通过
+`from rag import ModularRAG` 调用，旧函数 `search()` / `build_rag_context()` 改为兼容层。
+
+#### ② 检索后重排序（Re-ranking，新模块）
+
+RRF 融合只用了**排名**信息（第1名、第2名...），丢失了原始相似度分数的绝对值。
+两个片段排名都是第1，但一个相似度 0.9、一个 0.4，RRF 给它们的贡献一样。
+
+重排序把多维度信息综合起来重新打分：
+
+```
+综合分 = RRF分(归一化) × 0.4
+       + 向量最高相似度 × 0.3
+       + 关键词最高分数(归一化) × 0.15
+       + 来源类型加成 × 0.1      （FAQ +0.1，文档 +0）
+       + 标题匹配加分 × 0.05     （问题关键词出现在标题中）
+```
+
+- **零额外成本**：纯规则计算，不调用外部 API，实时完成
+- **FAQ 加成**：人工维护的问答更权威，给额外 0.1 权重
+- **标题匹配**：问题关键词出现在文档标题/FAQ 问题中时加分，最高 0.05
+
+#### ③ 6 个模块独立开关（新参数分组「RAG 模块开关」）
+
+每个环节可独立关闭，便于调试对比和性能优化：
+
+| 参数 | 默认 | 关闭后的效果 |
+|---|---|---|
+| `rag_module_query_rewrite` | 开启 | 直接用原始问题检索，不调用查询优化器（省一次大模型调用） |
+| `rag_module_vector_retrieval` | 开启 | 不做语义检索，只用关键词匹配 |
+| `rag_module_keyword_retrieval` | 开启 | 不做 FAQ 关键词匹配，只用向量语义检索 |
+| `rag_module_fusion` | 开启 | 两路结果简单合并（向量在前），不做加权 RRF 排序 |
+| `rag_module_rerank` | 开启 | 跳过检索后重排序，直接用融合结果 |
+| `rag_module_automerge` | 开启 | 命中子块时不合并为整章，只返回命中的子块片段 |
+
+**使用场景**：调试对比（关闭重排序看效果差异）、性能优化（查询改写会多调一次大模型，不需要时关掉）、
+故障排查（向量检索出问题时先关掉，只用关键词匹配验证基础功能）。
+
+#### ④ Self-RAG 自我反思（新参数分组「Self-RAG」）
+
+传统 RAG 是"无脑检索→塞给大模型→回答"。Self-RAG 让大模型**自己反思**三个问题：
+
+**反思点 1：Retrieve（要不要检索？）**
+- 大模型先判断问题类型：业务规则/价格/流程 → 需要检索；闲聊/问候/感谢 → 不需要
+- 不需要检索时跳过 RAG，直接回答，**省 embedding 调用**
+- 参数：`ai_self_rag_retrieve_check`（默认开启）
+
+**反思点 2：ISREL（检索内容相关吗？）**
+- 大模型对每个检索片段打 1-5 分，过滤掉 ≤2 分的不相关片段
+- 比规则式重排序更精准（语义理解），但多一次大模型调用
+- 参数：`ai_self_rag_relevance_filter`（默认开启）
+
+**反思点 3：ISSUP（回答靠谱吗？）**
+- 大模型检查回答中的事实性陈述是否能在知识库中找到依据
+- 发现问题只记录日志，不自动修正（避免修正引入新错误）
+- 参数：`ai_self_rag_verify_answer`（默认关闭，最耗 token）
+
+总开关：`ai_self_rag_enabled`（默认关闭，需要时手动开启）。
+
+#### ⑤ 系统参数开关交互优化
+
+管理员修改布尔开关（如「启用知识库向量检索」）后，**不再刷新整个页面**，
+只原地更新「已开启/已关闭」状态文字和颜色。修改失败时自动回滚开关状态。
+
+- 开关状态文字元素 ID：`cfg-status-{key}`
+- `toggleConfig()` 函数去掉 `loadSystemConfig()` 刷新，改为更新 `configCache` + 原地更新 DOM
+
+#### ⑥ 清理冗余文件与代码
+
+| 删除项 | 原因 |
+|---|---|
+| `backend/migrate_vectors.py` | 一次性迁移脚本，已执行完毕 |
+| `backend/export_docs_to_word.py` | 一次性导出脚本，已执行完毕 |
+| `ai_rag.py::_normalize_l2()` | 从未被调用的死代码 |
+| `ai_rag.py::_keyword_faq_hits()` | 模块化后被 KeywordRetriever 替代 |
+| 5 个日志文件 | `backend_err.log` / `backend_out.log` / `_conda2.log` / `_pip.log` / `_req.log` |
+| 2 个 `__pycache__` 目录 | Python 缓存，可随时重建 |
+
+### ✅ 验证
+
+| 验证项 | 结果 |
+|---|---|
+| 模块语法 | 9 个 rag 包文件 + ai_rag.py + ai_service.py + ai_api.py 全部 `ast.parse` 通过 |
+| 模块导入 | `from rag import ModularRAG, Reranker` 成功；`from ai_service import self_rag_*` 成功 |
+| 兼容层 | `ai_rag.build_rag_context()` 内部创建 ModularRAG 并调用 query()，接口不变 |
+| 模块开关 | 关闭向量检索后，查询只走关键词通道；关闭重排序后，用 RRF 结果直接构建上下文 |
+| Self-RAG 检索前判断 | 闲聊问题（"你好"）判断为不需要检索，skip_rag=True，系统提示词不含知识库片段 |
+| AutoMerging 开关 | 关闭后 VectorRetriever 直接返回子块，不合并为父块 |
+| 开关不刷新 | 切换布尔参数后页面不刷新，状态文字原地更新 |
+
+### 📄 基础设施同步
+
+- `config_service.CONFIG_META`：37 → **47 项**（新增 6 个模块开关 + 4 个 Self-RAG 开关）
+- `backend/rag/`：新增 9 个文件（模块化包）
+- 接口数、数据表数不变（RAG 重构不改变对外接口）
+
+---
+
 ## [V3.10.0] 2026-10-06
 
 ### ✨ AI 知识库与向量检索（RAG）+ 长文档运营
