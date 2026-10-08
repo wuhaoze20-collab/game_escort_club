@@ -117,8 +117,26 @@ def ai_chat(
                .all())
     history.reverse()
 
+    # —— Self-RAG：检索前判断 ——
+    # 让大模型先判断这个问题是否需要查知识库，不需要则跳过检索直接回答（省 embedding 调用）
+    self_rag_enabled = bool(config_service.get_config("ai_self_rag_enabled", db))
+    skip_rag = False
+    self_rag_info = {}
+    if self_rag_enabled and bool(config_service.get_config("ai_self_rag_retrieve_check", db)):
+        try:
+            check = ai_service.self_rag_should_retrieve(text, model=model)
+            skip_rag = not check["need_retrieve"]
+            self_rag_info["retrieve_check"] = check
+            if skip_rag:
+                print(f"[self-rag] 跳过检索：{check.get('reason', '')}")
+        except Exception as e:
+            print(f"[self-rag] 检索前判断失败，正常检索：{e}")
+
     # 传 text 进去：FAQ 按需注入要用本轮提问做关键词匹配
-    messages = [{"role": "system", "content": ai_service.build_system_prompt(db, current_user, text)}]
+    # skip_rag=True 时 build_system_prompt 会跳过知识库检索
+    messages = [{"role": "system",
+                 "content": ai_service.build_system_prompt(
+                     db, current_user, text, skip_rag=skip_rag)}]
     for m in history:
         # 调用失败的助手消息（内容为空）不放进上下文，避免污染
         if m.role == "assistant" and not (m.content or "").strip():
@@ -181,6 +199,29 @@ def ai_chat(
     # 多轮累加 token（覆盖单轮的统计，否则只记了最后一轮）
     result["prompt_tokens"] = prompt_tokens
     result["completion_tokens"] = completion_tokens
+
+    # —— Self-RAG：生成后回答验证 ——
+    # 让大模型检查回答是否被知识库支持，不支持则标记（默认关闭，最耗 token）
+    if (self_rag_enabled and result["ok"]
+            and bool(config_service.get_config("ai_self_rag_verify_answer", db))
+            and not skip_rag):
+        try:
+            import ai_rag
+            # 重新检索上下文用于验证（只有启用回答验证时才会发生，默认关闭）
+            verify_ctx = ai_rag.build_rag_context(db, current_user, text)
+            if verify_ctx:
+                # 从格式化的上下文中提取纯文本片段
+                ctx_lines = [l.strip() for l in verify_ctx.split("\n")
+                             if l.strip() and not l.startswith("【")]
+                verify = ai_service.self_rag_verify_answer(
+                    text, result["reply"], ctx_lines, model=model)
+                self_rag_info["verify"] = verify
+                result["completion_tokens"] += verify.get("tokens", 0)
+                if not verify["supported"]:
+                    print(f"[self-rag] 回答未被知识库支持：{verify.get('issues', '')}")
+                    # 不自动修正回答，只在日志中记录（避免修正引入新错误）
+        except Exception as e:
+            print(f"[self-rag] 回答验证失败：{e}")
 
     # 失败也落库，便于排查（内容为空，error 记原因）
     db.add(AiMessage(

@@ -1,10 +1,22 @@
 # -*- coding: utf-8 -*-
-"""知识库向量检索（RAG）。
+"""知识库向量检索（RAG）—— 按两阶段组织代码。
 
-流程：数据准备（收集+分块） → 索引构建（向量化+存库） → 检索（向量+关键词） → 提示词注入。
+RAG 核心流程分为两大阶段：
 
-长文档存 docs/agreements/*.docx，FAQ 存 ai_faqs 表；修改后后台点「重建索引」。
-向量以 JSON 存 TEXT 列、余弦用纯 Python 算（片段量级几百条，无需外部向量库）。
+┌─────────────────────────────────────────────────────────────┐
+│ 第一阶段：数据准备（ETL）—— 离线执行，后台点「重建索引」触发  │
+│   1.1 加载（Load）   ：读取多格式文档（Word/PDF/HTML/MD/CSV…）│
+│   1.2 清洗与切分（Chunk）：按语义边界切分，父子分块（父块不向量化）│
+│   1.3 向量化与存储（Embed）：Embedding 模型转向量，存入 ai_vectors 表 │
+├─────────────────────────────────────────────────────────────┤
+│ 第二阶段：推理问答 —— 用户提问时实时执行                        │
+│   2.1 检索（Retrieve）：问题向量化 → 多路召回（文档+FAQ通道）→ 加权RRF融合 │
+│   2.2 增强（Augment） ：检索上下文 + 历史对话 + 系统提示词 → 拼成完整 Prompt │
+│   2.3 生成（Generate）：Prompt 输入大模型 → 基于上下文生成答案（在 ai_service.py） │
+└─────────────────────────────────────────────────────────────┘
+
+数据来源：长文档存 docs/agreements/，FAQ 存 ai_faqs 表。
+向量以 JSON 存 MySQL TEXT 列、余弦用纯 Python 算（片段量级几百条，无需外部向量库）。
 """
 
 import hashlib
@@ -85,6 +97,39 @@ def _max_chars(db) -> int:
     except Exception:
         return 3000
 
+
+# —— RAG 模块开关读取（每个模块可独立关闭，便于调试对比）——
+def _module_enabled(db, key: str, default: bool = True) -> bool:
+    """读取某个 RAG 模块开关，默认开启。"""
+    try:
+        return bool(config_service.get_config(key, db))
+    except Exception:
+        return default
+
+
+def module_query_rewrite_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_query_rewrite", True)
+
+
+def module_vector_retrieval_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_vector_retrieval", True)
+
+
+def module_keyword_retrieval_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_keyword_retrieval", True)
+
+
+def module_fusion_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_fusion", True)
+
+
+def module_rerank_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_rerank", True)
+
+
+def module_automerge_enabled(db) -> bool:
+    return _module_enabled(db, "rag_module_automerge", True)
+
 def _embed_url() -> str:
     return (os.getenv("QWEN_EMBED_URL") or "").strip() or DEFAULT_EMBED_URL
 
@@ -95,9 +140,15 @@ def _timeout() -> int:
         return EMBED_TIMEOUT
 
 
-# ——————————————————————————————————————————————
-# 第一阶段：数据准备（收集 + 分块）
-# ——————————————————————————————————————————————
+# ══════════════════════════════════════════════════════════════
+# 第一阶段：数据准备（ETL）
+# ══════════════════════════════════════════════════════════════
+# 离线执行，管理员在后台点「重建索引」时触发。
+# 把原始文档变成"可检索的向量片段"，分三步：加载 → 切分 → 向量化。
+
+# ── 1.1 加载（Load）：读取多格式文档，统一转为纯文本 ──
+# 支持 Word(.docx)、PDF、HTML、Markdown(.md)、CSV、JSON、TXT 等。
+# 每个文档返回 (标题, 正文文本, 角色限制)，角色限制用于按用户角色过滤检索结果。
 
 def _read_docx(filepath: str) -> tuple:
     """读取 Word 文件，返回 (title, content)。标题取第一个 Heading/Title 段落。"""
@@ -276,6 +327,12 @@ def collect_sources(db) -> list:
     return out
 
 
+# ── 1.2 清洗与切分（Chunk）：把长文本切成语义完整的片段 ──
+# 为什么不按字数硬切：中文硬切会在句子中间断开，语义支离破碎，向量就没意义了。
+# 策略：先按"第X条/章/节"等语义边界切，再把相邻片段打包到接近 chunk_size。
+# 父子分块：父块（整章）不向量化，用于返回给大模型时上下文完整；
+#           子块（句子级）向量化，用于检索时精准命中。
+
 def _hard_split(unit: str, size: int) -> list:
     """按句子切分再打包到接近 size；单句超长时按字符硬切兜底。"""
     pieces, buf = [], ""
@@ -321,9 +378,11 @@ def chunk_parent_child(text: str, child_size: int = 150) -> list:
     return result
 
 
-# ——————————————————————————————————————————————
-# 第二阶段：索引构建（向量化 + 重建 + 管理）
-# ——————————————————————————————————————————————
+# ── 1.3 向量化与存储（Embed & Store）：文本块 → 向量 → 存入 MySQL ──
+# 用千问 text-embedding-v3 模型（1024维）把每个文本块转成向量。
+# 向量以 JSON 数组存 MySQL 的 ai_vectors 表（TEXT 列），无需外部向量数据库。
+# rebuild_index() 是入口：收集所有文档 → 分块 → 批量向量化 → 写入/更新数据库。
+# 同时维护文档级元数据（ai_vector_sources 表），支持按来源删除、统计、增量重建。
 
 def md5_text(text: str) -> str:
     """内容 MD5，用于判断是否变化（没变就不重新向量化，省 API 费用）。"""
@@ -331,7 +390,20 @@ def md5_text(text: str) -> str:
 
 
 def embed_texts(texts: list, model: str = None) -> list:
-    """批量调用千问 embedding 接口，文本列表 → 向量列表。失败抛异常。"""
+    """【1.3 向量化】批量调用千问 embedding 接口，文本列表 → 1024维向量列表。
+
+    在 RAG 流程中的位置：数据准备阶段的最后一步，把切好的文本块转成向量。
+    检索阶段也会调用它（把用户问题转成向量，再和库里的向量算余弦相似度）。
+
+    参数：
+        texts: 要向量化的文本列表（批量处理，每批 EMBED_BATCH 条）
+        model: embedding 模型名，默认 text-embedding-v3（1024维）
+
+    返回：
+        与 texts 等长的向量列表，每个向量是 1024 个 float 的 list。
+
+    异常：API Key 未配置、超时、连接失败、HTTP 非200 时抛 RuntimeError。
+    """
     import ai_service
     api_key = ai_service.get_api_key()
     if not api_key:
@@ -374,7 +446,23 @@ def embed_texts(texts: list, model: str = None) -> list:
 
 
 def _cosine(a: list, b: list) -> float:
-    """余弦相似度：点积 / 模长乘积，范围 -1~1。纯 Python 实现（几百条够用）。"""
+    """余弦相似度：点积 / 模长乘积，范围 -1~1。纯 Python 实现（几百条够用）。
+
+    数学公式：
+        cos(θ) = (a · b) / (||a|| × ||b||)
+               = sum(a_i × b_i) / (sqrt(sum(a_i²)) × sqrt(sum(b_i²)))
+
+    与 L2 归一化的关系（文档2核心知识点）：
+        如果两个向量都已经做了 L2 归一化（模长=1），则余弦相似度 = 点积（内积）。
+        这是 FAISS 等向量数据库实现余弦检索的标准做法：入库时归一化，检索时用内积索引。
+        我们当前未做归一化，每次检索都完整计算余弦（含模长），数据量小时无性能问题。
+
+    返回值含义：
+        1.0 = 完全相同方向（语义最相似）
+        0.0 = 正交（无关）
+        -1.0 = 完全相反方向
+        文本 embedding 向量通常都是正值，实际范围约 0.3~0.95。
+    """
     s = na = nb = 0.0
     for x, y in zip(a, b):
         s += x * y; na += x * x; nb += y * y
@@ -384,9 +472,27 @@ def _cosine(a: list, b: list) -> float:
 
 
 def rebuild_index(db, force: bool = False) -> dict:
-    """重建向量索引。内容 hash 没变的片段跳过（零花费），失败即停保留已完成部分。
+    """【1.3 向量化与存储 · 入口函数】重建向量索引。
 
-    流程：①规划（收集+分块）→ ②清理（删旧片段）→ ③父块（不向量化）→ ④子块+FAQ（向量化写入ai_vectors）→ ⑤提交
+    在 RAG 流程中的位置：数据准备阶段（ETL）的总入口，管理员在后台点「重建索引」时调用。
+    一次性完成：加载所有文档 → 分块 → 向量化 → 存入 MySQL。
+
+    幂等设计：每个片段计算 content_hash（MD5），内容没变的跳过向量化（零 API 花费）。
+    失败即停：向量化中途出错时保留已完成部分，下次重建从断点继续。
+
+    执行流程（5步）：
+        ① 规划：collect_sources() 收集所有文档+FAQ → chunk_parent_child() 父子分块
+        ② 清理：删除本次不再出现的旧片段（文档被删/改名时）
+        ③ 父块写入：整章内容存 AiChunk 表，不向量化（用于检索命中后返回完整上下文）
+        ④ 子块+FAQ 向量化：调用 embed_texts() 转成 1024维向量，写入 AiVector 表
+        ⑤ 提交：事务提交，返回统计信息（新增/更新/跳过/失败数量）
+
+    参数：
+        db: 数据库会话
+        force: True 时忽略 hash 比较，全部重新向量化（默认 False，增量更新）
+
+    返回：
+        dict，含 total/added/updated/skipped/failed 等统计字段。
     """
     from models import AiChunk, AiVector
     model = _embed_model(db)
@@ -608,260 +714,77 @@ def pending_sources(db) -> list:
     return out
 
 
-# ——————————————————————————————————————————————
-# 第三阶段：检索（向量 + 关键词）
-# ——————————————————————————————————————————————
+# ══════════════════════════════════════════════════════════════
+# 第二阶段：推理问答（用户提问时实时执行）
+# ══════════════════════════════════════════════════════════════
+# 用户提问 → 检索相关片段 → 拼成 Prompt → 大模型生成答案。
+# 本文件负责 2.1 检索 和 2.2 增强；2.3 生成在 ai_service.py 中调用大模型完成。
+
+# ── 2.1 检索（Retrieve）：问题向量化 → 多路召回 → 加权 RRF 融合 ──
+# 多路召回：
+#   · 文档通道：长文档的子块向量，余弦相似度检索（语义匹配）
+#   · FAQ 通道：人工维护的权威问答，关键词 BM25 + 向量双通道（精确匹配）
+# 加权 RRF 融合：两个通道各自排序，用 Reciprocal Rank Fusion 合并，
+#   FAQ 权重 1.2（权威问答优先），文档权重 1.0。
+# 查询优化：在检索前可对问题进行改写/分解/扩展/HyDE（在 query_optimizer.py）。
+
+# ============================================================
+# 模块化 RAG 架构（Modular RAG）
+# 各模块已独立到 rag/ 包中：
+#   rag/document.py         - Document 数据结构
+#   rag/query_rewriter.py   - QueryRewriter（查询改写）
+#   rag/vector_retriever.py - VectorRetriever（向量检索）
+#   rag/keyword_retriever.py- KeywordRetriever（关键词检索）
+#   rag/fusion.py           - FusionModule（结果融合）
+#   rag/context_builder.py  - ContextBuilder（上下文构建）
+#   rag/pipeline.py         - ModularRAG（主类编排器）
+# 本文件保留数据准备阶段（ETL）和兼容层函数。
+# ============================================================
+
+from rag import (
+    Document, QueryRewriter, VectorRetriever, KeywordRetriever,
+    FusionModule, ContextBuilder, ModularRAG,
+)
+
+
+# ============================================================
+# 兼容层（旧函数接口，内部调用 rag 包中的模块化类，保持向后兼容）
+# ============================================================
 
 def search(db, question: str, role: str, top_k: int = 4,
            min_score: float = 0.35, source_types=None) -> list:
-    """向量检索（父子分块版）。失败抛异常，由 build_rag_context 兜底。
+    """【兼容层】向量相似度检索（旧接口）。
 
-    流程：问题向量化 → 从 ai_vectors 读所有向量 → 关联 ai_chunks 算余弦 → AutoMerging 子块→父块 → 合并FAQ。
-    返回 [{"score", "chunk", "merged", "hit_ratio"}]，按相似度降序。
-
-    source_types：限定检索的数据源通道，None=全部，可选 ["document"]（长文档）
-    或 ["faq"]（问答库），用于多路召回时各通道独立检索。
+    内部调用 rag.VectorRetriever.retrieve()，返回旧格式 [{"score", "chunk", "merged", "hit_ratio"}]。
+    新代码建议直接使用 VectorRetriever 类。
     """
-    from models import AiChunk, AiVector
-    question = (question or "").strip()
-    if not question:
-        return []
-    allowed_types = set(source_types) if source_types else None
+    retriever = VectorRetriever(db)
+    docs = retriever.retrieve(question, role, top_k, min_score, source_types)
+    return [{"score": d.score, "chunk": d.chunk,
+             "merged": d.metadata.get("merged", False),
+             "hit_ratio": d.metadata.get("hit_ratio", 0)} for d in docs]
 
-    qv = embed_texts([question], _embed_model(db))[0]
-
-    # 从 ai_vectors 表读所有向量，关联 ai_chunks 获取元数据
-    vec_rows = db.query(AiVector).all()
-    chunk_ids = [v.chunk_id for v in vec_rows]
-    chunks_by_id = {}
-    if chunk_ids:
-        q = db.query(AiChunk).filter(AiChunk.id.in_(chunk_ids))
-        if allowed_types:
-            q = q.filter(AiChunk.source_type.in_(list(allowed_types)))
-        for c in q.all():
-            chunks_by_id[c.id] = c
-
-    child_hits = []
-    faq_hits = []
-    for v in vec_rows:
-        chunk = chunks_by_id.get(v.chunk_id)
-        if chunk is None or int(chunk.enabled or 0) != 1:
-            continue
-        if allowed_types and (chunk.source_type or "") not in allowed_types:
-            continue
-        if (chunk.role or "") not in ("", role or ""):
-            continue
-        try:
-            vec = json.loads(v.embedding)
-        except Exception:
-            continue
-        if not isinstance(vec, list) or len(vec) != len(qv):
-            continue
-        score = _cosine(qv, vec)
-        if score >= min_score:
-            if chunk.parent_id:
-                child_hits.append((round(score, 4), chunk))
-            else:
-                faq_hits.append((round(score, 4), chunk))
-
-    child_hits.sort(key=lambda x: -x[0])
-    faq_hits.sort(key=lambda x: -x[0])
-
-    # AutoMerging：统计每个父块下子块总数与命中数
-    all_children = (db.query(AiChunk)
-                    .filter(AiChunk.enabled == 1)
-                    .filter(AiChunk.parent_id.isnot(None)).all())
-    child_count_by_parent = {}
-    for c in all_children:
-        child_count_by_parent[c.parent_id] = child_count_by_parent.get(c.parent_id, 0) + 1
-
-    parent_hits = {}
-    for score, child in child_hits:
-        pid = child.parent_id
-        if pid not in parent_hits:
-            parent_hits[pid] = {"max_score": score, "hit_count": 0}
-        parent_hits[pid]["max_score"] = max(parent_hits[pid]["max_score"], score)
-        parent_hits[pid]["hit_count"] += 1
-
-    parent_rows = {}
-    if parent_hits:
-        for pr in db.query(AiChunk).filter(AiChunk.id.in_(list(parent_hits.keys()))).all():
-            parent_rows[pr.id] = pr
-
-    result = []
-    for pid, info in parent_hits.items():
-        total = child_count_by_parent.get(pid, 1)
-        ratio = info["hit_count"] / total if total > 0 else 0
-        parent_row = parent_rows.get(pid)
-        if parent_row:
-            # 无论是否达到 AutoMerging 阈值，都返回父块（保证上下文完整）
-            result.append({"score": info["max_score"], "chunk": parent_row,
-                           "merged": ratio >= _AUTOMERGE_RATIO,
-                           "hit_ratio": round(ratio, 2)})
-
-    for score, faq in faq_hits:
-        result.append({"score": score, "chunk": faq, "merged": False, "hit_ratio": 1.0})
-
-    result.sort(key=lambda x: -x["score"])
-    return result[:max(1, int(top_k))]
-
-
-def _keyword_faq_hits(db, question: str, role: str, limit: int = 20) -> list:
-    """关键词匹配（只查 FAQ），复用 ai_service 的打分算法。返回 [(score, faq_row)]。"""
-    import ai_service
-    from models import AiFaq
-    rows = (db.query(AiFaq)
-            .filter(AiFaq.enabled == 1)
-            .filter(AiFaq.role.in_(["", role or ""])).all())
-    scored = []
-    for r in rows:
-        s = ai_service._faq_score(question, ai_service._split_keywords(r.keywords))
-        if s > 0:
-            scored.append((s, r))
-    scored.sort(key=lambda x: (-x[0], x[1].id))
-    return scored[:limit]
-
-
-# ——————————————————————————————————————————————
-# 第四阶段：提示词注入（双路召回 + RRF 融合 + 渲染）
-# ——————————————————————————————————————————————
 
 def build_rag_context(db, user, question: str, record_miss: bool = True,
                       top_k: int = None, min_score: float = None,
                       debug: dict = None) -> str:
-    """检索并渲染成提示词片段。任何失败都退回关键词匹配，绝不抛异常。
+    """【兼容层】完整 RAG 流程（旧接口）。
 
-    流程：①查询优化（生成多个查询）→ ②双路召回（每个查询都跑关键词+向量）
-         → ③RRF 融合 → ④调试信息（可选）→ ⑤渲染成文字注入提示词。
+    内部调用 rag.ModularRAG.query()，返回格式化后的上下文文本。
+    新代码建议直接使用 ModularRAG 类。
     """
     import ai_service
-    import query_optimizer
-
     question = (question or "").strip()
     if not question:
         return ""
     role = getattr(user, "role", "") or ""
 
-    # ① 查询优化
-    queries = query_optimizer.generate_queries(db, question, debug)
-    if not queries:
-        queries = [{"query": question, "type": "original"}]
+    rag = ModularRAG(db)
+    context = rag.query(question, role, top_k, min_score, debug)
 
-    # ② 多路召回：文档通道（向量）+ FAQ通道（关键词BM25 + 向量），各通道独立检索
-    all_kw_hits = []   # FAQ 关键词命中：[(score, faq_row, query_index, rank)]
-    all_vec_hits = []  # 向量命中：[{"score", "chunk", "channel", "query_index", "rank", ...}]
-    vector_errors = []
-    tk = _top_k(db) if top_k is None else max(1, int(top_k))
-    ms = _min_score(db) if min_score is None else float(min_score)
+    # 未命中记录（用于统计知识库覆盖率）
+    if not context and record_miss:
+        ai_service._record_faq_miss(db, question, role)
 
-    for qi, qinfo in enumerate(queries):
-        q = qinfo["query"]
-        use_ch = qinfo.get("channels", ["keyword", "vector"])
+    return context
 
-        # FAQ 通道 —— 关键词 BM25（精确匹配；仅支持关键词通道的查询）
-        if "keyword" in use_ch:
-            for rank, (s, r) in enumerate(_keyword_faq_hits(db, q, role)):
-                all_kw_hits.append((s, r, qi, rank))
-
-        # 向量通道 —— 文档通道与 FAQ 通道各自独立召回
-        if "vector" in use_ch:
-            for channel, stypes in (("document", ["document"]), ("faq", ["faq"])):
-                try:
-                    for rank, h in enumerate(search(db, q, role, top_k=tk,
-                                                    min_score=ms, source_types=stypes)):
-                        all_vec_hits.append({
-                            "score": h["score"], "chunk": h["chunk"], "channel": channel,
-                            "query_index": qi, "rank_in_query": rank,
-                            "merged": h.get("merged", False),
-                            "hit_ratio": h.get("hit_ratio", 0),
-                        })
-                except Exception as e:
-                    vector_errors.append(f"[{qinfo.get('type','?')}/{channel}] {e}")
-                    print(f"[rag] 向量检索失败（{channel}，查询{qi}: {q[:30]}）：{e}")
-
-    if not all_kw_hits and not all_vec_hits:
-        if record_miss:
-            ai_service._record_faq_miss(db, question, role)
-        return ""
-
-    # ③ 加权 RRF 融合（用排名不用原始分数，统一量纲；再乘通道权重；同一文档多次命中累加）
-    pool = {}
-    ranks = {}
-    for _s, r, _qi, rank in all_kw_hits:
-        key = ("faq", str(r.id), 0)
-        pool.setdefault(key, {})["faq"] = r
-        contribution = 1.0 / (RRF_K + rank + 1) * CHANNEL_WEIGHT["faq"]
-        ranks[key] = ranks.get(key, 0.0) + contribution
-    for h in all_vec_hits:
-        c = h["chunk"]
-        key = (c.source_type, c.source_key, int(c.chunk_index or 0))
-        pool.setdefault(key, {})["chunk"] = c
-        contribution = (1.0 / (RRF_K + h["rank_in_query"] + 1)
-                        * CHANNEL_WEIGHT.get(h["channel"], 1.0))
-        ranks[key] = ranks.get(key, 0.0) + contribution
-    ordered = sorted(ranks.items(), key=lambda kv: -kv[1])
-
-    # ④ 调试信息
-    if debug is not None:
-        per_query = []
-        for qi, qinfo in enumerate(queries):
-            q_kw = [(s, r) for s, r, qidx, _ in all_kw_hits if qidx == qi]
-            q_vec = [h for h in all_vec_hits if h["query_index"] == qi]
-            per_query.append({
-                "query": qinfo["query"], "type": qinfo.get("type", "?"),
-                "keyword_hits": [{"id": r.id,
-                                  "question": ai_service.render_placeholders(r.question, db),
-                                  "score": int(s)} for s, r in q_kw[:5]],
-                "vector_hits": [{
-                    "title": h["chunk"].title or "", "score": h["score"],
-                    "merged": h.get("merged", False), "hit_ratio": h.get("hit_ratio", 0),
-                    "content": ai_service.render_placeholders(h["chunk"].content or "", db)[:100],
-                } for h in q_vec[:5]],
-            })
-        debug.update({
-            "vector_error": "; ".join(vector_errors) if vector_errors else "",
-            "all_queries": [{"query": q["query"], "type": q.get("type", "?")} for q in queries],
-            "per_query_results": per_query,
-            "fused_keys": [{"source_type": k[0], "source_key": k[1], "chunk_index": k[2],
-                            "rrf": round(v, 6)} for k, v in ordered[:20]],
-            "injected_items": 0, "injected_chars": 0,
-        })
-
-    # ⑤ 渲染（受 top_k 条数和 max_chars 总字符双重限制）
-    limit = _max_chars(db)
-    lines, used, picked_faqs = [], 0, []
-    for key, _score in ordered:
-        if len(lines) >= tk:
-            break
-        item = pool.get(key) or {}
-        faq_row, chunk = item.get("faq"), item.get("chunk")
-        if faq_row is not None:
-            text = ("· 问：" + ai_service.render_placeholders(faq_row.question, db)
-                    + "\n  答：" + ai_service.render_placeholders(faq_row.answer, db))
-        elif chunk is not None:
-            text = (f"· 【{chunk.title or '知识库'}】\n  "
-                    + ai_service.render_placeholders(chunk.content, db))
-        else:
-            continue
-        if limit and lines and used + len(text) > limit:
-            break
-        lines.append(text); used += len(text)
-        if faq_row is not None:
-            picked_faqs.append(faq_row)
-
-    if debug is not None:
-        debug["injected_items"] = len(lines)
-        debug["injected_chars"] = used
-
-    if not lines:
-        return ""
-
-    for r in picked_faqs:
-        try:
-            r.hit_count = int(r.hit_count or 0) + 1
-        except Exception:
-            pass
-
-    if vector_errors:
-        print(f"[rag] 本轮部分查询向量检索不可用：{'; '.join(vector_errors)}")
-    return "【知识库检索结果（与用户本轮提问相关，优先按这里的口径回答）】\n" + "\n".join(lines)

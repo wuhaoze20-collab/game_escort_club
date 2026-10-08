@@ -189,6 +189,32 @@ CONFIG_META: dict[str, dict] = {
         "desc": "单次注入的检索结果总长度上限，防止一次命中过多把提示词撑爆",
     },
 
+    # —— RAG 模块开关（检索流程中每个环节可独立关闭，便于调试和对比效果）——
+    "rag_module_query_rewrite": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "查询改写模块",
+        "desc": "关闭后直接用原始问题检索，不经过查询优化器（省一次大模型调用）",
+    },
+    "rag_module_vector_retrieval": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "向量检索模块",
+        "desc": "关闭后不做向量语义检索，只用关键词匹配",
+    },
+    "rag_module_keyword_retrieval": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "关键词检索模块",
+        "desc": "关闭后不做 FAQ 关键词匹配，只用向量语义检索",
+    },
+    "rag_module_fusion": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "RRF 融合模块",
+        "desc": "关闭后两路结果简单合并（向量在前关键词在后），不做加权 RRF 排序",
+    },
+    "rag_module_rerank": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "重排序模块",
+        "desc": "关闭后跳过检索后重排序，直接用 RRF 融合结果构建上下文",
+    },
+    "rag_module_automerge": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "AutoMerging 自动合并",
+        "desc": "关闭后命中子块时不自动合并为整章，只返回命中的子块片段",
+    },
+
     # —— 查询优化（检索前）：默认全关，需要时手动开启，每个开关都会多调一次大模型 ——
     "ai_query_rewrite_enabled": {
         "default": False, "type": "bool", "group": "查询优化", "label": "查询重写",
@@ -209,6 +235,25 @@ CONFIG_META: dict[str, dict] = {
     "ai_query_hyde_enabled": {
         "default": False, "type": "bool", "group": "查询优化", "label": "HyDE 假设文档",
         "desc": "先生成假设答案，用答案措辞做向量检索",
+    },
+
+    # —— Self-RAG（自我反思检索）：让大模型自己判断要不要检索、内容有没有用、回答靠不靠谱 ——
+    # 每个开关都会多调一次大模型，按需开启
+    "ai_self_rag_enabled": {
+        "default": False, "type": "bool", "group": "Self-RAG", "label": "启用 Self-RAG",
+        "desc": "总开关。打开后大模型会自我反思：是否需要检索、检索内容是否相关、回答是否被支持",
+    },
+    "ai_self_rag_retrieve_check": {
+        "default": True, "type": "bool", "group": "Self-RAG", "label": "检索前判断",
+        "desc": "大模型先判断问题是否需要检索知识库，不需要则跳过检索直接回答（省 embedding 调用）",
+    },
+    "ai_self_rag_relevance_filter": {
+        "default": True, "type": "bool", "group": "Self-RAG", "label": "检索后相关性过滤",
+        "desc": "大模型对检索到的每个片段打分（1-5），过滤掉不相关的，减少噪音",
+    },
+    "ai_self_rag_verify_answer": {
+        "default": False, "type": "bool", "group": "Self-RAG", "label": "生成后回答验证",
+        "desc": "大模型检查回答是否被知识库支持，不支持则修正（最耗 token，建议调试时开启）",
     },
 }
 

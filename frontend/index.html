@@ -2629,7 +2629,7 @@
                             + '  <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleConfig(\'' + escapeHtml(c.config_key) + '\', this.checked)">'
                             + '  <span class="toggle-slider"></span>'
                             + '</label>'
-                            + '<span class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
+                            + '<span id="cfg-status-' + escapeHtml(c.config_key) + '" class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
                     } else {
                         controlHtml = ''
                             + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="text" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
@@ -2674,10 +2674,21 @@
         async function toggleConfig(key, checked) {
             try {
                 await apiRequest('/api/config/' + key, 'PUT', { value: checked ? '1' : '0' });
-                await loadSystemConfig();
+                // 保存成功后不刷新整个页面，只原地更新状态文字和缓存
+                const item = configCache.find(c => c.config_key === key);
+                if (item) item.config_value = checked ? '1' : '0';
+                const statusEl = document.getElementById('cfg-status-' + key);
+                if (statusEl) {
+                    statusEl.textContent = checked ? '已开启' : '已关闭';
+                    statusEl.className = 'text-xs ' + (checked ? 'text-green-600' : 'text-gray-400') + ' ml-2';
+                }
             } catch (e) {
                 alert(e.message);
-                await loadSystemConfig();
+                // 失败时回滚开关状态
+                const item = configCache.find(c => c.config_key === key);
+                const shouldBeOn = item && (item.config_value === '1' || item.config_value === 'true');
+                const checkbox = document.querySelector('input[type="checkbox"][onchange*="toggleConfig(\'' + key + '\'"]');
+                if (checkbox) checkbox.checked = shouldBeOn;
             }
         }
 

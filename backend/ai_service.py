@@ -585,7 +585,7 @@ def _rag_enabled(db) -> bool:
         return False
 
 
-def build_system_prompt(db, user, question: str = "") -> str:
+def build_system_prompt(db, user, question: str = "", skip_rag: bool = False) -> str:
     """构造系统提示词：数据库段落 + 角色上下文 + 平台资料 + 当前用户 + 补充指示
 
     这里刻意把「真实菜单结构」「角色权限」「操作路径」都写进提示词 —— 早期版本只给了
@@ -595,6 +595,9 @@ def build_system_prompt(db, user, question: str = "") -> str:
     `question` 是用户本轮提问，用于挑出相关知识注入：默认按关键词匹配问答库
     （见 build_faq_context）；打开「知识库向量检索」后改走 ai_rag.build_rag_context
     （向量 + 关键词 RRF 融合，含对长篇文档的检索）。
+
+    `skip_rag` 为 True 时跳过知识库检索（Self-RAG 判断不需要检索时使用），
+    只注入平台资料和角色上下文，省 embedding 调用。
     """
     kb = build_knowledge_base(db)
     extra = (config_service.get_config("ai_extra_instruction", db) or "").strip()
@@ -603,7 +606,7 @@ def build_system_prompt(db, user, question: str = "") -> str:
     role_name = getattr(user, "role_name", "") or role
     role_ctx = _render_role_context(role)
 
-    # —— ① 提示词段落：优先用数据库，表为空则用出厂内容 ——
+    # —— ② 获取角色提示词段落（AI 的人设、行为规范）
     sections = _db_prompt_sections(db, role)
     if not sections:
         sections = [s for s in PROMPT_SECTIONS
@@ -612,10 +615,11 @@ def build_system_prompt(db, user, question: str = "") -> str:
 
     parts = [body]
 
-    # —— ② 动态块（不可编辑：由代码按当前用户实时生成）——
+    # —— ③ 当前用户信息
     parts.append(f"【当前用户】\n称呼：{nickname}\n角色：{role_name}")
     if role_ctx:
         parts.append(role_ctx)
+    # —— ③
     parts.append("【平台资料】\n" + (kb if kb else "（暂无内容配置）"))
 
     # —— ③ 检索片段（按需注入，避免把所有资料都塞进去）——
@@ -624,7 +628,10 @@ def build_system_prompt(db, user, question: str = "") -> str:
     # · 打开 —— ai_rag 把「向量召回」与「关键词召回」用 RRF 融合，见 ai_rag.build_rag_context。
     #   它内部已做降级（向量检索失败仍输出关键词结果），所以这里只在**真正抛异常**时才兜底，
     #   否则会因为"两边都没命中"而把未命中提问重复记两次。
-    if _rag_enabled(db):
+    # skip_rag=True 时（Self-RAG 判断不需要检索），完全跳过检索，只保留平台资料
+    if skip_rag:
+        ctx = ""
+    elif _rag_enabled(db):
         try:
             import ai_rag
             ctx = ai_rag.build_rag_context(db, user, question)
@@ -674,6 +681,7 @@ def chat(messages: list, model: str = None, temperature: float = 0.3,
                     "（可联系管理员处理）")
 
     model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    # 构造请求体
     payload = {
         "model": model,
         "messages": messages,
@@ -736,3 +744,172 @@ def chat(messages: list, model: str = None, temperature: float = 0.3,
         "completion_tokens": int(usage.get("completion_tokens") or 0),
         "model": data.get("model") or model,
     }
+
+
+# ============================================================================
+# Self-RAG（自我反思检索增强生成）
+# 核心思想：让大模型自己判断"要不要检索、检索内容有没有用、回答靠不靠谱"
+# 三个反思点：
+#   1. Retrieve    —— 检索前判断：这个问题需要查知识库吗？
+#   2. ISREL       —— 检索后判断：每个片段和问题相关吗？（1-5分打分）
+#   3. ISSUP       —— 生成后判断：回答被知识库支持吗？
+# ============================================================================
+
+def self_rag_should_retrieve(question: str, model: str = None) -> dict:
+    """Self-RAG 反思点1：检索前判断——这个问题需要查知识库吗？
+
+    让大模型判断问题类型：
+    - 需要检索：业务规则、退款政策、价格、服务流程等事实性问题
+    - 不需要检索：闲聊、问候、感谢、简单确认等
+
+    参数：
+        question: 用户问题
+        model: 大模型名，默认用配置的模型
+
+    返回：
+        {"need_retrieve": bool, "reason": str, "tokens": int}
+    """
+    system_prompt = (
+        "你是一个检索判断器。判断用户的问题是否需要查询知识库才能准确回答。\n"
+        "需要检索的情况：问业务规则、退款政策、价格、服务流程、平台规定等事实性问题。\n"
+        "不需要检索的情况：闲聊、问候、感谢、简单确认、表达情绪等。\n"
+        "只回答 JSON 格式：{\"need_retrieve\": true/false, \"reason\": \"简短原因\"}"
+    )
+    result = chat(
+        [{"role": "system", "content": system_prompt},
+         {"role": "user", "content": question}],
+        model=model, temperature=0.1, max_tokens=100,
+    )
+    if not result["ok"]:
+        return {"need_retrieve": True, "reason": "判断失败，默认检索", "tokens": 0}
+
+    import json as _json
+    try:
+        parsed = _json.loads(result["reply"])
+        return {
+            "need_retrieve": bool(parsed.get("need_retrieve", True)),
+            "reason": str(parsed.get("reason", "")),
+            "tokens": result.get("completion_tokens", 0),
+        }
+    except Exception:
+        # 解析失败，默认需要检索（保守策略，宁可多检索也不漏）
+        return {"need_retrieve": True, "reason": "解析失败，默认检索",
+                "tokens": result.get("completion_tokens", 0)}
+
+
+def self_rag_filter_relevance(question: str, contexts: list,
+                              model: str = None) -> list:
+    """Self-RAG 反思点2：检索后相关性过滤——每个片段和问题相关吗？
+
+    让大模型对每个检索片段打 1-5 分：
+    - 5分：完全相关，直接回答问题
+    - 4分：高度相关，包含关键信息
+    - 3分：部分相关，有参考价值
+    - 2分：不太相关，勉强沾边
+    - 1分：完全不相关
+
+    过滤掉 ≤2 分的片段，减少噪音。
+
+    参数：
+        question: 用户问题
+        contexts: 检索到的片段列表，每个元素是字符串
+        model: 大模型名
+
+    返回：
+        过滤后的片段列表（按相关性降序），每个元素是 {"content": str, "score": int}
+    """
+    if not contexts:
+        return []
+
+    # 构造打分提示
+    numbered = "\n".join(f"[{i+1}] {c[:200]}" for i, c in enumerate(contexts))
+    system_prompt = (
+        "你是一个相关性评分器。对每个片段打分（1-5分），判断它与用户问题的相关程度。\n"
+        "5=完全相关，4=高度相关，3=部分相关，2=不太相关，1=完全不相关。\n"
+        "只回答 JSON 格式：{\"scores\": [分数1, 分数2, ...]}"
+    )
+    user_prompt = f"用户问题：{question}\n\n待评分片段：\n{numbered}"
+
+    result = chat(
+        [{"role": "system", "content": system_prompt},
+         {"role": "user", "content": user_prompt}],
+        model=model, temperature=0.1, max_tokens=200,
+    )
+
+    if not result["ok"]:
+        # 评分失败，不过滤，全部保留
+        return [{"content": c, "score": 3} for c in contexts]
+
+    import json as _json
+    try:
+        parsed = _json.loads(result["reply"])
+        scores = parsed.get("scores", [])
+    except Exception:
+        scores = []
+
+    # 过滤并排序
+    filtered = []
+    for i, c in enumerate(contexts):
+        score = int(scores[i]) if i < len(scores) else 3
+        if score >= 3:   # 只保留 3 分及以上的
+            filtered.append({"content": c, "score": score})
+    filtered.sort(key=lambda x: -x["score"])
+    return filtered
+
+
+def self_rag_verify_answer(question: str, answer: str,
+                           contexts: list, model: str = None) -> dict:
+    """Self-RAG 反思点3：生成后验证——回答被知识库支持吗？
+
+    让大模型检查回答中的事实性陈述是否能在检索片段中找到依据。
+    如果回答包含知识库没有的信息，标记为"未验证"。
+
+    参数：
+        question: 用户问题
+        answer: 大模型生成的回答
+        contexts: 检索到的片段列表
+        model: 大模型名
+
+    返回：
+        {"supported": bool, "issues": str, "suggestion": str, "tokens": int}
+    """
+    if not contexts:
+        return {"supported": True, "issues": "无检索内容，跳过验证",
+                "suggestion": "", "tokens": 0}
+
+    ctx_text = "\n".join(f"[{i+1}] {c[:300]}" for i, c in enumerate(contexts))
+    system_prompt = (
+        "你是一个事实验证器。检查AI的回答是否能在参考资料中找到依据。\n"
+        "如果回答中有参考资料没有提到的具体数字、规则、承诺，标记为问题。\n"
+        "只回答 JSON 格式：{\"supported\": true/false, "
+        "\"issues\": \"发现的问题（没有则为空）\", "
+        "\"suggestion\": \"修正建议（没有则为空）\"}"
+    )
+    user_prompt = (
+        f"用户问题：{question}\n\n"
+        f"AI回答：{answer}\n\n"
+        f"参考资料：\n{ctx_text}"
+    )
+
+    result = chat(
+        [{"role": "system", "content": system_prompt},
+         {"role": "user", "content": user_prompt}],
+        model=model, temperature=0.1, max_tokens=300,
+    )
+
+    if not result["ok"]:
+        return {"supported": True, "issues": "验证失败",
+                "suggestion": "", "tokens": 0}
+
+    import json as _json
+    try:
+        parsed = _json.loads(result["reply"])
+        return {
+            "supported": bool(parsed.get("supported", True)),
+            "issues": str(parsed.get("issues", "")),
+            "suggestion": str(parsed.get("suggestion", "")),
+            "tokens": result.get("completion_tokens", 0),
+        }
+    except Exception:
+        return {"supported": True, "issues": "解析失败",
+                "suggestion": "", "tokens": result.get("completion_tokens", 0)}
