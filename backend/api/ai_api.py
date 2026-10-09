@@ -117,6 +117,12 @@ def ai_chat(
                .all())
     history.reverse()
 
+    # 对话参数：必须在下方的 Self-RAG「检索前判断」之前读取，
+    # 因为那个判断要调用大模型，需要用到 model。
+    model = config_service.get_config("ai_model", db)
+    temperature = float(config_service.get_config("ai_temperature", db))
+    max_tokens = int(config_service.get_config("ai_max_tokens", db))
+
     # —— Self-RAG：检索前判断 ——
     # 让大模型先判断这个问题是否需要查知识库，不需要则跳过检索直接回答（省 embedding 调用）
     self_rag_enabled = bool(config_service.get_config("ai_self_rag_enabled", db))
@@ -145,9 +151,6 @@ def ai_chat(
 
     # 按角色暴露工具（无权限的工具根本不给模型看，减少它乱猜）
     tools = ai_tools.available_tools(current_user.role)
-    model = config_service.get_config("ai_model", db)
-    temperature = float(config_service.get_config("ai_temperature", db))
-    max_tokens = int(config_service.get_config("ai_max_tokens", db))
 
     # —— 工具调用循环 ——
     # 模型可能连续要求多个工具（先查余额再查订单）。最多跑 MAX_TOOL_ROUNDS 轮，

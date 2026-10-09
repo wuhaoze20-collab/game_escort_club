@@ -6,8 +6,7 @@
 在 RAG 流程中的位置：检索融合之后，生成之前，把原始片段变成 Prompt 的一部分。
 """
 
-from typing import List, Tuple, Dict, Any
-from .document import Document
+from typing import Tuple
 
 
 class ContextBuilder:

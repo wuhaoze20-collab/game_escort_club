@@ -18,12 +18,12 @@
 
 import re
 import os
+import random
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 import ai_rag
-import config_service
 from auth import require_roles
 from database import get_db
 from models import AiChunk, KbDocument, User
@@ -679,6 +679,7 @@ def delete_eval_question(
 def run_eval(
     generate_answer: bool = True,
     role: str = "boss",
+    sample_size: int = 5,
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
@@ -686,7 +687,10 @@ def run_eval(
 
     参数：
         generate_answer: 是否调用大模型生成答案并计算端到端语义相似度（默认 True，较慢）
-        role: 以哪个角色身份检索（默认 boss）
+        role: 以哪个角色的题库评估（boss/player/service/admin）；
+              传空或 all 表示评估全部启用的题目；
+              传 random 表示从全部题库中随机抽题（抽题数量由 sample_size 决定）
+        sample_size: role=random 时的抽题数量（默认 5，自动限制在 1~题库总数之间）
 
     评估指标：
         - Context Precision：检索到的片段中，与标准答案相关的占比
@@ -694,12 +698,26 @@ def run_eval(
         - 语义相似度：AI 答案 vs 标准答案（仅 generate_answer=True 时计算）
     """
     global _last_eval_result
-    from rag_eval import evaluate_rag
+    from rag_eval import evaluate_rag, get_test_questions
 
-    role = _check_role(role) if role else "boss"
     try:
-        result = evaluate_rag(db, test_set=None, role=role,
-                              generate_answer=generate_answer)
+        if role == "random":
+            # 混合随机检测：从全部启用题目中随机抽取 N 道，覆盖各角色
+            all_q = get_test_questions(db, role=None)
+            if not all_q:
+                raise HTTPException(status_code=400, detail="题库为空，无法随机抽题")
+            n = max(1, min(int(sample_size or 5), len(all_q)))
+            test_set = random.sample(all_q, n)
+            # 每题仍用自己的 role 去检索（q_role 在 evaluate_rag 内决定）
+            result = evaluate_rag(db, test_set=test_set, role="random",
+                                  generate_answer=generate_answer)
+        else:
+            # role 为空或 all 时不按角色过滤；否则校验角色合法性
+            role = _check_role(role) if role and role != "all" else "all"
+            result = evaluate_rag(db, test_set=None, role=role,
+                                  generate_answer=generate_answer)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"评估失败：{e}")
 
@@ -758,6 +776,7 @@ def compare_eval(
 
     返回：
         两次评估的基本信息 + 5 个指标的数值对比 + 变化量（B - A）
+        自动按时间排序：ID 小（时间旧）的为 A（优化前），ID 大（时间新）的为 B（优化后）
     """
     import rag_eval
     detail_a = rag_eval.get_eval_detail(db, a)
@@ -766,6 +785,10 @@ def compare_eval(
         raise HTTPException(status_code=404, detail=f"评估记录 {a} 不存在")
     if not detail_b:
         raise HTTPException(status_code=404, detail=f"评估记录 {b} 不存在")
+
+    # 自动按 ID（即时间先后）排序：旧的是 A（优化前），新的是 B（优化后）
+    if detail_a.get("id", 0) > detail_b.get("id", 0):
+        detail_a, detail_b = detail_b, detail_a
 
     metrics = [
         ("avg_precision", "检索精确率"),
@@ -791,9 +814,13 @@ def compare_eval(
         })
 
     return {
-        "a": {"id": a, "created_at": detail_a.get("created_at"), "rerank_mode": detail_a.get("rerank_mode"),
-              "role": detail_a.get("role"), "total": detail_a.get("total")},
-        "b": {"id": b, "created_at": detail_b.get("created_at"), "rerank_mode": detail_b.get("rerank_mode"),
-              "role": detail_b.get("role"), "total": detail_b.get("total")},
+        "a": {"id": detail_a.get("id"), "created_at": detail_a.get("created_at"),
+              "rerank_mode": detail_a.get("rerank_mode"),
+              "role": detail_a.get("role"), "total": detail_a.get("total"),
+              "config_snapshot": detail_a.get("config_snapshot", {})},
+        "b": {"id": detail_b.get("id"), "created_at": detail_b.get("created_at"),
+              "rerank_mode": detail_b.get("rerank_mode"),
+              "role": detail_b.get("role"), "total": detail_b.get("total"),
+              "config_snapshot": detail_b.get("config_snapshot", {})},
         "metrics": comparison,
     }

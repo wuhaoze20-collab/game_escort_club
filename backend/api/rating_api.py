@@ -100,7 +100,7 @@ def complaint_order(
     if rating:
         if rating.review_status == "removed":
             raise HTTPException(status_code=400, detail="该订单评价已处理，无法投诉")
-        if rating.comment.startswith("【老板投诉】"):
+        if (rating.comment or "").startswith("【老板投诉】"):
             raise HTTPException(status_code=400, detail="该订单已投诉过，请等待处理")
         # 已有评价改为差评
         rating.rating = 1
@@ -325,7 +325,7 @@ def review_decision(
     if request.action == "approve":
         rating.review_status = "removed"
         # 申诉成功：撤销投诉差评，扣回打手投诉次数
-        if rating.comment.startswith("【老板投诉】"):
+        if (rating.comment or "").startswith("【老板投诉】"):
             player = db.query(PlayerInfo).filter(PlayerInfo.username == rating.player_username).first()
             if player and player.complaint_count > 0:
                 player.complaint_count -= 1

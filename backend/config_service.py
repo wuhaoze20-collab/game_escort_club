@@ -263,6 +263,10 @@ CONFIG_META: dict[str, dict] = {
         "default": True, "type": "bool", "group": "Self-RAG", "label": "检索后相关性过滤",
         "desc": "大模型对检索到的每个片段打分（1-5），过滤掉不相关的，减少噪音",
     },
+    "ai_self_rag_relevance_threshold": {
+        "default": 3, "type": "int", "group": "Self-RAG", "label": "相关性过滤阈值",
+        "desc": "大模型打分1-5，低于此分数的片段被过滤。默认3（过滤≤2分）；调为2更宽松（只过滤完全不相关），调为4更严格",
+    },
     "ai_self_rag_verify_answer": {
         "default": False, "type": "bool", "group": "Self-RAG", "label": "生成后回答验证",
         "desc": "大模型检查回答是否被知识库支持，不支持则修正（最耗 token，建议调试时开启）",

@@ -21,7 +21,7 @@
 
 import json
 import re
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 
 class CrossEncoderReranker:

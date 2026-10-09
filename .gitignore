@@ -44,3 +44,9 @@ backend/backend_out.log
 backend/backend_err.log
 backend/_test_rag.py
 backend/_api_test.py
+
+# 清理测试数据时留下的本地备份（含被删记录，仅供本机回滚，不入库）
+backend/_deleted_backup.json
+# 临时排查脚本与它们的输出（按需创建，用完即删）
+backend/_check_*.py
+backend/_*.txt

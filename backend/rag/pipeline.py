@@ -13,8 +13,6 @@
 生成（Generate）在 ai_service.py 的 chat() 中完成。
 """
 
-from typing import List, Dict, Optional
-from .document import Document
 from .query_rewriter import QueryRewriter
 from .vector_retriever import VectorRetriever
 from .keyword_retriever import KeywordRetriever
@@ -214,7 +212,6 @@ class ModularRAG:
             config_service.get_config("ai_self_rag_relevance_filter", self.db))
         if use_relevance_filter and final_ordered:
             try:
-                import ai_service
                 # 提取候选片段的纯文本内容（取前 top_k*2 个供大模型筛选）
                 candidate_texts = []
                 candidate_keys = []
@@ -233,9 +230,13 @@ class ModularRAG:
                         candidate_keys.append(key)
 
                 if len(candidate_texts) > 1:
+                    # 从系统参数读取相关性过滤阈值（默认3，即过滤≤2分）
+                    rel_threshold = int(config_service.get_config(
+                        "ai_self_rag_relevance_threshold", self.db, 3) or 3)
                     # 调用大模型打分过滤
                     filtered = ai_service.self_rag_filter_relevance(
-                        question, candidate_texts, model=None)
+                        question, candidate_texts, model=None,
+                        threshold=rel_threshold)
                     # 用过滤后的结果重新排序
                     if filtered:
                         score_map = {candidate_keys[i]: f["score"]

@@ -9,7 +9,7 @@ RRF 公式：score(d) = Σ 1 / (k + rank(d))，k 通常取 60。
 加权：不同通道乘以不同权重（FAQ 1.2，文档 1.0）。
 """
 
-from typing import List, Tuple, Dict, Any
+from typing import Tuple
 
 
 class FusionModule:

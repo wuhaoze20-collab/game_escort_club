@@ -1,5 +1,86 @@
 # 更新日志 CHANGELOG
 
+## [V4.4.1] 2026-10-09
+
+### 🐛 全项目体检：修复 4 个 bug + 清理 33 处冗余代码
+
+对项目做了一次完整的健康检查，手段包括：语法编译、pyflakes 静态分析、
+逐接口鉴权覆盖核查、SQL 注入与 XSS 扫描、4 角色运行时冒烟、模型与数据库结构比对。
+
+#### ① 修复 Self-RAG「检索前判断」功能完全失效（最严重）
+
+`api/ai_api.py` 里 `self_rag_should_retrieve(text, model=model)` 在第 127 行调用，
+但 `model` 到第 148 行才被赋值 —— Python 会先求值参数表达式，所以这里**必然**
+抛 `NameError`，而它被外层 `try/except Exception` 吞掉了，只在日志里留一行字。
+
+后果：这个功能**从来没有真正生效过**，开关打开也照样白跑一遍检索。
+
+修复：把 `model` / `temperature` / `max_tokens` 三项配置的读取提前到判断之前。
+
+#### ② 修复 AI 客服不知道管理员有「RAG 调试」页面
+
+`ai_service.py` 的 `ROLE_MENUS` 里，admin「系统设置」分组漏了「RAG 调试」。
+这是被项目自带的一致性自检脚本抓出来的（原本报 1 个 ERROR）。
+修复后自检结果从 `通过 24 · 错误 1` 变为 `通过 26 · 警告 0 · 错误 0`。
+
+#### ③ 修复两处未防空的字符串调用（定时炸弹）
+
+`api/rating_api.py` 两处 `rating.comment.startswith("【老板投诉】")`，
+而 `player_ratings.comment` 列允许 NULL。当前库里 30 条评价恰好都没有 NULL，
+所以一直没暴露 —— 但只要出现一条（导入数据、直连 SQL、早期版本遗留），
+老板投诉接口和打手申诉审核接口就会 500。
+
+修复：改为 `(rating.comment or "").startswith(...)`。
+
+#### ④ 修复数据库自动迁移漏列（"别人拉取后跑不起来"的根因）
+
+项目启动用 `create_all()` 建表，它**只建新表，不给已存在的表补新列**。
+而 `ADD_COLUMNS` 迁移列表漏了 `ai_eval_history.config_json`（V4.4.0 之后才加的列）。
+任何人复用旧数据库 + 拉最新代码，打开评估历史就会报
+`Unknown column 'ai_eval_history.config_json' in 'field list'`。
+
+修复：把该列加入自动迁移（TEXT 列不带 DEFAULT，避开 errno 1101）。
+
+#### ⑤ 清理 33 处冗余代码
+
+用 pyflakes 全量扫描后逐条清理，从 **33 条告警降到 0**：
+
+| 类型 | 数量 | 举例 |
+|---|---|---|
+| 未使用的 `typing` 导入 | 20 | `rag/fusion.py` 的 `List, Dict, Any` |
+| 未使用的模块导入 | 8 | `ai_rag.py` 里 5 个没人用的类、`api/quote_api.py` 的 typing |
+| 重复导入 | 2 | `rag/pipeline.py` 中同一方法里导入两次 `ai_service` |
+| 无占位符的 f-string | 1 | `rag_eval.py` 的一条调试打印 |
+| 其他 | 2 | `rag_eval.py` 函数内多余 import |
+
+清理前已确认 `ai_rag.py` 那批导入**没有**被其他 7 处 `from ai_rag import ...` 使用，
+属于纯冗余，删除不影响任何调用。
+
+#### ⑥ 新增两个常驻自检工具
+
+配合原有的 `check_consistency.py`（前后端一致性）和 `check_ai_tools.py`（AI 工具权限），
+补上：
+
+- **`check_schema.py`** —— 比对 SQLAlchemy 模型与实际数据库表结构。
+  专治上面第 ④ 类问题：以后改 `models.py` 加了列，跑一次就知道有没有漏进 `ADD_COLUMNS`。
+  支持 `--strict`（有错时非 0 退出，可用于提交前门禁）。
+- **`check_api.py`** —— 接口冒烟测试。4 种角色登录后遍历全部无参 GET 接口，
+  报告 500 与非预期状态码。只读不写，可安全重复运行。
+
+#### 本次体检的通过项
+
+| 检查项 | 结果 |
+|---|---|
+| 语法编译（compileall 全量） | 全部通过 |
+| 静态分析（pyflakes） | 清理后零告警 |
+| 接口鉴权 | 109 个接口，仅登录/注册/重置密码 3 个公开，无越权 |
+| SQL 注入 | 仅 2 处 f-string 拼 SQL，都在未启用的 SQLite 分支且变量来自代码常量 |
+| XSS | 181 处 `escapeHtml` 调用，仅 3 处错误提示未转义（低风险） |
+| 运行时冒烟 | 4 角色 × 全量 GET = 164 次请求，0 个 500 |
+| AI 工具权限 | 15 项全通过 |
+| 前后端一致性 | 26 项全通过 |
+| 数据库结构 | 24 张表全部存在，列完全一致 |
+
 ## [V4.4.0] 2026-10-09
 
 ### ✨ RAG 量化评估层次 4：测试题数据库化 + A/B 对比 + 语义级重排序

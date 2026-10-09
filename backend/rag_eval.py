@@ -19,7 +19,7 @@ RAG 量化评估模块（层次1：本地实现，不依赖 LLM 打分）
 
 import os
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 # 必须在导入 sentence_transformers 之前设置镜像，否则会直连 huggingface 超时
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -56,7 +56,7 @@ def _get_sim_model():
             return _sim_model
         except Exception:
             # 本地没有缓存，不尝试下载（避免长时间超时），直接回退
-            print(f"[rag_eval] 本地无 BGE 模型缓存，使用千问 embedding API 计算相似度")
+            print("[rag_eval] 本地无 BGE 模型缓存，使用千问 embedding API 计算相似度")
             print(f"[rag_eval] 如需启用本地模型，运行：python -c \"from sentence_transformers import SentenceTransformer; SentenceTransformer('{_sim_model_name}')\"")
             _sim_model = "_dashscope_api"
             return _sim_model
@@ -326,6 +326,57 @@ DEFAULT_TEST_SET = [
         "ground_truth": "管理员可以拉黑老板和打手账户。被拉黑后，打手的后台金额会转入公司后台，并在处罚公告里发布拉黑通知。被拉黑账户无法登录和使用平台功能。",
         "role": "player",
     },
+    # —— 以下为第二版扩充题（依据《用户服务协议》《打手服务规范》《退款投诉争议规则》）——
+    {
+        "question": "打手有哪些禁止行为？",
+        "ground_truth": "打手禁止代练账号共享、使用外挂、代充与套现、引导私下交易、辱骂骚扰、恶意刷单、虚假战绩承诺等。违反者按情节给予警告、停单3天或封禁账号处理，构成严重违规的永久封禁并扣除后台金额。",
+        "role": "player",
+    },
+    {
+        "question": "打手无故拒单会怎么处理？",
+        "ground_truth": "打手收到派单后应在规定时间内确认或拒绝，不得无故拒单。无故拒单属于中度违规，平台处以停单3天；因打手无故拒单导致订单取消的，全额退款并对打手按中度违规处理。",
+        "role": "player",
+    },
+    {
+        "question": "打手的昵称、简介和标签有什么长度限制？",
+        "ground_truth": "打手昵称最长20个字符，简介最长100个字符，标签最长20个字符。昵称、简介与标签不得包含违法、低俗、侮辱、广告、联系方式及误导性内容。",
+        "role": "player",
+    },
+    {
+        "question": "打手被处罚后怎么申诉？需要提供哪些材料？",
+        "ground_truth": "打手对处罚有异议的，可在收到处罚通知后3日内通过客服渠道提交申诉，材料包括订单号、聊天记录、录屏、系统通知截图等。管理员审核后作出最终决定。同一事项仅可申诉一次，有新证据可在驳回后7日内申请复核。",
+        "role": "player",
+    },
+    {
+        "question": "收到投诉后多久响应？处理时限是多久？",
+        "ground_truth": "客服在收到投诉后1个工作日内首次响应，告知受理结果与后续流程。投诉应在订单结束后3日内发起，涉及作弊、诈骗等严重违规的不受3日期限限制。",
+        "role": "service",
+    },
+    {
+        "question": "哪些情况下老板可以申请退款？",
+        "ground_truth": "订单尚未派单、或在打手确认前取消的，可全额退款；打手接单后长时间未开始服务、无故拒单、使用外挂作弊、辱骂骚扰老板或引导私下交易的，老板可申请退款，平台核实后支持。已确认结单的订单除存在违规情形外，原则上不予退款。",
+        "role": "service",
+    },
+    {
+        "question": "结单争议怎么处理？争议期间费用由谁保管？",
+        "ground_truth": "老板对结单有异议的，应当在确认前于订单页面发起结单争议。客服核对订单信息、服务记录、双方陈述与证据材料后处理，处理时限一般为受理后3个工作日内给出处理意见。争议期间订单费用继续由平台托管，打手不得催促或威胁老板确认结单。",
+        "role": "service",
+    },
+    {
+        "question": "平台对违规行为有哪几档处罚？",
+        "ground_truth": "平台实行三档处罚体系：警告、停单3天、封禁账号。言语不当、消极服务等轻微违规给予警告，警告累计3次升级为停单处罚；无故拒单、态度恶劣等中度违规处以停单3天；作弊、诈骗、恶意刷单等严重违规永久封禁账号并扣除后台金额，账号被拉黑后后台金额转入公司账户。",
+        "role": "admin",
+    },
+    {
+        "question": "用户对处罚决定有异议，申诉流程是怎样的？",
+        "ground_truth": "用户可在收到处罚通知后3日内通过客服渠道提交申诉，并提供相应证据。管理员独立审核，结合订单记录、双方陈述与证据材料作出最终决定。申诉期间原处罚一般继续执行，管理员认定处罚确有错误的，予以撤销或调整。",
+        "role": "admin",
+    },
+    {
+        "question": "恶意投诉会怎么处理？",
+        "ground_truth": "恶意投诉指明知投诉事由不实、以索取不当利益或损害他人为目的、反复提交无依据投诉或伪造证据投诉等行为。对恶意投诉的老板，可视情节给予警告、限制投诉权限、限制下单或封禁账号；对恶意投诉的打手，可视情节给予警告、停单3天或封禁账号，涉及伪造证据的从重处理。",
+        "role": "admin",
+    },
 ]
 
 
@@ -346,7 +397,8 @@ def init_eval_questions(db):
             question=item["question"],
             ground_truth=item["ground_truth"],
             role=item.get("role", "boss"),
-            category=_guess_category(item["question"]),
+            # 题目自带 category 时优先使用，否则按关键词自动猜测
+            category=item.get("category") or _guess_category(item["question"]),
             enabled=1,
         ))
         added += 1
@@ -356,22 +408,28 @@ def init_eval_questions(db):
 
 
 def _guess_category(question: str) -> str:
-    """根据问题关键词自动猜测分类。"""
+    """根据问题关键词自动猜测分类。
+
+    判断顺序有讲究：先判断更具体的类别（退款争议、处罚申诉），
+    再判断宽泛的（投诉、打手），避免"打手被处罚"被误归到"打手管理"。
+    """
     q = question or ""
+    if any(k in q for k in ["退款", "争议"]):
+        return "退款争议"
     if any(k in q for k in ["充值", "大狗币", "支付", "金额", "费用"]):
         return "充值计费"
-    if any(k in q for k in ["订单", "点单", "接单", "结单", "流程"]):
+    if any(k in q for k in ["处罚", "申诉", "拉黑", "封禁"]):
+        return "处罚规则"
+    if any(k in q for k in ["订单", "点单", "接单", "结单", "拒单", "派单", "流程"]):
         return "订单流程"
-    if any(k in q for k in ["提现", "后台金额", "抽成"]):
+    if any(k in q for k in ["提现", "后台金额", "抽成", "结算", "打赏"]):
         return "提现结算"
     if any(k in q for k in ["密码", "登录", "锁定", "账户", "注册"]):
         return "账号安全"
-    if any(k in q for k in ["好评", "评价", "投诉", "申诉"]):
+    if any(k in q for k in ["好评", "评价", "投诉"]):
         return "评价投诉"
-    if any(k in q for k in ["等级", "标签", "打手"]):
+    if any(k in q for k in ["等级", "标签", "打手", "昵称", "简介"]):
         return "打手管理"
-    if any(k in q for k in ["拉黑", "处罚", "封禁"]):
-        return "处罚规则"
     return "通用"
 
 
@@ -440,8 +498,11 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
     from rag.pipeline import ModularRAG
 
     # 优先用传入的 test_set；否则从数据库读取启用的测试题；数据库为空时回退到内置默认集
+    # 角色过滤：role 为具体角色时只评估该角色的题目（分角色题库）；
+    # role 为空/None/"all" 时评估全部启用的题目。每道题仍用自己记录的 role 去检索。
     if test_set is None:
-        test_set = get_test_questions(db, role=role)
+        role_filter = None if (not role or role == "all") else role
+        test_set = get_test_questions(db, role=role_filter)
         if not test_set:
             test_set = DEFAULT_TEST_SET
     rag = ModularRAG(db)
@@ -451,7 +512,7 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
     for i, item in enumerate(test_set):
         question = item["question"]
         ground_truth = item["ground_truth"]
-        q_role = item.get("role", role)
+        q_role = item.get("role") or role or "boss"
 
         print(f"[rag_eval] 评估第 {i+1}/{len(test_set)} 题：{question[:30]}...")
 
@@ -544,6 +605,19 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
     rerank_enabled = bool(config_service.get_config("rag_module_rerank", db, True))
     rerank_mode = str(config_service.get_config("rag_rerank_mode", db, "rule")).strip().lower() if rerank_enabled else "off"
 
+    # 收集 RAG 参数快照（用于 A/B 对比时展示参数差异）
+    # 自动从 CONFIG_META 收集 RAG 相关分组的所有参数，避免硬编码参数名遗漏
+    rag_params = {}
+    RAG_PARAM_GROUPS = {"AI 知识库", "RAG 模块开关", "查询优化", "Self-RAG"}
+    try:
+        for key, meta in config_service.CONFIG_META.items():
+            if meta.get("group") in RAG_PARAM_GROUPS:
+                val = config_service.get_config(key, db, None)
+                if val is not None:
+                    rag_params[key] = val
+    except Exception as e:
+        print(f"[rag_eval] 收集RAG参数快照失败：{e}")
+
     result = {
         "total": len(results),
         "avg_precision": avg_precision,
@@ -556,6 +630,7 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
         "threshold": 0.65,
         "model": _sim_model_name if _sim_model != "_dashscope_api" else "千问 embedding API",
         "rerank_mode": rerank_mode,
+        "config_snapshot": rag_params,
     }
 
     # 自动保存评估历史到数据库
@@ -574,7 +649,6 @@ def _extract_chunks_from_debug(debug: dict, db) -> List[str]:
     但它只有 key（source_type, source_key, chunk_index），需要去数据库查内容。
     简化处理：从 per_query_results 的 vector_hits 和 keyword_hits 里提取内容。
     """
-    import ai_service
     chunks = []
     seen = set()
 
@@ -679,6 +753,7 @@ def save_eval_history(db, result: Dict, role: str = "boss", generate_answer: boo
         elapsed_seconds=result.get("elapsed_seconds", 0),
         model=result.get("model", ""),
         rerank_mode=result.get("rerank_mode", "rule"),
+        config_json=json.dumps(result.get("config_snapshot", {}), ensure_ascii=False),
         items_json=json.dumps(items_slim, ensure_ascii=False),
     )
     db.add(record)
@@ -690,22 +765,31 @@ def save_eval_history(db, result: Dict, role: str = "boss", generate_answer: boo
 def get_eval_history(db, limit: int = 20) -> List[Dict]:
     """获取最近的评估历史记录（不包含逐题详情，用于列表展示）。"""
     from models import AiEvalHistory
+    import json as _json
     records = db.query(AiEvalHistory).order_by(AiEvalHistory.id.desc()).limit(limit).all()
-    return [{
-        "id": r.id,
-        "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else "",
-        "role": r.role,
-        "generate_answer": r.generate_answer,
-        "total": r.total,
-        "avg_precision": r.avg_precision,
-        "avg_recall": r.avg_recall,
-        "avg_similarity": r.avg_similarity,
-        "avg_faithfulness": r.avg_faithfulness,
-        "avg_answer_relevancy": r.avg_answer_relevancy,
-        "elapsed_seconds": r.elapsed_seconds,
-        "model": r.model,
-        "rerank_mode": r.rerank_mode or "rule",
-    } for r in records]
+    result = []
+    for r in records:
+        try:
+            cfg = _json.loads(r.config_json or "{}")
+        except Exception:
+            cfg = {}
+        result.append({
+            "id": r.id,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else "",
+            "role": r.role,
+            "generate_answer": r.generate_answer,
+            "total": r.total,
+            "avg_precision": r.avg_precision,
+            "avg_recall": r.avg_recall,
+            "avg_similarity": r.avg_similarity,
+            "avg_faithfulness": r.avg_faithfulness,
+            "avg_answer_relevancy": r.avg_answer_relevancy,
+            "elapsed_seconds": r.elapsed_seconds,
+            "model": r.model,
+            "rerank_mode": r.rerank_mode or "rule",
+            "config_snapshot": cfg,
+        })
+    return result
 
 
 def get_eval_detail(db, eval_id: int):
@@ -720,6 +804,10 @@ def get_eval_detail(db, eval_id: int):
         items = json.loads(record.items_json or "[]")
     except Exception:
         items = []
+    try:
+        cfg = json.loads(record.config_json or "{}")
+    except Exception:
+        cfg = {}
     return {
         "id": record.id,
         "created_at": record.created_at.strftime("%Y-%m-%d %H:%M:%S") if record.created_at else "",
@@ -735,6 +823,7 @@ def get_eval_detail(db, eval_id: int):
         "model": record.model,
         "rerank_mode": record.rerank_mode or "rule",
         "threshold": 0.65,
+        "config_snapshot": cfg,
         "items": items,
     }
 

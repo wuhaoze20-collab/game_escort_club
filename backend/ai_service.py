@@ -150,7 +150,7 @@ ROLE_MENUS = {
         ("订单财务", "本月盈利、订单管理、提现审核"),
         ("审核管理", "评价复查、标签审核、头像昵称审核、注册审核、拉黑审核"),
         ("人员管理", "老板管理、打手管理"),
-        ("系统设置", "台词管理、提示词管理、AI 问答库、系统参数"),
+        ("系统设置", "台词管理、提示词管理、AI 问答库、RAG 调试、系统参数"),
         ("个人中心", "我的账户"),
     ],
     "service": [
@@ -798,7 +798,7 @@ def self_rag_should_retrieve(question: str, model: str = None) -> dict:
 
 
 def self_rag_filter_relevance(question: str, contexts: list,
-                              model: str = None) -> list:
+                              model: str = None, threshold: int = 3) -> list:
     """Self-RAG 反思点2：检索后相关性过滤——每个片段和问题相关吗？
 
     让大模型对每个检索片段打 1-5 分：
@@ -808,12 +808,13 @@ def self_rag_filter_relevance(question: str, contexts: list,
     - 2分：不太相关，勉强沾边
     - 1分：完全不相关
 
-    过滤掉 ≤2 分的片段，减少噪音。
+    过滤掉低于 threshold 分的片段（默认3，即过滤≤2分），减少噪音。
 
     参数：
         question: 用户问题
         contexts: 检索到的片段列表，每个元素是字符串
         model: 大模型名
+        threshold: 相关性阈值（1-5），低于此分数的片段被过滤
 
     返回：
         过滤后的片段列表（按相关性降序），每个元素是 {"content": str, "score": int}
@@ -847,11 +848,11 @@ def self_rag_filter_relevance(question: str, contexts: list,
     except Exception:
         scores = []
 
-    # 过滤并排序
+    # 过滤并排序（低于 threshold 分的片段被过滤）
     filtered = []
     for i, c in enumerate(contexts):
         score = int(scores[i]) if i < len(scores) else 3
-        if score >= 3:   # 只保留 3 分及以上的
+        if score >= threshold:
             filtered.append({"content": c, "score": score})
     filtered.sort(key=lambda x: -x["score"])
     return filtered

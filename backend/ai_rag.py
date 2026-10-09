@@ -741,10 +741,7 @@ def pending_sources(db) -> list:
 # 本文件保留数据准备阶段（ETL）和兼容层函数。
 # ============================================================
 
-from rag import (
-    Document, QueryRewriter, VectorRetriever, KeywordRetriever,
-    FusionModule, ContextBuilder, ModularRAG,
-)
+from rag import VectorRetriever, ModularRAG
 
 
 # ============================================================

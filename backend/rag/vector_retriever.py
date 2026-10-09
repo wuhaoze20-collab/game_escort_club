@@ -6,7 +6,7 @@
 在 RAG 流程中的位置：推理问答阶段的核心检索步骤，语义相似度召回。
 """
 
-from typing import List, Optional
+from typing import List
 from .document import Document
 
 

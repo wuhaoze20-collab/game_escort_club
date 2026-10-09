@@ -63,6 +63,12 @@ ADD_COLUMNS = (
     # 出问题时能定位是模型编造还是工具返回了错数据。
     ("ai_messages", "tools_used",
      "ALTER TABLE ai_messages ADD COLUMN tools_used VARCHAR(255) DEFAULT ''"),
+    # 评估历史的参数快照（JSON）。V4.4.0 先建了 ai_eval_history 表，
+    # A/B 对比参数差异功能才补上这一列，老库升级上来会缺列，
+    # 报 "Unknown column 'ai_eval_history.config_json'"，这里自动补齐。
+    # 注意：MySQL 的 TEXT 列不能带 DEFAULT（errno 1101），所以不写默认值。
+    ("ai_eval_history", "config_json",
+     "ALTER TABLE ai_eval_history ADD COLUMN config_json TEXT"),
 )
 
 

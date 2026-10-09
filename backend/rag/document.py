@@ -6,7 +6,7 @@ RAG 基础数据结构模块。
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 
 
 @dataclass

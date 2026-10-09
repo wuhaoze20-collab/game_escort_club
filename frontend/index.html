@@ -555,6 +555,25 @@
         #sidebar-menu::-webkit-scrollbar-track { background: transparent; }
         [data-theme="dark"] #sidebar-menu::-webkit-scrollbar-thumb { background: rgba(255, 70, 85, 0.4); border-radius: 3px; }
         [data-theme="light"] #sidebar-menu::-webkit-scrollbar-thumb { background: rgba(60, 70, 80, 0.25); border-radius: 3px; }
+
+        /* ==================== 按钮点击反馈 ====================
+           所有按钮点击时立即产生按压动效，避免"点了没反应"的观感。
+           仅用 transform / filter，不影响布局与主题配色。 */
+        button:not(:disabled) {
+            transition: transform 0.08s ease, filter 0.12s ease, opacity 0.15s ease;
+        }
+        button:not(:disabled):active {
+            transform: scale(0.96);
+            filter: brightness(0.9);
+        }
+        button:disabled {
+            cursor: not-allowed;
+        }
+        /* 刷新按钮进行中的状态 */
+        button.fb-busy {
+            opacity: 0.65;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -1367,11 +1386,20 @@
                                     <input type="checkbox" id="rag-eval-gen-answer" checked class="w-4 h-4">
                                     生成 AI 答案并计算端到端相似度（较慢）
                                 </label>
-                                <select id="rag-eval-role" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="boss">以老板身份检索</option>
-                                    <option value="player">以打手身份检索</option>
-                                    <option value="service">以客服身份检索</option>
+                                <select id="rag-eval-role" onchange="onEvalRoleChange()" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">全部角色（全部题库）</option>
+                                    <option value="boss">老板题库</option>
+                                    <option value="player">打手题库</option>
+                                    <option value="service">客服题库</option>
+                                    <option value="admin">管理员题库</option>
+                                    <option value="random">混合随机检测</option>
                                 </select>
+                                <label id="rag-eval-sample-wrap" class="hidden items-center gap-2 text-sm text-gray-600">
+                                    抽题数量
+                                    <input type="number" id="rag-eval-sample-size" value="5" min="1" max="20"
+                                        class="w-16 px-2 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                    道
+                                </label>
                                 <button onclick="runRagEval()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">运行评估</button>
                             </div>
                             <p class="text-xs text-gray-500">评估指标：Context Precision（检索精确率）、Context Recall（检索召回率）、端到端语义相似度、Faithfulness（忠实度）、Answer Relevancy（答案相关性）。使用 BGE 语义模型，相关阈值 0.65。</p>
@@ -1401,7 +1429,7 @@
                     <div id="rag-panel-questions" class="hidden">
                         <div class="flex items-center gap-2 mb-4">
                             <button onclick="showEvalQuestionForm()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">新增题目</button>
-                            <button onclick="loadEvalQuestions()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                            <button id="eval-questions-refresh-btn" onclick="loadEvalQuestions(true)" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                             <span id="eval-questions-count" class="text-xs text-gray-500"></span>
                         </div>
                         <!-- 新增/编辑表单 -->
@@ -2265,16 +2293,28 @@
                 btn.classList.toggle('hidden', !canEdit);
             });
 
-            // 默认显示第一个菜单
-            switchPage(menuConfig[currentUser.role][0].items[0].key);
-
-            // 滚动位置记忆：刷新页面后恢复到上次位置
+            // 滚动位置 + 当前页面记忆：刷新后恢复到上次的页面和位置
+            let savedPage = '';
+            let savedScroll = 0;
             try {
-                const savedScroll = localStorage.getItem('app_scroll_y');
-                if (savedScroll) {
-                    setTimeout(() => window.scrollTo(0, parseInt(savedScroll) || 0), 100);
-                }
+                savedPage = localStorage.getItem('app_last_page') || '';
+                savedScroll = parseInt(localStorage.getItem('app_scroll_y') || '0') || 0;
             } catch (e) {}
+            // 恢复到上次的页面（如果该页面对当前角色可用）
+            if (savedPage) {
+                const allPages = menuConfig[currentUser.role].flatMap(g => g.items.map(i => i.key));
+                if (allPages.includes(savedPage)) {
+                    switchPage(savedPage);
+                } else {
+                    switchPage(menuConfig[currentUser.role][0].items[0].key);
+                }
+            } else {
+                switchPage(menuConfig[currentUser.role][0].items[0].key);
+            }
+            // 等内容渲染完成后恢复滚动位置（500ms 确保后端数据已渲染）
+            if (savedScroll > 0) {
+                setTimeout(() => window.scrollTo(0, savedScroll), 500);
+            }
             // 滚动时保存位置（节流：最多每200ms存一次）
             let _scrollTimer = null;
             window.addEventListener('scroll', () => {
@@ -2922,13 +2962,37 @@
 
         // —— RAG 量化评估 ——
 
+        // 选择"混合随机检测"时才显示抽题数量输入框
+        function onEvalRoleChange() {
+            const role = document.getElementById('rag-eval-role').value;
+            const wrap = document.getElementById('rag-eval-sample-wrap');
+            if (!wrap) return;
+            if (role === 'random') {
+                wrap.classList.remove('hidden');
+                wrap.classList.add('flex');
+            } else {
+                wrap.classList.add('hidden');
+                wrap.classList.remove('flex');
+            }
+        }
+
         async function runRagEval() {
             const genAnswer = document.getElementById('rag-eval-gen-answer').checked;
             const role = document.getElementById('rag-eval-role').value;
             const resultBox = document.getElementById('rag-eval-result');
-            resultBox.innerHTML = '<div class="loading">正在评估，请稍候（生成 AI 答案时较慢）...</div>';
+            let url = '/api/ai/kb/eval/run?generate_answer=' + genAnswer + '&role=' + encodeURIComponent(role);
+            // 混合随机检测：带上抽题数量
+            if (role === 'random') {
+                let n = parseInt(document.getElementById('rag-eval-sample-size').value, 10);
+                if (!n || n < 1) n = 1;
+                if (n > 20) n = 20;
+                document.getElementById('rag-eval-sample-size').value = n;
+                url += '&sample_size=' + n;
+                resultBox.innerHTML = '<div class="loading">正在从题库随机抽取 ' + n + ' 道题评估，请稍候...</div>';
+            } else {
+                resultBox.innerHTML = '<div class="loading">正在评估，请稍候（生成 AI 答案时较慢）...</div>';
+            }
             try {
-                const url = '/api/ai/kb/eval/run?generate_answer=' + genAnswer + '&role=' + role;
                 const result = await apiRequest(url, 'POST');
                 renderRagEvalResult(result);
             } catch (e) {
@@ -3088,33 +3152,27 @@
             trendHtml += '</div>';
             trendHtml += '</div>';
 
-            // 历史记录表格（支持 A/B 对比勾选）
+            // 历史记录表格（支持勾选两条对比）
             let tableHtml = '<div class="overflow-x-auto"><table class="w-full text-xs">';
             tableHtml += '<thead><tr class="text-gray-500 border-b border-gray-200">';
-            tableHtml += '<th class="text-center py-2 px-1">对比</th>';
+            tableHtml += '<th class="text-center py-2 px-1">勾选</th>';
             tableHtml += '<th class="text-left py-2 px-2">时间</th><th class="text-center">角色</th><th class="text-center">重排序</th><th class="text-center">题数</th>';
             tableHtml += '<th class="text-center">Precision</th><th class="text-center">Recall</th><th class="text-center">相似度</th>';
             tableHtml += '<th class="text-center">忠实度</th><th class="text-center">相关性</th><th class="text-center">耗时</th>';
             tableHtml += '</tr></thead><tbody>';
+            // 评估角色中文显示（random 为混合随机检测）
+            const _histRoleLabel = { boss: '老板', player: '打手', admin: '管理员', service: '客服', all: '全部角色', random: '混合随机', '': '全部角色' };
             items.forEach(r => {
                 const rm = r.rerank_mode || 'rule';
                 const rmLabel = rm === 'semantic' ? '语义级' : rm === 'off' ? '关闭' : '规则式';
                 const rmColor = rm === 'semantic' ? 'text-purple-600' : rm === 'off' ? 'text-gray-400' : 'text-blue-600';
-                const checkedA = (_compareA === r.id) ? 'checked' : '';
-                const checkedB = (_compareB === r.id) ? 'checked' : '';
+                const checked = _compareIds.includes(r.id) ? 'checked' : '';
                 tableHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">';
                 tableHtml += '<td class="text-center py-2 px-1">';
-                tableHtml += '  <label class="inline-flex items-center gap-0.5 cursor-pointer" title="设为 A">';
-                tableHtml += '    <input type="radio" name="cmp-a" ' + checkedA + ' onchange="setCompare(\'a\',' + r.id + ')" class="accent-blue-500">';
-                tableHtml += '    <span class="text-[10px] text-blue-500 font-bold">A</span>';
-                tableHtml += '  </label>';
-                tableHtml += '  <label class="inline-flex items-center gap-0.5 cursor-pointer ml-1" title="设为 B">';
-                tableHtml += '    <input type="radio" name="cmp-b" ' + checkedB + ' onchange="setCompare(\'b\',' + r.id + ')" class="accent-green-500">';
-                tableHtml += '    <span class="text-[10px] text-green-500 font-bold">B</span>';
-                tableHtml += '  </label>';
+                tableHtml += '  <input type="checkbox" ' + checked + ' onchange="toggleCompare(' + r.id + ')" class="accent-purple-500 cursor-pointer" title="勾选两条进行对比">';
                 tableHtml += '</td>';
                 tableHtml += '<td class="py-2 px-2 text-gray-600 cursor-pointer" onclick="showEvalDetail(' + r.id + ')">' + r.created_at + '</td>';
-                tableHtml += '<td class="text-center text-gray-600">' + r.role + '</td>';
+                tableHtml += '<td class="text-center text-gray-600">' + (_histRoleLabel[r.role] || r.role || '全部') + '</td>';
                 tableHtml += '<td class="text-center ' + rmColor + '">' + rmLabel + '</td>';
                 tableHtml += '<td class="text-center">' + r.total + '</td>';
                 tableHtml += '<td class="text-center">' + (r.avg_precision || 0).toFixed(3) + '</td>';
@@ -3126,41 +3184,53 @@
                 tableHtml += '</tr>';
             });
             tableHtml += '</tbody></table></div>';
-            // A/B 对比按钮
-            if (_compareA && _compareB) {
+            // 勾选提示（勾满两条即自动对比）
+            if (_compareIds.length) {
                 tableHtml += '<div class="mt-3 flex items-center gap-2">';
-                tableHtml += '  <span class="text-xs text-gray-500">已选 A(#' + _compareA + ') vs B(#' + _compareB + ')</span>';
-                tableHtml += '  <button onclick="runRagCompare()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">开始对比</button>';
+                tableHtml += '  <span class="text-xs text-gray-500">已勾选 ' + _compareIds.length + ' 条' + (_compareIds.length === 1 ? '，再勾选一条即可对比' : '') + '</span>';
+                tableHtml += '  <button onclick="clearRagCompare()" class="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-100 transition">清除</button>';
                 tableHtml += '</div>';
             }
 
             box.innerHTML = trendHtml + tableHtml;
         }
 
-        // —— A/B 对比 ——
-        let _compareA = null, _compareB = null;
-        function setCompare(which, id) {
-            if (which === 'a') _compareA = id;
-            else _compareB = id;
-            loadRagEvalHistory();  // 重新渲染以更新勾选状态
+        // —— 评估对比（勾选两条，自动按时间排序为优化前/优化后）——
+        let _compareIds = [];
+        function toggleCompare(id) {
+            const idx = _compareIds.indexOf(id);
+            if (idx >= 0) {
+                _compareIds.splice(idx, 1);
+            } else {
+                // 最多同时勾选两条，超出时挤掉最早勾选的那条
+                if (_compareIds.length >= 2) _compareIds.shift();
+                _compareIds.push(id);
+            }
+            if (_compareIds.length === 2) {
+                runRagCompare();
+            } else {
+                document.getElementById('rag-eval-compare').classList.add('hidden');
+            }
+            loadRagEvalHistory();
         }
         function clearRagCompare() {
-            _compareA = null; _compareB = null;
+            _compareIds = [];
             document.getElementById('rag-eval-compare').classList.add('hidden');
             loadRagEvalHistory();
         }
         async function runRagCompare() {
-            if (!_compareA || !_compareB) { alert('请先在历史记录中选择 A 和 B 两次评估'); return; }
+            if (_compareIds.length !== 2) { alert('请先勾选两条评估记录'); return; }
             const box = document.getElementById('rag-eval-compare');
             const content = document.getElementById('rag-eval-compare-content');
             box.classList.remove('hidden');
             content.innerHTML = '<div class="loading">对比中...</div>';
             try {
-                const res = await apiRequest('/api/ai/kb/eval/compare?a=' + _compareA + '&b=' + _compareB);
+                const res = await apiRequest('/api/ai/kb/eval/compare?a=' + _compareIds[0] + '&b=' + _compareIds[1]);
                 let html = '<div class="bg-gray-50 rounded-lg p-4">';
                 html += '<div class="flex gap-4 mb-3 text-xs">';
-                html += '  <div class="flex-1 bg-blue-50 rounded p-2"><span class="text-blue-600 font-bold">A</span>  #' + res.a.id + ' · ' + res.a.created_at + ' · ' + (res.a.rerank_mode || 'rule') + '</div>';
-                html += '  <div class="flex-1 bg-green-50 rounded p-2"><span class="text-green-600 font-bold">B</span>  #' + res.b.id + ' · ' + res.b.created_at + ' · ' + (res.b.rerank_mode || 'rule') + '</div>';
+                const _rmLabel = (m) => m === 'semantic' ? '语意级' : m === 'off' ? '关闭' : '规则级';
+                html += '  <div class="flex-1 bg-blue-50 rounded p-2"><span class="text-blue-600 font-bold">A</span>  #' + res.a.id + ' · ' + res.a.created_at + ' · ' + _rmLabel(res.a.rerank_mode) + '</div>';
+                html += '  <div class="flex-1 bg-green-50 rounded p-2"><span class="text-green-600 font-bold">B</span>  #' + res.b.id + ' · ' + res.b.created_at + ' · ' + _rmLabel(res.b.rerank_mode) + '</div>';
                 html += '</div>';
 
                 // —— 柱状对比图（flex 布局，居中自适应）——
@@ -3227,7 +3297,96 @@
                     html += '<td class="text-center">' + diffHtml + '</td>';
                     html += '</tr>';
                 });
+                html += '</tbody></table>';
+
+                // —— 参数详情按钮 + 展开窗口 ——
+                const cfgA = res.a.config_snapshot || {};
+                const cfgB = res.b.config_snapshot || {};
+                const allKeys = [...new Set([...Object.keys(cfgA), ...Object.keys(cfgB)])];
+                const _cfgLabel = (k) => {
+                    const map = {
+                        ai_rag_enabled: 'RAG总开关',
+                        ai_rag_top_k: '向量检索片段条数上限',
+                        ai_rag_min_score: '向量检索相似度门槛',
+                        ai_rag_embedding_model: 'Embedding模型',
+                        ai_rag_chunk_size: '分块大小',
+                        ai_rag_max_chars: '上下文最大字符数',
+                        rag_module_query_rewrite: '查询改写模块',
+                        rag_module_vector_retrieval: '向量检索模块',
+                        rag_module_keyword_retrieval: '关键词检索模块',
+                        rag_module_fusion: '结果融合模块',
+                        rag_module_rerank: '重排序模块',
+                        rag_module_automerge: 'AutoMerging模块',
+                        rag_rerank_mode: '重排序模式',
+                        rag_rerank_candidate_limit: '重排序候选数',
+                        ai_query_rewrite_enabled: '查询重写',
+                        ai_query_decompose_enabled: '子查询分解',
+                        ai_query_stepback_enabled: '后退提示',
+                        ai_query_expand_enabled: '查询扩展',
+                        ai_query_hyde_enabled: 'HyDE假设文档',
+                        ai_self_rag_enabled: 'Self-RAG总开关',
+                        ai_self_rag_retrieve_check: '检索前判断',
+                        ai_self_rag_relevance_filter: '检索后相关性过滤',
+                        ai_self_rag_relevance_threshold: '相关性过滤阈值',
+                        ai_self_rag_verify_answer: '生成后回答验证',
+                    };
+                    return map[k] || k;
+                };
+                const _cfgVal = (v) => {
+                    if (v === true || v === 1 || v === '1' || v === 'true') return '开启';
+                    if (v === false || v === 0 || v === '0' || v === 'false') return '关闭';
+                    if (v === 'rule') return '规则级';
+                    if (v === 'semantic') return '语意级';
+                    if (v === 'off') return '关闭';
+                    return String(v);
+                };
+                // 规范化比较：数字 4 和 "4" 相同，布尔 true 和 1/"true" 相同，浮点 0.43 和 "0.43" 相同
+                const _normVal = (v) => {
+                    if (v === true || v === 'true' || v === 1 || v === '1') return 'ON';
+                    if (v === false || v === 'false' || v === 0 || v === '0') return 'OFF';
+                    const n = parseFloat(v);
+                    if (!isNaN(n) && String(v).trim() !== '') return 'N:' + n;
+                    return 'S:' + String(v);
+                };
+                const _isDiff = (k) => _normVal(cfgA[k]) !== _normVal(cfgB[k]);
+                // 有差异的参数排最前面，相同的排后面
+                const sortedKeys = [...allKeys].sort((x, y) => {
+                    const dx = _isDiff(x) ? 0 : 1;
+                    const dy = _isDiff(y) ? 0 : 1;
+                    return dx - dy;
+                });
+                const diffKeys = sortedKeys.filter(_isDiff);
+                const diffCount = diffKeys.length;
+
+                html += '<div class="mt-3 flex items-center justify-between">';
+                html += '  <span class="text-xs text-gray-500">参数差异：<span class="font-bold ' + (diffCount > 0 ? 'text-orange-500' : 'text-green-500') + '">' + diffCount + '</span> 项不同</span>';
+                html += '  <button onclick="document.getElementById(\'rag-compare-config\').classList.toggle(\'hidden\')" class="text-xs px-3 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition">查看参数详情</button>';
+                html += '</div>';
+
+                // 参数详情展开窗口（有差异时默认展开）
+                html += '<div id="rag-compare-config" class="' + (diffCount > 0 ? '' : 'hidden') + ' mt-3 p-3 rounded-lg" style="background:rgba(128,128,128,0.06)">';
+                html += '  <div class="text-xs font-medium text-gray-600 mb-2">RAG 参数配置对比' + (diffCount > 0 ? '（差异项已置顶）' : '') + '</div>';
+                html += '  <table class="w-full text-xs"><thead><tr class="text-gray-500 border-b">';
+                html += '    <th class="text-left py-1.5">参数</th><th class="text-center">A（优化前）</th><th class="text-center">B（优化后）</th><th class="text-center">差异</th></tr></thead><tbody>';
+                sortedKeys.forEach(k => {
+                    const va = _cfgVal(cfgA[k]);
+                    const vb = _cfgVal(cfgB[k]);
+                    const isDiff = _isDiff(k);
+                    const rowBg = isDiff ? 'style="background:rgba(251,146,60,0.1)"' : '';
+                    const diffTag = isDiff ? '<span class="text-orange-500 font-medium">● 不同</span>' : '<span class="text-gray-400">相同</span>';
+                    html += '<tr class="border-b border-gray-100" ' + rowBg + '>';
+                    html += '  <td class="py-1.5 text-gray-700">' + _cfgLabel(k) + '</td>';
+                    html += '  <td class="text-center ' + (isDiff ? 'text-blue-600 font-medium' : 'text-gray-500') + '">' + va + '</td>';
+                    html += '  <td class="text-center ' + (isDiff ? 'text-green-600 font-medium' : 'text-gray-500') + '">' + vb + '</td>';
+                    html += '  <td class="text-center">' + diffTag + '</td>';
+                    html += '</tr>';
+                });
+                if (allKeys.length === 0) {
+                    html += '<tr><td colspan="4" class="py-3 text-center text-gray-400">该评估记录未保存参数快照（V4.4.0 之前的记录）</td></tr>';
+                }
                 html += '</tbody></table></div>';
+
+                html += '</div>';
                 content.innerHTML = html;
             } catch (e) {
                 content.innerHTML = '<div class="text-sm text-red-500">对比失败：' + escapeHtml(e.message) + '</div>';
@@ -3235,12 +3394,21 @@
         }
 
         // —— 测试题管理 ——
-        async function loadEvalQuestions() {
+        async function loadEvalQuestions(isManual) {
             const box = document.getElementById('eval-questions-list');
             const countEl = document.getElementById('eval-questions-count');
+            const btn = document.getElementById('eval-questions-refresh-btn');
             if (!box) return;
+            // 手动点「刷新」时给出即时反馈，避免看起来像没反应
+            if (isManual && btn) {
+                btn.disabled = true;
+                btn.textContent = '刷新中...';
+                btn.classList.add('opacity-60');
+            }
+            if (isManual) box.innerHTML = '<div class="text-sm text-gray-400">加载中...</div>';
             try {
-                const res = await apiRequest('/api/ai/kb/eval/questions');
+                // 加时间戳绕过浏览器缓存，确保拿到最新数据
+                const res = await apiRequest('/api/ai/kb/eval/questions?_t=' + Date.now());
                 const items = res.items || [];
                 if (countEl) countEl.textContent = '共 ' + res.total + ' 道题';
                 if (!items.length) {
@@ -3270,8 +3438,18 @@
                     html += '</div>';
                 });
                 box.innerHTML = html;
+                if (isManual && btn) {
+                    btn.textContent = '✓ 已刷新';
+                    setTimeout(() => { if (btn) btn.textContent = '刷新'; }, 1200);
+                }
             } catch (e) {
                 box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            } finally {
+                if (isManual && btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-60');
+                    if (btn.textContent === '刷新中...') btn.textContent = '刷新';
+                }
             }
         }
 
@@ -4083,6 +4261,8 @@
             if (key === 'rag-debug') {
                 loadRagDebugPage();
             }
+            // 记录当前页面，刷新后恢复
+            try { localStorage.setItem('app_last_page', key); } catch (e) {}
         }
 
         // ==================== 内容加载与渲染 ====================
@@ -5913,6 +6093,32 @@
                 initApp();
             }
         });
+
+        // ==================== 刷新按钮统一反馈 ====================
+        // 问题：多数「刷新」按钮调用的加载函数没有即时视觉反馈，
+        // 数据没变化时看起来像点了没反应（用户无法判断按钮是否生效）。
+        // 方案：用事件委托统一处理——凡是文字含「刷新」的按钮，
+        //       点击后立即显示"刷新中..."，完成后显示"✓ 已刷新"再复原原文字。
+        //       不改动各个 load 函数本身的逻辑，零侵入。
+        (function initRefreshFeedback() {
+            document.addEventListener('click', function (e) {
+                const btn = e.target && e.target.closest ? e.target.closest('button') : null;
+                if (!btn || btn.disabled || btn.classList.contains('fb-busy')) return;
+                const original = (btn.textContent || '').trim();
+                // 只接管文字含「刷新」的按钮，避免误伤其他按钮
+                if (!original.includes('刷新')) return;
+                btn.classList.add('fb-busy');
+                btn.textContent = '刷新中...';
+                // 大多数加载是本地数据库查询（毫秒级），用固定节拍给出确定反馈
+                setTimeout(function () {
+                    btn.textContent = '✓ 已刷新';
+                    setTimeout(function () {
+                        btn.textContent = original;
+                        btn.classList.remove('fb-busy');
+                    }, 900);
+                }, 450);
+            }, true);
+        })();
     </script>
 </body>
 </html>

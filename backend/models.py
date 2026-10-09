@@ -393,6 +393,7 @@ class AiEvalHistory(Base):
     elapsed_seconds = Column(Float, default=0)  # 评估耗时
     model = Column(String(100), default="")  # 用的语义模型
     rerank_mode = Column(String(20), default="rule")  # 重排序模式：rule/semantic/off
+    config_json = Column(Text, default="")  # 评估时的RAG参数快照（JSON字符串，用于A/B对比参数差异）
     items_json = Column(Text, default="")  # 逐题详情（JSON 字符串）
 
 
