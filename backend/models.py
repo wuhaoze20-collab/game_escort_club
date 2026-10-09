@@ -409,3 +409,29 @@ class AiEvalQuestion(Base):
     enabled = Column(Integer, default=1)  # 是否启用（0=禁用，不参与评估）
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class AiEvalFixedSet(Base):
+    """固定的评估题集：抽一次就固定住，后续评估一直复用同一批题。
+
+    为什么需要这张表
+    ----------------
+    随机抽题的价值是覆盖不同角色/分类，但如果每次评估都重新抽，
+    两次评估的题目就不同了 —— 指标差异里混入了"这次抽到的题更难/更简单"，
+    没法判断差异到底来自参数改动还是抽题运气。
+
+    实测：题库里题目难度的标准差约 0.25，抽 5 题时两次对比的差异
+    标准差可达 0.16，比参数优化通常带来的提升（0.05~0.10）还大。
+
+    所以把随机题集固定下来：只有管理员点「重新随机」才会变，
+    这样连续几次评估的题目完全一致，A/B 对比才反映真实效果。
+
+    表里只保留最新一行（重抽时覆盖）。
+    """
+    __tablename__ = "ai_eval_fixed_set"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_ids = Column(Text, default="[]")  # JSON 数组，固定的题目 ID 列表
+    sample_size = Column(Integer, default=5)  # 抽取数量（展示用）
+    created_at = Column(DateTime, default=datetime.now)  # 抽取时间
+    created_by = Column(String(50), default="")  # 抽取人

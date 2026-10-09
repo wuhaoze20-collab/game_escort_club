@@ -440,7 +440,9 @@ def get_test_questions(db, role: str = None, only_enabled: bool = True) -> List[
         role: 只返回指定角色的题目，None 表示返回全部
         only_enabled: 只返回启用的题目（默认 True）
     返回：
-        [{"question": ..., "ground_truth": ..., "role": ...}, ...]
+        [{"id": 题目ID, "question": 问题, "ground_truth": 标准答案,
+          "role": 角色, "category": 分类}, ...]
+        id 用于「固定题集」记录本次抽中了哪几道题。
     """
     from models import AiEvalQuestion
     query = db.query(AiEvalQuestion)
@@ -450,7 +452,8 @@ def get_test_questions(db, role: str = None, only_enabled: bool = True) -> List[
         query = query.filter(AiEvalQuestion.role == role)
     rows = query.order_by(AiEvalQuestion.id.asc()).all()
     return [
-        {"question": r.question, "ground_truth": r.ground_truth, "role": r.role}
+        {"id": r.id, "question": r.question, "ground_truth": r.ground_truth,
+         "role": r.role, "category": r.category or "通用"}
         for r in rows
     ]
 

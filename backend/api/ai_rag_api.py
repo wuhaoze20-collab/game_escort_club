@@ -16,9 +16,11 @@
 也不能让 AI 拿着过期条款回答用户 —— 所以不提供"静默过期"的选项。
 """
 
+import json
 import re
 import os
 import random
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -26,7 +28,7 @@ from sqlalchemy.orm import Session
 import ai_rag
 from auth import require_roles
 from database import get_db
-from models import AiChunk, KbDocument, User
+from models import AiChunk, AiEvalFixedSet, KbDocument, User
 from schemas import AiRagSearchRequest, KbDocumentCreate, KbDocumentUpdate
 
 router = APIRouter(prefix="/api/ai/kb", tags=["AI 知识库与向量检索"])
@@ -675,6 +677,95 @@ def delete_eval_question(
     return {"message": "删除成功"}
 
 
+# ============================================================
+# 固定题集：抽一次就固定住，后续评估一直复用同一批题
+#
+# 为什么不每次重抽：题库里各题难度差异很大（实测标准差约 0.25），
+# 抽 5 题时，两次评估光凭"抽题运气"就能差出约 0.16，比参数优化通常
+# 带来的提升（0.05~0.10）还大 —— 那样 A/B 对比反映的是抽题差异，
+# 不是参数效果。固定下来之后，两次评估的题目完全一致，对比才可信。
+# ============================================================
+
+def _fixed_set_payload(db) -> dict:
+    """组装固定题集的响应：抽取信息 + 题目详情（按当前题库实时展开）。"""
+    from rag_eval import get_test_questions
+
+    pool = get_test_questions(db, role=None)  # 当前启用的全部题目（带 id）
+    id_map = {q["id"]: q for q in pool}
+    row = db.query(AiEvalFixedSet).order_by(AiEvalFixedSet.id.desc()).first()
+
+    if row is None:
+        return {"exists": False, "sample_size": 0, "created_at": "",
+                "created_by": "", "total_pool": len(pool),
+                "questions": [], "missing": []}
+
+    try:
+        ids = json.loads(row.question_ids or "[]")
+    except Exception:
+        ids = []
+
+    questions, missing = [], []
+    for qid in ids:
+        q = id_map.get(qid)
+        if q is None:
+            missing.append(qid)  # 题目被删除或被禁用了
+        else:
+            questions.append({"id": q["id"], "question": q["question"],
+                              "role": q["role"], "category": q["category"]})
+
+    return {
+        "exists": bool(ids),
+        "sample_size": row.sample_size or len(ids),
+        "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "",
+        "created_by": row.created_by or "",
+        "total_pool": len(pool),
+        "questions": questions,
+        "missing": missing,
+    }
+
+
+@router.get("/eval/fixed-set")
+def get_fixed_set(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """读取当前固定的评估题集。"""
+    return _fixed_set_payload(db)
+
+
+@router.post("/eval/fixed-set")
+def draw_fixed_set(
+    sample_size: int = 5,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """重新随机抽取固定题集（覆盖上一批）。
+
+    抽完即固定：之后每次评估都用这批题，直到再次调用本接口。
+    表里只保留最新一行，不积累历史。
+    """
+    from rag_eval import get_test_questions
+
+    pool = get_test_questions(db, role=None)
+    if not pool:
+        raise HTTPException(status_code=400, detail="题库为空，无法抽题")
+
+    n = max(1, min(int(sample_size or 5), len(pool)))
+    picked = random.sample(pool, n)
+
+    row = db.query(AiEvalFixedSet).order_by(AiEvalFixedSet.id.desc()).first()
+    if row is None:
+        row = AiEvalFixedSet()
+        db.add(row)
+    row.question_ids = json.dumps([q["id"] for q in picked])
+    row.sample_size = n
+    row.created_at = datetime.now()
+    row.created_by = current_user.username
+    db.commit()
+
+    return _fixed_set_payload(db)
+
+
 @router.post("/eval/run")
 def run_eval(
     generate_answer: bool = True,
@@ -689,8 +780,8 @@ def run_eval(
         generate_answer: 是否调用大模型生成答案并计算端到端语义相似度（默认 True，较慢）
         role: 以哪个角色的题库评估（boss/player/service/admin）；
               传空或 all 表示评估全部启用的题目；
-              传 random 表示从全部题库中随机抽题（抽题数量由 sample_size 决定）
-        sample_size: role=random 时的抽题数量（默认 5，自动限制在 1~题库总数之间）
+              传 random 表示用「固定题集」里的题评估（题集在「随机选题」页抽取）
+        sample_size: 已废弃，保留仅为兼容旧调用；抽题数量改在「随机选题」页设置
 
     评估指标：
         - Context Precision：检索到的片段中，与标准答案相关的占比
@@ -702,12 +793,24 @@ def run_eval(
 
     try:
         if role == "random":
-            # 混合随机检测：从全部启用题目中随机抽取 N 道，覆盖各角色
+            # 混合随机检测：用「固定题集」里的题，而不是每次重新抽。
+            # 每次重抽会让两次评估的题目不同，指标差异里就混进了题目难度差异，
+            # 分不清是参数改动带来的还是抽题运气。题集由「随机选题」页控制。
             all_q = get_test_questions(db, role=None)
             if not all_q:
-                raise HTTPException(status_code=400, detail="题库为空，无法随机抽题")
-            n = max(1, min(int(sample_size or 5), len(all_q)))
-            test_set = random.sample(all_q, n)
+                raise HTTPException(status_code=400, detail="题库为空，无法评估")
+            fixed = _fixed_set_payload(db)
+            if not fixed["exists"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="尚未抽取固定题集，请先到「随机选题」页抽题")
+            id_map = {q["id"]: q for q in all_q}
+            test_set = [id_map[q["id"]] for q in fixed["questions"]
+                        if q["id"] in id_map]
+            if not test_set:
+                raise HTTPException(
+                    status_code=400,
+                    detail="固定题集里的题目已被删除或禁用，请重新抽题")
             # 每题仍用自己的 role 去检索（q_role 在 evaluate_rag 内决定）
             result = evaluate_rag(db, test_set=test_set, role="random",
                                   generate_answer=generate_answer)
