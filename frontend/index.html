@@ -1316,7 +1316,136 @@
                     <div id="quote-table" class="space-y-2"><div class="loading">加载中...</div></div>
                 </section>
 
-                <!-- 16.10 系统参数（仅管理员）：业务规则集中配置，改完立即生效 -->
+                <!-- 16.10 RAG 调试（仅管理员）：RAG 参数、模块开关、知识库管理、量化评估集中在此 -->
+                <section id="page-rag-debug" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">RAG 调试中心</h2>
+                        <button onclick="loadRagDebugPage()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">RAG（检索增强生成）相关的所有配置、知识库管理和量化评估集中在此。修改参数后<b>立即生效</b>。</p>
+
+                    <!-- 标签页切换 -->
+                    <div class="flex gap-2 mb-6 border-b border-gray-200">
+                        <button onclick="switchRagTab('params')" id="rag-tab-params" class="rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600">RAG 参数</button>
+                        <button onclick="switchRagTab('kb')" id="rag-tab-kb" class="rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">知识库管理</button>
+                        <button onclick="switchRagTab('eval')" id="rag-tab-eval" class="rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">量化评估</button>
+                        <button onclick="switchRagTab('questions')" id="rag-tab-questions" class="rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">测试题管理</button>
+                    </div>
+
+                    <!-- 标签页1：RAG 参数 -->
+                    <div id="rag-panel-params">
+                        <div id="rag-config-table" class="space-y-3"><div class="loading">加载中...</div></div>
+                    </div>
+
+                    <!-- 标签页2：知识库管理 -->
+                    <div id="rag-panel-kb" class="hidden">
+                        <div class="flex items-center gap-2 mb-4">
+                            <input type="file" id="kb-upload-input" accept=".pdf,.docx,.html,.htm,.txt,.md,.csv,.json" class="hidden" onchange="uploadKbDocument(this)">
+                            <button onclick="document.getElementById('kb-upload-input').click()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">上传文档</button>
+                            <button onclick="loadKbIndexStatus(); loadKbDocList();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                        </div>
+                        <div class="border border-gray-200 rounded-lg p-4 mb-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <div class="text-sm font-medium text-gray-800">向量索引状态</div>
+                                <button onclick="rebuildKbIndex()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
+                            </div>
+                            <div id="kb-index-status" class="text-xs text-gray-500">加载中...</div>
+                            <div id="kb-index-msg" class="text-xs text-gray-500 mt-1"></div>
+                        </div>
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="text-sm font-medium text-gray-800 mb-3">已索引文档</div>
+                            <div id="kb-doc-list" class="text-xs text-gray-500">加载中...</div>
+                        </div>
+                    </div>
+
+                    <!-- 标签页3：量化评估 -->
+                    <div id="rag-panel-eval" class="hidden">
+                        <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                            <div class="text-sm font-medium text-gray-700 mb-3">评估配置</div>
+                            <div class="flex flex-wrap gap-3 items-center mb-3">
+                                <label class="flex items-center gap-2 text-sm">
+                                    <input type="checkbox" id="rag-eval-gen-answer" checked class="w-4 h-4">
+                                    生成 AI 答案并计算端到端相似度（较慢）
+                                </label>
+                                <select id="rag-eval-role" class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="boss">以老板身份检索</option>
+                                    <option value="player">以打手身份检索</option>
+                                    <option value="service">以客服身份检索</option>
+                                </select>
+                                <button onclick="runRagEval()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">运行评估</button>
+                            </div>
+                            <p class="text-xs text-gray-500">评估指标：Context Precision（检索精确率）、Context Recall（检索召回率）、端到端语义相似度、Faithfulness（忠实度）、Answer Relevancy（答案相关性）。使用 BGE 语义模型，相关阈值 0.65。</p>
+                        </div>
+                        <div id="rag-eval-result"></div>
+                        <!-- 失效诊断建议 -->
+                        <div id="rag-eval-diagnosis" class="mt-6"></div>
+                        <!-- 评估历史记录 -->
+                        <div class="mt-6 border-t border-gray-200 pt-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <div class="text-sm font-medium text-gray-700">评估历史（最近 20 次）</div>
+                                <button onclick="loadRagEvalHistory()" class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">刷新历史</button>
+                            </div>
+                            <div id="rag-eval-history"></div>
+                        </div>
+                        <!-- A/B 对比结果 -->
+                        <div id="rag-eval-compare" class="mt-6 hidden">
+                            <div class="flex justify-between items-center mb-3">
+                                <div class="text-sm font-medium text-gray-700">A/B 对比结果</div>
+                                <button onclick="clearRagCompare()" class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">清除对比</button>
+                            </div>
+                            <div id="rag-eval-compare-content"></div>
+                        </div>
+                    </div>
+
+                    <!-- 标签页4：测试题管理 -->
+                    <div id="rag-panel-questions" class="hidden">
+                        <div class="flex items-center gap-2 mb-4">
+                            <button onclick="showEvalQuestionForm()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">新增题目</button>
+                            <button onclick="loadEvalQuestions()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                            <span id="eval-questions-count" class="text-xs text-gray-500"></span>
+                        </div>
+                        <!-- 新增/编辑表单 -->
+                        <div id="eval-question-form" class="hidden border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                            <input type="hidden" id="eq-id">
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">问题</label>
+                                <textarea id="eq-question" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入测试问题，如：平台抽成比例是多少？"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-600 mb-1">标准答案</label>
+                                <textarea id="eq-ground-truth" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入标准答案，用于端到端相似度对比"></textarea>
+                            </div>
+                            <div class="flex gap-3 mb-3">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">适用角色</label>
+                                    <select id="eq-role" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="boss">老板</option>
+                                        <option value="player">打手</option>
+                                        <option value="admin">管理员</option>
+                                        <option value="service">客服</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">分类</label>
+                                    <input id="eq-category" type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="如：充值计费、订单流程">
+                                </div>
+                                <div class="flex items-end">
+                                    <label class="flex items-center gap-2 text-sm text-gray-600">
+                                        <input type="checkbox" id="eq-enabled" checked> 启用
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="saveEvalQuestion()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">保存</button>
+                                <button onclick="hideEvalQuestionForm()" class="px-4 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">取消</button>
+                            </div>
+                        </div>
+                        <!-- 题目列表 -->
+                        <div id="eval-questions-list" class="space-y-2"></div>
+                    </div>
+                </section>
+
+                <!-- 16.11 系统参数（仅管理员）：业务规则集中配置，改完立即生效 -->
                 <section id="page-system-config" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-lg font-semibold text-gray-800">系统参数</h2>
@@ -1325,35 +1454,6 @@
                     <p class="text-sm text-gray-500 mb-4">抽成比例、提现冷却、登录锁定、各类上限等业务规则集中在此。修改后<b>立即生效</b>，无需改代码或重启服务。</p>
                     <div id="config-alerts"></div>
                     <div id="config-table" class="space-y-3"><div class="loading">加载中...</div></div>
-                </section>
-
-                <!-- 16.11 知识库管理（仅管理员）：文档上传、向量索引状态、文档列表 -->
-                <section id="page-kb-index" class="page-section bg-white rounded-xl shadow-sm p-6">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-lg font-semibold text-gray-800">知识库管理</h2>
-                        <div class="flex items-center gap-2">
-                            <input type="file" id="kb-upload-input" accept=".pdf,.docx,.html,.htm,.txt,.md,.csv,.json" class="hidden" onchange="uploadKbDocument(this)">
-                            <button onclick="document.getElementById('kb-upload-input').click()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">上传文档</button>
-                            <button onclick="loadKbIndexStatus(); loadKbDocList();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
-                        </div>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-4">上传 PDF / Word / HTML / TXT / Markdown / CSV / JSON 文档，自动分块向量化后供 AI 检索。支持用户协议、打手规范、退款规则等长篇文档。</p>
-
-                    <!-- 索引状态卡片 -->
-                    <div class="border border-gray-200 rounded-lg p-4 mb-4">
-                        <div class="flex justify-between items-center mb-2">
-                            <div class="text-sm font-medium text-gray-800">向量索引状态</div>
-                            <button onclick="rebuildKbIndex()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重建索引</button>
-                        </div>
-                        <div id="kb-index-status" class="text-xs text-gray-500">加载中...</div>
-                        <div id="kb-index-msg" class="text-xs text-gray-500 mt-1"></div>
-                    </div>
-
-                    <!-- 文档列表 -->
-                    <div class="border border-gray-200 rounded-lg p-4">
-                        <div class="text-sm font-medium text-gray-800 mb-3">已索引文档</div>
-                        <div id="kb-doc-list" class="text-xs text-gray-500">加载中...</div>
-                    </div>
                 </section>
 
                 <!-- 16.6 提示词管理（仅管理员） -->
@@ -1593,7 +1693,7 @@
             <div class="absolute bottom-24 right-6 w-[620px] max-w-[94vw] h-[740px] max-h-[86vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
                 <div class="px-5 py-3.5 border-b flex justify-between items-center shrink-0">
                     <div>
-                        <h3 class="font-semibold">AI 客服</h3>
+                        <h3 class="font-semibold">布鲁斯</h3>
                         <p id="ai-chat-subtitle" class="text-xs text-gray-400">依据平台资料回答，仅供参考</p>
                     </div>
                     <div class="flex items-center gap-3 shrink-0">
@@ -2167,6 +2267,23 @@
 
             // 默认显示第一个菜单
             switchPage(menuConfig[currentUser.role][0].items[0].key);
+
+            // 滚动位置记忆：刷新页面后恢复到上次位置
+            try {
+                const savedScroll = localStorage.getItem('app_scroll_y');
+                if (savedScroll) {
+                    setTimeout(() => window.scrollTo(0, parseInt(savedScroll) || 0), 100);
+                }
+            } catch (e) {}
+            // 滚动时保存位置（节流：最多每200ms存一次）
+            let _scrollTimer = null;
+            window.addEventListener('scroll', () => {
+                if (_scrollTimer) return;
+                _scrollTimer = setTimeout(() => {
+                    try { localStorage.setItem('app_scroll_y', String(window.scrollY || 0)); } catch (e) {}
+                    _scrollTimer = null;
+                }, 200);
+            });
         }
 
         // 菜单配置（左树分组）
@@ -2203,7 +2320,7 @@
                     { key: 'quote-manage', label: '台词管理' },
                     { key: 'ai-prompt', label: '提示词管理' },
                     { key: 'ai-faq', label: 'AI 问答库' },
-                    { key: 'kb-index', label: '知识库管理' },
+                    { key: 'rag-debug', label: 'RAG 调试' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2513,7 +2630,7 @@
         async function rebuildKbIndex() {
             const msg = document.getElementById('kb-index-msg');
             if (!confirm('重建向量索引会调用千问 embedding 接口（按量计费），未改动的片段会自动跳过。确认继续？')) return;
-            const btns = document.querySelectorAll('#page-kb-index button');
+            const btns = document.querySelectorAll('#rag-panel-kb button');
             btns.forEach(b => { b.disabled = true; });
             if (msg) msg.textContent = '正在重建索引，请稍候（首次可能要十几秒）...';
             try {
@@ -2532,7 +2649,7 @@
             const file = input.files && input.files[0];
             if (!file) return;
             const msg = document.getElementById('kb-index-msg');
-            const btns = document.querySelectorAll('#page-kb-index button');
+            const btns = document.querySelectorAll('#rag-panel-kb button');
             btns.forEach(b => { b.disabled = true; });
             if (msg) msg.textContent = '正在上传「' + file.name + '」并重建索引，请稍候...';
             try {
@@ -2606,15 +2723,19 @@
             }
         }
 
+        // RAG 相关的参数分组（这些移到「RAG 调试」页面，不在系统参数里显示）
+        const RAG_CONFIG_GROUPS = ['AI 知识库', 'RAG 模块开关', '查询优化', 'Self-RAG'];
+
         function renderConfigTable() {
             renderConfigAlerts();
             const box = document.getElementById('config-table');
             if (!box) return;
-            // 按 group 分组，保持 CONFIG_META 中的出现顺序
+            // 按 group 分组，保持 CONFIG_META 中的出现顺序；过滤掉 RAG 相关分组
             const groups = {};
             const groupOrder = [];
             configCache.forEach(c => {
                 const g = c.group || '其他';
+                if (RAG_CONFIG_GROUPS.indexOf(g) !== -1) return;  // RAG 参数移到 RAG 调试页面
                 if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
                 groups[g].push(c);
             });
@@ -2671,6 +2792,644 @@
             if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
         }
 
+        // ==================== RAG 调试中心 ====================
+
+        function switchRagTab(tab) {
+            // 切换标签按钮样式
+            document.querySelectorAll('.rag-tab-btn').forEach(btn => {
+                btn.className = 'rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700';
+            });
+            const activeBtn = document.getElementById('rag-tab-' + tab);
+            if (activeBtn) activeBtn.className = 'rag-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600';
+            // 切换面板
+            document.getElementById('rag-panel-params').classList.add('hidden');
+            document.getElementById('rag-panel-kb').classList.add('hidden');
+            document.getElementById('rag-panel-eval').classList.add('hidden');
+            document.getElementById('rag-panel-questions').classList.add('hidden');
+            document.getElementById('rag-panel-' + tab).classList.remove('hidden');
+            // 切换到测试题管理时加载题目列表
+            if (tab === 'questions') {
+                loadEvalQuestions();
+            }
+        }
+
+        async function loadRagDebugPage() {
+            // 加载 RAG 参数（复用系统参数的缓存，只渲染 RAG 相关分组）
+            if (!configCache.length) {
+                try {
+                    const res = await apiRequest('/api/config/all');
+                    configCache = (res && res.items) || [];
+                    configAlerts = (res && res.alerts) || [];
+                } catch (e) {
+                    document.getElementById('rag-config-table').innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+                    return;
+                }
+            }
+            renderRagConfigTable();
+            // 加载知识库状态
+            loadKbIndexStatus();
+            loadKbDocList();
+            // 加载评估历史
+            loadRagEvalHistory();
+        }
+
+        function renderRagConfigTable() {
+            const box = document.getElementById('rag-config-table');
+            if (!box) return;
+            // 只渲染 RAG 相关分组
+            const groups = {};
+            const groupOrder = [];
+            configCache.forEach(c => {
+                const g = c.group || '其他';
+                if (RAG_CONFIG_GROUPS.indexOf(g) === -1) return;  // 只显示 RAG 相关分组
+                if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+                groups[g].push(c);
+            });
+            if (!groupOrder.length) {
+                box.innerHTML = '<div class="text-sm text-gray-400">暂无 RAG 相关参数</div>';
+                return;
+            }
+            box.innerHTML = groupOrder.map((g, gi) => {
+                const cards = groups[g].map(c => {
+                    const isBool = c.value_type === 'bool';
+                    const isSelect = c.value_type === 'select';
+                    const isInt = c.value_type === 'int';
+                    const isOn = isBool && (c.config_value === '1' || c.config_value === 'true' || c.config_value === 'True');
+                    let controlHtml = '';
+                    if (isBool) {
+                        controlHtml = ''
+                            + '<label class="toggle-switch" title="点击切换">'
+                            + '  <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleConfig(\'' + escapeHtml(c.config_key) + '\', this.checked)">'
+                            + '  <span class="toggle-slider"></span>'
+                            + '</label>'
+                            + '<span id="cfg-status-' + escapeHtml(c.config_key) + '" class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
+                    } else if (isSelect && c.options && c.options.length) {
+                        // 单选按钮选项形式
+                        const opts = c.options.map(o => {
+                            const checked = (String(o.value) === String(c.config_value)) ? 'checked' : '';
+                            const isActive = (String(o.value) === String(c.config_value));
+                            return ''
+                                + '<label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition text-sm '
+                                + (isActive ? 'bg-blue-50 border-blue-400 text-blue-700 font-medium' : 'border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50') + '"'
+                                + ' title="' + escapeHtml(o.label || o.value) + '">'
+                                + '  <input type="radio" name="cfg-radio-' + escapeHtml(c.config_key) + '" value="' + escapeHtml(String(o.value)) + '" ' + checked
+                                + ' onchange="saveConfig(\'' + c.config_key + '\', this.value)" class="accent-blue-500">'
+                                + '  <span>' + escapeHtml(o.label || o.value) + '</span>'
+                                + '</label>';
+                        }).join('');
+                        controlHtml = '<div class="flex flex-wrap gap-2">' + opts + '</div>';
+                    } else {
+                        const inputType = isInt ? 'number' : 'text';
+                        controlHtml = ''
+                            + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="' + inputType + '" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
+                            + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
+                            + '<button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>';
+                    }
+                    return ''
+                        + '<div class="border border-gray-200 rounded-lg p-4">'
+                        + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
+                        + '    <div class="flex-1 min-w-0">'
+                        + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
+                        + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
+                        + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
+                        + '    </div>'
+                        + '    <div class="flex gap-2 shrink-0 items-center">'
+                        + controlHtml
+                        + '    </div>'
+                        + '  </div>'
+                        + '</div>';
+                }).join('');
+                return ''
+                    + '<div class="mb-6">'
+                    + '  <h3 class="cfg-group-title text-base font-semibold text-gray-700 mb-3 pb-2 border-b border-gray-200 flex items-center gap-2 cursor-pointer select-none hover:text-gray-900 transition" onclick="toggleRagConfigGroup(' + gi + ')" title="点击折叠/展开">'
+                    + '    <span class="rag-cfg-group-arrow inline-block transition-transform duration-200 text-sm">\u25be</span>'
+                    + '    <span>' + escapeHtml(g) + '</span>'
+                    + '    <span class="text-xs font-normal text-gray-400">(' + groups[g].length + ' 项)</span>'
+                    + '  </h3>'
+                    + '  <div class="rag-cfg-group-body space-y-3" id="rag-cfg-group-body-' + gi + '">' + cards + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        function toggleRagConfigGroup(gi) {
+            const body = document.getElementById('rag-cfg-group-body-' + gi);
+            if (!body) return;
+            const collapsed = body.style.display === 'none';
+            body.style.display = collapsed ? '' : 'none';
+            const arrow = body.previousElementSibling.querySelector('.rag-cfg-group-arrow');
+            if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+        }
+
+        // —— RAG 量化评估 ——
+
+        async function runRagEval() {
+            const genAnswer = document.getElementById('rag-eval-gen-answer').checked;
+            const role = document.getElementById('rag-eval-role').value;
+            const resultBox = document.getElementById('rag-eval-result');
+            resultBox.innerHTML = '<div class="loading">正在评估，请稍候（生成 AI 答案时较慢）...</div>';
+            try {
+                const url = '/api/ai/kb/eval/run?generate_answer=' + genAnswer + '&role=' + role;
+                const result = await apiRequest(url, 'POST');
+                renderRagEvalResult(result);
+            } catch (e) {
+                resultBox.innerHTML = '<div class="text-sm text-red-500">评估失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function renderRagEvalResult(result) {
+            const box = document.getElementById('rag-eval-result');
+            if (!result || !result.items) {
+                box.innerHTML = '<div class="text-sm text-gray-400">无评估结果</div>';
+                return;
+            }
+
+            function verdict(score, good, ok) {
+                if (score >= good) return '<span class="text-green-600">优秀</span>';
+                if (score >= ok) return '<span class="text-blue-600">合格</span>';
+                return '<span class="text-amber-600">待优化</span>';
+            }
+
+            let html = ''
+                + '<div class="grid grid-cols-5 gap-3 mb-6">'
+                + '  <div class="border border-gray-200 rounded-lg p-4 text-center">'
+                + '    <div class="text-xs text-gray-500 mb-1">Context Precision</div>'
+                + '    <div class="text-xl font-bold text-gray-800">' + (result.avg_precision || 0).toFixed(4) + '</div>'
+                + '    <div class="text-xs mt-1">' + verdict(result.avg_precision || 0, 0.85, 0.7) + '</div>'
+                + '  </div>'
+                + '  <div class="border border-gray-200 rounded-lg p-4 text-center">'
+                + '    <div class="text-xs text-gray-500 mb-1">Context Recall</div>'
+                + '    <div class="text-xl font-bold text-gray-800">' + (result.avg_recall || 0).toFixed(4) + '</div>'
+                + '    <div class="text-xs mt-1">' + verdict(result.avg_recall || 0, 0.8, 0.6) + '</div>'
+                + '  </div>'
+                + '  <div class="border border-gray-200 rounded-lg p-4 text-center">'
+                + '    <div class="text-xs text-gray-500 mb-1">端到端语义相似度</div>'
+                + '    <div class="text-xl font-bold text-gray-800">' + (result.avg_similarity != null ? result.avg_similarity.toFixed(4) : '-') + '</div>'
+                + '    <div class="text-xs mt-1">' + (result.avg_similarity != null ? verdict(result.avg_similarity, 0.85, 0.7) : '未生成答案') + '</div>'
+                + '  </div>'
+                + '  <div class="border border-gray-200 rounded-lg p-4 text-center">'
+                + '    <div class="text-xs text-gray-500 mb-1">忠实度 Faithfulness</div>'
+                + '    <div class="text-xl font-bold text-gray-800">' + (result.avg_faithfulness != null ? result.avg_faithfulness.toFixed(4) : '-') + '</div>'
+                + '    <div class="text-xs mt-1">' + (result.avg_faithfulness != null ? verdict(result.avg_faithfulness, 0.85, 0.7) : '未生成答案') + '</div>'
+                + '  </div>'
+                + '  <div class="border border-gray-200 rounded-lg p-4 text-center">'
+                + '    <div class="text-xs text-gray-500 mb-1">答案相关性 Relevancy</div>'
+                + '    <div class="text-xl font-bold text-gray-800">' + (result.avg_answer_relevancy != null ? result.avg_answer_relevancy.toFixed(4) : '-') + '</div>'
+                + '    <div class="text-xs mt-1">' + (result.avg_answer_relevancy != null ? verdict(result.avg_answer_relevancy, 0.85, 0.7) : '未生成答案') + '</div>'
+                + '  </div>'
+                + '</div>'
+                + '<div class="text-xs text-gray-400 mb-4">测试题数：' + result.total + '　重排序：' + (result.rerank_mode === 'semantic' ? '<span class="text-purple-600">语义级 Cross-Encoder</span>' : result.rerank_mode === 'off' ? '关闭' : '规则式') + '　语义模型：' + escapeHtml(result.model || '') + '　相关阈值：' + result.threshold + '　耗时：' + result.elapsed_seconds + 's' + (result.history_id ? '　历史ID：' + result.history_id : '') + '</div>';
+
+            // 逐题详情
+            html += '<div class="space-y-3">';
+            result.items.forEach((item, i) => {
+                html += ''
+                    + '<div class="border border-gray-200 rounded-lg p-4">'
+                    + '  <div class="flex justify-between items-start mb-2">'
+                    + '    <div class="text-sm font-medium text-gray-800">[' + (i + 1) + '] ' + escapeHtml(item.question) + '</div>'
+                    + '    <div class="text-xs text-gray-400 shrink-0 ml-4">检索 ' + item.retrieved_count + ' 段</div>'
+                    + '  </div>'
+                    + '  <div class="flex gap-4 text-xs mb-2">'
+                    + '    <span>Precision: <b>' + item.context_precision + '</b></span>'
+                    + '    <span>Recall: <b>' + item.context_recall + '</b></span>'
+                    + (item.answer_similarity != null ? '<span>答案相似度: <b>' + item.answer_similarity + '</b></span>' : '')
+                    + '  </div>'
+                    + '  <details class="text-xs text-gray-500">'
+                    + '    <summary class="cursor-pointer hover:text-gray-700">查看详情</summary>'
+                    + '    <div class="mt-2 p-3 bg-gray-50 rounded">'
+                    + '      <div class="mb-2"><b>标准答案：</b>' + escapeHtml(item.ground_truth) + '</div>'
+                    + (item.ai_answer ? '<div class="mb-2"><b>AI 答案：</b>' + escapeHtml(item.ai_answer) + '</div>' : '')
+                    + '    </div>'
+                    + '  </details>'
+                    + '</div>';
+            });
+            html += '</div>';
+
+            box.innerHTML = html;
+            // 评估完成后自动加载历史和诊断
+            loadRagEvalHistory();
+            renderRagDiagnosis(result);
+        }
+
+        // —— 评估历史与趋势图 ——
+        async function loadRagEvalHistory() {
+            const box = document.getElementById('rag-eval-history');
+            if (!box) return;
+            try {
+                const res = await apiRequest('/api/ai/kb/eval/history?limit=20');
+                renderRagEvalHistory(res.items || []);
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载历史失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function renderRagEvalHistory(items) {
+            const box = document.getElementById('rag-eval-history');
+            if (!items || !items.length) {
+                box.innerHTML = '<div class="text-sm text-gray-400">暂无评估历史</div>';
+                return;
+            }
+
+            // 精致趋势图：柱状图 + SVG折线叠加
+            const recent = items.slice(0, 12).reverse();  // 时间正序，最多12次
+            const n = recent.length;
+            // y轴范围：0.5 ~ 1.0（放大变化，因为指标都在0.6-0.95之间）
+            const Y_MIN = 0.5, Y_MAX = 1.0;
+            function scoreToH(s) { return Math.max(((s || 0) - Y_MIN) / (Y_MAX - Y_MIN) * 40, 2); }
+            // 计算折线路径点：
+            //   x = 柱子组中心 (i+0.5)/n*100，蓝色点偏左4.5px，绿色点偏右4.5px（对齐各自柱子）
+            //   y = 40 - 映射后高度
+            let pPts = [], rcPts = [];
+            recent.forEach((r, i) => {
+                const x = ((i + 0.5) / n) * 100;
+                const py = 40 - scoreToH(r.avg_precision);
+                const ry = 40 - scoreToH(r.avg_recall);
+                pPts.push({ x, y: py, val: r.avg_precision, time: r.created_at });
+                rcPts.push({ x, y: ry, val: r.avg_recall, time: r.created_at });
+            });
+            const pLine = pPts.map(p => p.x + ',' + p.y).join(' ');
+            const rcLine = rcPts.map(p => p.x + ',' + p.y).join(' ');
+            // 圆点用绝对定位 div（正圆，不被SVG拉伸），蓝色偏左、绿色偏右对齐各自柱子
+            let pDots = '', rcDots = '';
+            pPts.forEach(p => {
+                pDots += '<div title="' + p.time + ' Precision: ' + p.val + '" style="position:absolute;left:calc(' + p.x + '% - 4.5px);top:' + (p.y / 40 * 100) + '%;width:6px;height:6px;background:#3b82f6;border:1px solid #fff;border-radius:50%;transform:translate(-50%,-50%);pointer-events:auto;z-index:2"></div>';
+            });
+            rcPts.forEach(p => {
+                rcDots += '<div title="' + p.time + ' Recall: ' + p.val + '" style="position:absolute;left:calc(' + p.x + '% + 4.5px);top:' + (p.y / 40 * 100) + '%;width:6px;height:6px;background:#22c55e;border:1px solid #fff;border-radius:50%;transform:translate(-50%,-50%);pointer-events:auto;z-index:2"></div>';
+            });
+
+            let trendHtml = '<div class="rounded-lg p-4 mb-4" style="background-color:rgba(128,128,128,0.06)">';
+            trendHtml += '<div class="text-xs mb-3 flex justify-between items-center" style="color:var(--text-card-muted)">';
+            trendHtml += '  <span>最近 ' + n + ' 次评估趋势 <span class="opacity-60">（Y轴范围 0.5~1.0）</span></span>';
+            trendHtml += '  <span class="flex gap-3"><span><span style="display:inline-block;width:8px;height:8px;background:linear-gradient(180deg,#60a5fa,#3b82f6);border-radius:2px;margin-right:4px"></span>Precision</span><span><span style="display:inline-block;width:8px;height:8px;background:linear-gradient(180deg,#4ade80,#22c55e);border-radius:2px;margin-right:4px"></span>Recall</span></span>';
+            trendHtml += '</div>';
+            // 图表区域：relative 定位，高度统一 40px，SVG和柱子完全对齐
+            trendHtml += '<div class="relative" style="height:40px">';
+            // SVG折线（只画线，不画点）
+            trendHtml += '<svg viewBox="0 0 100 40" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:40px;pointer-events:none;overflow:visible">';
+            trendHtml += '  <polyline points="' + pLine + '" fill="none" stroke="#3b82f6" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+            trendHtml += '  <polyline points="' + rcLine + '" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+            trendHtml += '</svg>';
+            // 圆点（绝对定位正圆）
+            trendHtml += pDots + rcDots;
+            // 柱状图（底层，和SVG同区域 0-40px，高度用相同映射）
+            trendHtml += '<div class="flex items-end gap-3 w-full" style="height:40px">';
+            recent.forEach((r, i) => {
+                trendHtml += '<div class="flex flex-col items-center justify-end" style="flex:1;min-width:0;height:40px">';
+                trendHtml += '  <div class="flex items-end gap-0.5">';
+                trendHtml += '    <div style="width:7px;background:linear-gradient(180deg,#60a5fa,#3b82f6);border-radius:2px 2px 0 0;height:' + scoreToH(r.avg_precision) + 'px;opacity:0.3"></div>';
+                trendHtml += '    <div style="width:7px;background:linear-gradient(180deg,#4ade80,#22c55e);border-radius:2px 2px 0 0;height:' + scoreToH(r.avg_recall) + 'px;opacity:0.3"></div>';
+                trendHtml += '  </div>';
+                trendHtml += '</div>';
+            });
+            trendHtml += '</div>';
+            trendHtml += '</div>';
+            trendHtml += '<div class="flex justify-between mt-2 text-[10px]" style="color:var(--text-card-muted)">';
+            trendHtml += '  <span>最早</span><span>最新</span>';
+            trendHtml += '</div>';
+            trendHtml += '</div>';
+
+            // 历史记录表格（支持 A/B 对比勾选）
+            let tableHtml = '<div class="overflow-x-auto"><table class="w-full text-xs">';
+            tableHtml += '<thead><tr class="text-gray-500 border-b border-gray-200">';
+            tableHtml += '<th class="text-center py-2 px-1">对比</th>';
+            tableHtml += '<th class="text-left py-2 px-2">时间</th><th class="text-center">角色</th><th class="text-center">重排序</th><th class="text-center">题数</th>';
+            tableHtml += '<th class="text-center">Precision</th><th class="text-center">Recall</th><th class="text-center">相似度</th>';
+            tableHtml += '<th class="text-center">忠实度</th><th class="text-center">相关性</th><th class="text-center">耗时</th>';
+            tableHtml += '</tr></thead><tbody>';
+            items.forEach(r => {
+                const rm = r.rerank_mode || 'rule';
+                const rmLabel = rm === 'semantic' ? '语义级' : rm === 'off' ? '关闭' : '规则式';
+                const rmColor = rm === 'semantic' ? 'text-purple-600' : rm === 'off' ? 'text-gray-400' : 'text-blue-600';
+                const checkedA = (_compareA === r.id) ? 'checked' : '';
+                const checkedB = (_compareB === r.id) ? 'checked' : '';
+                tableHtml += '<tr class="border-b border-gray-100 hover:bg-gray-50">';
+                tableHtml += '<td class="text-center py-2 px-1">';
+                tableHtml += '  <label class="inline-flex items-center gap-0.5 cursor-pointer" title="设为 A">';
+                tableHtml += '    <input type="radio" name="cmp-a" ' + checkedA + ' onchange="setCompare(\'a\',' + r.id + ')" class="accent-blue-500">';
+                tableHtml += '    <span class="text-[10px] text-blue-500 font-bold">A</span>';
+                tableHtml += '  </label>';
+                tableHtml += '  <label class="inline-flex items-center gap-0.5 cursor-pointer ml-1" title="设为 B">';
+                tableHtml += '    <input type="radio" name="cmp-b" ' + checkedB + ' onchange="setCompare(\'b\',' + r.id + ')" class="accent-green-500">';
+                tableHtml += '    <span class="text-[10px] text-green-500 font-bold">B</span>';
+                tableHtml += '  </label>';
+                tableHtml += '</td>';
+                tableHtml += '<td class="py-2 px-2 text-gray-600 cursor-pointer" onclick="showEvalDetail(' + r.id + ')">' + r.created_at + '</td>';
+                tableHtml += '<td class="text-center text-gray-600">' + r.role + '</td>';
+                tableHtml += '<td class="text-center ' + rmColor + '">' + rmLabel + '</td>';
+                tableHtml += '<td class="text-center">' + r.total + '</td>';
+                tableHtml += '<td class="text-center">' + (r.avg_precision || 0).toFixed(3) + '</td>';
+                tableHtml += '<td class="text-center">' + (r.avg_recall || 0).toFixed(3) + '</td>';
+                tableHtml += '<td class="text-center">' + (r.avg_similarity != null ? r.avg_similarity.toFixed(3) : '-') + '</td>';
+                tableHtml += '<td class="text-center">' + (r.avg_faithfulness != null ? r.avg_faithfulness.toFixed(3) : '-') + '</td>';
+                tableHtml += '<td class="text-center">' + (r.avg_answer_relevancy != null ? r.avg_answer_relevancy.toFixed(3) : '-') + '</td>';
+                tableHtml += '<td class="text-center text-gray-400">' + r.elapsed_seconds + 's</td>';
+                tableHtml += '</tr>';
+            });
+            tableHtml += '</tbody></table></div>';
+            // A/B 对比按钮
+            if (_compareA && _compareB) {
+                tableHtml += '<div class="mt-3 flex items-center gap-2">';
+                tableHtml += '  <span class="text-xs text-gray-500">已选 A(#' + _compareA + ') vs B(#' + _compareB + ')</span>';
+                tableHtml += '  <button onclick="runRagCompare()" class="px-3 py-1 text-xs bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">开始对比</button>';
+                tableHtml += '</div>';
+            }
+
+            box.innerHTML = trendHtml + tableHtml;
+        }
+
+        // —— A/B 对比 ——
+        let _compareA = null, _compareB = null;
+        function setCompare(which, id) {
+            if (which === 'a') _compareA = id;
+            else _compareB = id;
+            loadRagEvalHistory();  // 重新渲染以更新勾选状态
+        }
+        function clearRagCompare() {
+            _compareA = null; _compareB = null;
+            document.getElementById('rag-eval-compare').classList.add('hidden');
+            loadRagEvalHistory();
+        }
+        async function runRagCompare() {
+            if (!_compareA || !_compareB) { alert('请先在历史记录中选择 A 和 B 两次评估'); return; }
+            const box = document.getElementById('rag-eval-compare');
+            const content = document.getElementById('rag-eval-compare-content');
+            box.classList.remove('hidden');
+            content.innerHTML = '<div class="loading">对比中...</div>';
+            try {
+                const res = await apiRequest('/api/ai/kb/eval/compare?a=' + _compareA + '&b=' + _compareB);
+                let html = '<div class="bg-gray-50 rounded-lg p-4">';
+                html += '<div class="flex gap-4 mb-3 text-xs">';
+                html += '  <div class="flex-1 bg-blue-50 rounded p-2"><span class="text-blue-600 font-bold">A</span>  #' + res.a.id + ' · ' + res.a.created_at + ' · ' + (res.a.rerank_mode || 'rule') + '</div>';
+                html += '  <div class="flex-1 bg-green-50 rounded p-2"><span class="text-green-600 font-bold">B</span>  #' + res.b.id + ' · ' + res.b.created_at + ' · ' + (res.b.rerank_mode || 'rule') + '</div>';
+                html += '</div>';
+
+                // —— 柱状对比图（flex 布局，居中自适应）——
+                const validMetrics = res.metrics.filter(m => m.value_a != null && m.value_b != null);
+                if (validMetrics.length) {
+                    const CHART_H = 130;  // 图表区域高度
+                    html += '<div class="mb-4 p-4 rounded-lg" style="background:rgba(128,128,128,0.06)">';
+                    html += '<div class="text-xs font-medium text-gray-600 mb-3">优化前后指标对比</div>';
+                    // 图表区：相对定位，Y轴参考线 + flex 柱子组居中
+                    html += '<div class="relative" style="height:' + CHART_H + 'px">';
+                    // Y轴参考线（0.5, 0.7, 0.9）
+                    [0.5, 0.7, 0.9].forEach(v => {
+                        const top = (1 - (v - 0.4) / 0.6) * CHART_H;
+                        html += '<div style="position:absolute;left:0;right:0;top:' + top + 'px;border-top:1px dashed rgba(128,128,128,0.15)"></div>';
+                        html += '<span style="position:absolute;left:0;top:' + (top - 8) + 'px;font-size:9px;color:#999">' + v.toFixed(1) + '</span>';
+                    });
+                    // 柱子组：flex 居中，每组等宽
+                    html += '<div class="flex justify-center items-end gap-10 h-full" style="padding-left:28px">';
+                    validMetrics.forEach(m => {
+                        const ha = Math.max(((m.value_a - 0.4) / 0.6) * CHART_H, 2);
+                        const hb = Math.max(((m.value_b - 0.4) / 0.6) * CHART_H, 2);
+                        html += '<div class="flex flex-col items-center justify-end h-full" style="min-width:70px">';
+                        // 数值标签（完整精度）
+                        html += '  <div class="flex gap-1.5 mb-1">';
+                        html += '    <span style="font-size:10px;color:#3b82f6;font-weight:600">' + m.value_a.toFixed(4) + '</span>';
+                        html += '    <span style="font-size:10px;color:#22c55e;font-weight:600">' + m.value_b.toFixed(4) + '</span>';
+                        html += '  </div>';
+                        // 两根柱子
+                        html += '  <div class="flex items-end gap-1.5">';
+                        html += '    <div title="' + m.label + ' A: ' + m.value_a.toFixed(4) + '" style="width:24px;height:' + ha + 'px;background:linear-gradient(180deg,#60a5fa,#3b82f6);border-radius:3px 3px 0 0"></div>';
+                        html += '    <div title="' + m.label + ' B: ' + m.value_b.toFixed(4) + '" style="width:24px;height:' + hb + 'px;background:linear-gradient(180deg,#4ade80,#22c55e);border-radius:3px 3px 0 0"></div>';
+                        html += '  </div>';
+                        html += '</div>';
+                    });
+                    html += '</div></div>';
+                    // 指标标签（flex 居中，和柱子组对齐）
+                    html += '<div class="flex justify-center gap-10 mt-2" style="padding-left:28px">';
+                    validMetrics.forEach(m => {
+                        html += '<div style="min-width:70px;text-align:center;font-size:10px;color:#666;white-space:nowrap">' + m.label + '</div>';
+                    });
+                    html += '</div>';
+                    // 图例
+                    html += '<div class="flex justify-center gap-6 mt-3 text-[10px] text-gray-500">';
+                    html += '  <span><span style="display:inline-block;width:10px;height:10px;background:linear-gradient(180deg,#60a5fa,#3b82f6);border-radius:2px;margin-right:3px"></span>A（优化前）</span>';
+                    html += '  <span><span style="display:inline-block;width:10px;height:10px;background:linear-gradient(180deg,#4ade80,#22c55e);border-radius:2px;margin-right:3px"></span>B（优化后）</span>';
+                    html += '</div></div>';
+                }
+
+                html += '<table class="w-full text-xs"><thead><tr class="text-gray-500 border-b">';
+                html += '<th class="text-left py-2">指标</th><th class="text-center">A</th><th class="text-center">B</th><th class="text-center">变化(B-A)</th></tr></thead><tbody>';
+                res.metrics.forEach(m => {
+                    const va = m.value_a != null ? m.value_a.toFixed(4) : '-';
+                    const vb = m.value_b != null ? m.value_b.toFixed(4) : '-';
+                    let diffHtml = '-';
+                    if (m.diff != null) {
+                        const color = m.diff > 0 ? 'text-green-600' : m.diff < 0 ? 'text-red-600' : 'text-gray-500';
+                        const arrow = m.diff > 0 ? '↑' : m.diff < 0 ? '↓' : '→';
+                        diffHtml = '<span class="' + color + ' font-medium">' + arrow + ' ' + (m.diff > 0 ? '+' : '') + m.diff.toFixed(4) + '</span>';
+                    }
+                    html += '<tr class="border-b border-gray-100">';
+                    html += '<td class="py-2 text-gray-700">' + m.label + '</td>';
+                    html += '<td class="text-center text-blue-600">' + va + '</td>';
+                    html += '<td class="text-center text-green-600">' + vb + '</td>';
+                    html += '<td class="text-center">' + diffHtml + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table></div>';
+                content.innerHTML = html;
+            } catch (e) {
+                content.innerHTML = '<div class="text-sm text-red-500">对比失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        // —— 测试题管理 ——
+        async function loadEvalQuestions() {
+            const box = document.getElementById('eval-questions-list');
+            const countEl = document.getElementById('eval-questions-count');
+            if (!box) return;
+            try {
+                const res = await apiRequest('/api/ai/kb/eval/questions');
+                const items = res.items || [];
+                if (countEl) countEl.textContent = '共 ' + res.total + ' 道题';
+                if (!items.length) {
+                    box.innerHTML = '<div class="text-sm text-gray-400">暂无测试题，点击「新增题目」添加</div>';
+                    return;
+                }
+                let html = '';
+                items.forEach(q => {
+                    const roleLabel = { boss: '老板', player: '打手', admin: '管理员', service: '客服' }[q.role] || q.role;
+                    const enabledBadge = q.enabled ? '<span class="px-1.5 py-0.5 text-[10px] bg-green-100 text-green-700 rounded">启用</span>' : '<span class="px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-500 rounded">禁用</span>';
+                    html += '<div class="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition">';
+                    html += '  <div class="flex justify-between items-start mb-2">';
+                    html += '    <div class="flex items-center gap-2">';
+                    html += '      <span class="text-xs text-gray-400">#' + q.id + '</span>';
+                    html += '      <span class="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">' + roleLabel + '</span>';
+                    html += '      <span class="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">' + escapeHtml(q.category || '通用') + '</span>';
+                    html += '      ' + enabledBadge;
+                    html += '    </div>';
+                    html += '    <div class="flex gap-1">';
+                    html += '      <button onclick="editEvalQuestion(' + q.id + ')" class="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100">编辑</button>';
+                    html += '      <button onclick="toggleEvalQuestion(' + q.id + ',' + (q.enabled ? 0 : 1) + ')" class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200">' + (q.enabled ? '禁用' : '启用') + '</button>';
+                    html += '      <button onclick="deleteEvalQuestion(' + q.id + ')" class="px-2 py-0.5 text-xs bg-red-50 text-red-600 rounded hover:bg-red-100">删除</button>';
+                    html += '    </div>';
+                    html += '  </div>';
+                    html += '  <div class="text-sm font-medium text-gray-800 mb-1">' + escapeHtml(q.question) + '</div>';
+                    html += '  <div class="text-xs text-gray-500 line-clamp-2">' + escapeHtml(q.ground_truth) + '</div>';
+                    html += '</div>';
+                });
+                box.innerHTML = html;
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function showEvalQuestionForm() {
+            document.getElementById('eq-id').value = '';
+            document.getElementById('eq-question').value = '';
+            document.getElementById('eq-ground-truth').value = '';
+            document.getElementById('eq-role').value = 'boss';
+            document.getElementById('eq-category').value = '';
+            document.getElementById('eq-enabled').checked = true;
+            document.getElementById('eval-question-form').classList.remove('hidden');
+        }
+        function hideEvalQuestionForm() {
+            document.getElementById('eval-question-form').classList.add('hidden');
+        }
+        function editEvalQuestion(id) {
+            // 从列表中找到该题并填充表单
+            apiRequest('/api/ai/kb/eval/questions').then(res => {
+                const q = (res.items || []).find(x => x.id === id);
+                if (!q) return;
+                document.getElementById('eq-id').value = q.id;
+                document.getElementById('eq-question').value = q.question;
+                document.getElementById('eq-ground-truth').value = q.ground_truth;
+                document.getElementById('eq-role').value = q.role;
+                document.getElementById('eq-category').value = q.category || '';
+                document.getElementById('eq-enabled').checked = q.enabled === 1;
+                document.getElementById('eval-question-form').classList.remove('hidden');
+                document.getElementById('eval-question-form').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        }
+        async function saveEvalQuestion() {
+            const id = document.getElementById('eq-id').value;
+            const data = {
+                question: document.getElementById('eq-question').value,
+                ground_truth: document.getElementById('eq-ground-truth').value,
+                role: document.getElementById('eq-role').value,
+                category: document.getElementById('eq-category').value,
+                enabled: document.getElementById('eq-enabled').checked ? 1 : 0,
+            };
+            if (!data.question.trim() || !data.ground_truth.trim()) { alert('问题和标准答案不能为空'); return; }
+            try {
+                if (id) {
+                    await apiRequest('/api/ai/kb/eval/questions/' + id, 'PUT', data);
+                } else {
+                    await apiRequest('/api/ai/kb/eval/questions', 'POST', data);
+                }
+                hideEvalQuestionForm();
+                loadEvalQuestions();
+            } catch (e) { alert('保存失败：' + e.message); }
+        }
+        async function toggleEvalQuestion(id, enabled) {
+            try {
+                await apiRequest('/api/ai/kb/eval/questions/' + id, 'PUT', { enabled });
+                loadEvalQuestions();
+            } catch (e) { alert('操作失败：' + e.message); }
+        }
+        async function deleteEvalQuestion(id) {
+            if (!confirm('确定删除这道测试题？')) return;
+            try {
+                await apiRequest('/api/ai/kb/eval/questions/' + id, 'DELETE');
+                loadEvalQuestions();
+            } catch (e) { alert('删除失败：' + e.message); }
+        }
+
+        async function showEvalDetail(id) {
+            try {
+                const detail = await apiRequest('/api/ai/kb/eval/history/' + id);
+                renderRagEvalResult(detail);
+            } catch (e) {
+                alert('加载详情失败：' + e.message);
+            }
+        }
+
+        // —— 失效诊断建议 ——
+        function _configEnabled(key) {
+            // 检查某个 bool 配置是否开启（从 configCache 中读取）
+            const c = configCache.find(x => x.config_key === key);
+            if (!c) return false;
+            return c.config_value === '1' || c.config_value === 'true' || c.config_value === 'True';
+        }
+
+        function renderRagDiagnosis(result) {
+            const box = document.getElementById('rag-eval-diagnosis');
+            if (!box || !result) return;
+
+            const suggestions = [];
+            const p = result.avg_precision || 0;
+            const r = result.avg_recall || 0;
+            const s = result.avg_similarity;
+            const f = result.avg_faithfulness;
+            const rel = result.avg_answer_relevancy;
+
+            // 检查当前已开启的模块，避免重复建议
+            const rerankOn = _configEnabled('rag_module_rerank');
+            const selfRagOn = _configEnabled('ai_self_rag_enabled') && _configEnabled('ai_self_rag_relevance_filter');
+            const semanticRerank = rerankOn && (configCache.find(x => x.config_key === 'rag_rerank_mode')?.config_value === 'semantic');
+
+            // 根据指标自动诊断
+            if (r < 0.6) {
+                suggestions.push({ level: 'high', text: '召回率过低（' + r.toFixed(2) + '），检索不到相关内容。建议：①增大 top_k 参数；②降低 min_score 相似度阈值；③检查文档是否已正确索引。' });
+            } else if (r < 0.8) {
+                suggestions.push({ level: 'medium', text: '召回率一般（' + r.toFixed(2) + '）。建议适当增大 top_k 或优化查询改写模块。' });
+            }
+
+            if (p < 0.6) {
+                let tip = '精确率过低（' + p.toFixed(2) + '），检索结果噪声大。建议：①提高 min_score 阈值；';
+                if (!rerankOn) tip += '②启用重排序（Rerank）模块；';
+                else if (!semanticRerank) tip += '②将重排序模式切换为语义级 Cross-Encoder；';
+                else tip += '②进一步提高 min_score 阈值或减小 top_k；';
+                tip += '③优化分块策略，减小 chunk_size。';
+                suggestions.push({ level: 'high', text: tip });
+            } else if (p < 0.75) {
+                let tip = '精确率一般（' + p.toFixed(2) + '）。';
+                if (!rerankOn) tip += '建议启用重排序模块过滤不相关片段。';
+                else if (!semanticRerank) tip += '建议将重排序模式切换为语义级 Cross-Encoder，提升语义判断能力。';
+                else tip += '当前已用语义级重排序，可尝试提高 min_score 阈值或减小 top_k 进一步提升精确率。';
+                suggestions.push({ level: 'medium', text: tip });
+            }
+
+            if (s != null && s < 0.6) {
+                suggestions.push({ level: 'high', text: '端到端相似度低（' + s.toFixed(2) + '），AI 答案和标准答案差距大。建议检查系统提示词，或增加检索上下文的注入量。' });
+            }
+
+            if (f != null && f < 0.7) {
+                let tip = '忠实度低（' + f.toFixed(2) + '），AI 可能在编造内容。建议：①在提示词中强调"只根据参考资料回答"；②增加检索上下文数量；';
+                if (!selfRagOn) tip += '③考虑启用 Self-RAG 检索后过滤。';
+                else tip += '③Self-RAG 已开启，可尝试调整相关性过滤阈值（≤2分过滤）或增加检索上下文数量。';
+                suggestions.push({ level: 'high', text: tip });
+            }
+
+            if (rel != null && rel < 0.7) {
+                suggestions.push({ level: 'medium', text: '答案相关性低（' + rel.toFixed(2) + '），AI 可能答非所问。建议优化查询改写模块，确保问题被正确理解。' });
+            }
+
+            if (p >= 0.85 && r >= 0.8 && (s == null || s >= 0.8) && (f == null || f >= 0.85)) {
+                suggestions.push({ level: 'good', text: '各项指标均达到优秀水平，RAG 系统运行良好。可以继续监控历史趋势，关注指标是否有退化。' });
+            }
+
+            if (!suggestions.length) {
+                suggestions.push({ level: 'good', text: '指标整体合格，无明显问题。建议定期运行评估，监控指标变化趋势。' });
+            }
+
+            let html = '<div class="bg-gray-50 rounded-lg p-4">';
+            html += '<div class="text-sm font-medium text-gray-700 mb-3">失效诊断与优化建议</div>';
+            suggestions.forEach(sg => {
+                const color = sg.level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
+                    : sg.level === 'medium' ? 'text-amber-600 bg-amber-50 border-amber-200'
+                    : 'text-green-600 bg-green-50 border-green-200';
+                const icon = sg.level === 'high' ? '⚠️' : sg.level === 'medium' ? '💡' : '✅';
+                html += '<div class="border rounded-lg p-3 mb-2 ' + color + '">';
+                html += '  <div class="text-sm">' + icon + ' ' + escapeHtml(sg.text) + '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+
+            box.innerHTML = html;
+        }
+
         async function toggleConfig(key, checked) {
             try {
                 await apiRequest('/api/config/' + key, 'PUT', { value: checked ? '1' : '0' });
@@ -2692,22 +3451,35 @@
             }
         }
 
-        async function saveConfig(key) {
-            const el = document.getElementById('cfg-' + key);
-            if (!el) return;
+        async function saveConfig(key, value) {
+            // 支持两种调用方式：
+            //   saveConfig(key) —— 从 id=cfg-key 的输入框取值
+            //   saveConfig(key, value) —— 直接传入值（单选按钮等场景）
+            let configValue = value;
+            if (configValue === undefined) {
+                const el = document.getElementById('cfg-' + key);
+                if (!el) return;
+                configValue = el.value;
+            }
+            // 记录当前滚动位置，重新渲染后恢复（避免页面跳动）
+            const scrollY = window.scrollY || document.documentElement.scrollTop;
             try {
-                const res = await apiRequest('/api/config/' + key, 'PUT', { value: el.value });
+                const res = await apiRequest('/api/config/' + key, 'PUT', { value: configValue });
                 alert(res.message);
                 await loadSystemConfig();
+                // 恢复滚动位置
+                window.scrollTo(0, scrollY);
             } catch (e) { alert(e.message); }
         }
 
         async function resetConfig(key) {
             if (!confirm('确定把该参数恢复为默认值？')) return;
+            const scrollY = window.scrollY || document.documentElement.scrollTop;
             try {
                 const res = await apiRequest('/api/config/' + key + '/reset', 'POST');
                 alert(res.message);
                 await loadSystemConfig();
+                window.scrollTo(0, scrollY);
             } catch (e) { alert(e.message); }
         }
 
@@ -3105,7 +3877,7 @@
             const box = document.getElementById('ai-chat-messages');
             box.dataset.loaded = '1';
             box.innerHTML = '';
-            appendAiMsg('assistant', '你好，我是「小嚼」。\n价格、下单、接单、充值、提现、会员福利等问题都可以问我～');
+            appendAiMsg('assistant', '你好，我是「布鲁斯」。\n价格、下单、接单、充值、提现、会员福利等问题都可以问我～');
         }
 
         // AI 回复的轻量渲染。
@@ -3308,9 +4080,8 @@
             ensureQuoteTimer();
 
             // 页面特定的数据加载
-            if (key === 'kb-index') {
-                loadKbIndexStatus();
-                loadKbDocList();
+            if (key === 'rag-debug') {
+                loadRagDebugPage();
             }
         }
 

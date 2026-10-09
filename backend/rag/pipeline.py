@@ -20,6 +20,7 @@ from .vector_retriever import VectorRetriever
 from .keyword_retriever import KeywordRetriever
 from .fusion import FusionModule
 from .reranker import Reranker
+from .cross_encoder_reranker import CrossEncoderReranker
 from .context_builder import ContextBuilder
 
 
@@ -84,6 +85,7 @@ class ModularRAG:
         self.keyword_retriever = KeywordRetriever(db)
         self.fusion = FusionModule(rrf_k=RRF_K, channel_weights=CHANNEL_WEIGHT)
         self.reranker = Reranker(db)
+        self.cross_encoder = CrossEncoderReranker(db)
         self.context_builder = ContextBuilder(db)
 
     def query(self, question: str, role: str, top_k: int = None,
@@ -182,14 +184,27 @@ class ModularRAG:
             ordered, pool = self._simple_merge(all_kw_hits, all_vec_hits)
 
         # ④ 重排序（Re-rank）：综合多维度分数二次排序
-        #    RRF 只用了排名信息，重排序把向量分数、关键词分数、来源类型、
-        #    标题匹配等绝对值信息加回来，让真正相关的内容排到更前面
+        #    两种模式：
+        #      - rule（规则式）：RRF分 + 向量分 + 关键词分 + 来源加成，零成本
+        #      - semantic（语义级/Cross-Encoder）：调用大模型判断每段与问题的相关性，更精准但多1次API调用
         if use_rerank:
-            final_ordered = self.reranker.rerank(
-                ordered, pool, all_vec_hits, all_kw_hits, question,
-            )
+            import config_service
+            rerank_mode = str(config_service.get_config("rag_rerank_mode", self.db, "rule")).strip().lower()
+            rerank_candidates = int(config_service.get_config("rag_rerank_candidate_limit", self.db, 10))
+            if rerank_mode == "semantic":
+                final_ordered = self.cross_encoder.rerank(
+                    ordered, pool, question,
+                    top_k=tk, candidate_limit=rerank_candidates,
+                )
+                rerank_type = "semantic"
+            else:
+                final_ordered = self.reranker.rerank(
+                    ordered, pool, all_vec_hits, all_kw_hits, question,
+                )
+                rerank_type = "rule"
         else:
             final_ordered = ordered   # 关闭重排序：直接用融合结果
+            rerank_type = "off"
 
         # ④.5 Self-RAG 相关性过滤（ISREL）：让大模型对每个片段打1-5分，过滤掉≤2分的
         #    重排序是规则式打分，Self-RAG 是大模型语义打分，更精准但多一次大模型调用
@@ -248,8 +263,18 @@ class ModularRAG:
                 "keyword_retrieval": use_keyword,
                 "fusion": use_fusion,
                 "rerank": use_rerank,
+                "rerank_mode": rerank_type if use_rerank else "off",
                 "automerge": use_automerge,
             }
+            # 语义重排序时，记录每个候选的语义分数
+            if use_rerank and rerank_type == "semantic":
+                sem_scores = self.cross_encoder.get_last_scores()
+                if sem_scores:
+                    debug["semantic_rerank_scores"] = [
+                        {"source_type": k[0], "source_key": k[1],
+                         "chunk_index": k[2], "semantic_score": round(s, 4)}
+                        for k, s in sem_scores
+                    ]
 
         # ⑥ 上下文构建（用最终排序后的结果）
         limit = _max_chars(self.db)

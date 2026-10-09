@@ -214,6 +214,11 @@ def init_quotes_and_config():
         if added_docs:
             print(f"知识库文档初始化完成：导入 {added_docs} 篇"
                   f"（尚未建立向量索引，请到「系统设置 → 知识库索引」点「重建索引」）")
+        # RAG 评估测试题库（幂等：已存在的题目不重复插入）
+        import rag_eval
+        added_questions = rag_eval.init_eval_questions(db)
+        if added_questions:
+            print(f"RAG 评估测试题库初始化完成：导入 {added_questions} 道测试题")
     except Exception as e:
         print(f"[init_quotes_and_config] 初始化异常: {e}")
     finally:

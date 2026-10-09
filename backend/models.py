@@ -374,3 +374,37 @@ class AiVector(Base):
     __table_args__ = (
         UniqueConstraint("chunk_id", name="uk_ai_vector_chunk"),
     )
+
+
+class AiEvalHistory(Base):
+    """RAG 评估历史记录表：每次运行评估后自动存入，用于趋势对比和诊断。"""
+    __tablename__ = "ai_eval_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)  # 评估时间
+    role = Column(String(20), default="boss")  # 以哪个角色身份检索
+    generate_answer = Column(Integer, default=0)  # 是否生成了AI答案（0/1）
+    total = Column(Integer, default=0)  # 测试题数
+    avg_precision = Column(Float, default=0)  # 平均检索精确率
+    avg_recall = Column(Float, default=0)  # 平均检索召回率
+    avg_similarity = Column(Float, nullable=True)  # 平均端到端语义相似度
+    avg_faithfulness = Column(Float, nullable=True)  # 平均忠实度
+    avg_answer_relevancy = Column(Float, nullable=True)  # 平均答案相关性
+    elapsed_seconds = Column(Float, default=0)  # 评估耗时
+    model = Column(String(100), default="")  # 用的语义模型
+    rerank_mode = Column(String(20), default="rule")  # 重排序模式：rule/semantic/off
+    items_json = Column(Text, default="")  # 逐题详情（JSON 字符串）
+
+
+class AiEvalQuestion(Base):
+    """RAG 评估测试题库：管理员可自定义增删改查，评估时从这里读取题目。"""
+    __tablename__ = "ai_eval_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(Text, nullable=False)  # 测试问题
+    ground_truth = Column(Text, nullable=False)  # 标准答案（用于端到端相似度对比）
+    role = Column(String(20), default="boss")  # 适用角色：boss/player/admin/service
+    category = Column(String(50), default="通用")  # 题目分类：充值/订单/提现/账号等
+    enabled = Column(Integer, default=1)  # 是否启用（0=禁用，不参与评估）
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

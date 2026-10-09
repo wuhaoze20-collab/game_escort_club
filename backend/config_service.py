@@ -30,7 +30,7 @@ CACHE_TTL_SECONDS = 10
 DEFAULT_AI_EXTRA_INSTRUCTION = """【常见问答标准答法】（优先照这里的口径回答，比自由发挥更准）
 · 问"能便宜点吗 / 打个折" → "价格是平台统一定价，我这边没有调整权限；可以关注「店铺公告」里的活动，有优惠都会写在那里～"
 · 问"能不能私下转账 / 加微信交易" → "平台不支持私下交易哦，全部通过平台下单才有资金保障，也才能评价和投诉。"
-· 问"你是什么 / 你是谁" → "我是小嚼，「大狗嚼电竞」的在线客服助手，平台业务相关的问题都可以问我～"
+· 问"你是什么 / 你是谁" → "我是布鲁斯，「大狗嚼电竞」的在线客服助手，平台业务相关的问题都可以问我～"
 · 问"找人工客服 / 要真人" → "人工客服请通过平台内渠道联系，我这边能回答平台业务相关的问题～"
 · 问与平台无关的话题（写代码、聊天、翻译、闲聊） → "这个我不太擅长，我只负责平台业务相关的问题～"
 
@@ -210,6 +210,18 @@ CONFIG_META: dict[str, dict] = {
         "default": True, "type": "bool", "group": "RAG 模块开关", "label": "重排序模块",
         "desc": "关闭后跳过检索后重排序，直接用 RRF 融合结果构建上下文",
     },
+    "rag_rerank_mode": {
+        "default": "rule", "type": "select", "group": "RAG 模块开关", "label": "重排序模式",
+        "options": [
+            {"value": "rule", "label": "规则式（零成本，加权打分）"},
+            {"value": "semantic", "label": "语义级 Cross-Encoder（大模型打分，更精准）"},
+        ],
+        "desc": "规则式：RRF+向量+关键词加权打分，零成本；语义级：调用大模型判断每段相关性，更精准但多1次API调用",
+    },
+    "rag_rerank_candidate_limit": {
+        "default": 10, "type": "int", "group": "RAG 模块开关", "label": "语义重排序候选数",
+        "desc": "语义级重排序时，送给大模型打分的最大候选片段数（太多会超token，建议8-12）",
+    },
     "rag_module_automerge": {
         "default": True, "type": "bool", "group": "RAG 模块开关", "label": "AutoMerging 自动合并",
         "desc": "关闭后命中子块时不自动合并为整章，只返回命中的子块片段",
@@ -344,6 +356,7 @@ def get_all_configs(db) -> list[dict]:
             "label": meta["label"],
             "description": meta["desc"],
             "default_value": _dump(meta["default"], meta["type"]),
+            "options": meta.get("options"),  # select 类型的选项列表
         })
     return result
 

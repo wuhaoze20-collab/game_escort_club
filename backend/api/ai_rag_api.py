@@ -568,3 +568,232 @@ def search_test(
         "injected_chars": debug.get("injected_chars", 0),
         "injected_text": text,
     }
+
+
+# ══════════════════════════════════════════════
+# RAG 量化评估（仅管理员）
+# ══════════════════════════════════════════════
+
+# 进程内缓存最近一次评估结果，避免前端刷新时重复跑评估
+_last_eval_result: dict = {}
+
+
+@router.get("/eval/questions")
+def list_eval_questions(
+    role: str = None,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """获取测试题库列表（从数据库读取，支持按角色筛选）。"""
+    from models import AiEvalQuestion
+    query = db.query(AiEvalQuestion)
+    if role:
+        query = query.filter(AiEvalQuestion.role == role)
+    rows = query.order_by(AiEvalQuestion.id.asc()).all()
+    return {
+        "total": len(rows),
+        "items": [{
+            "id": r.id,
+            "question": r.question,
+            "ground_truth": r.ground_truth,
+            "role": r.role,
+            "category": r.category,
+            "enabled": r.enabled,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+    }
+
+
+@router.post("/eval/questions")
+def create_eval_question(
+    data: dict,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """新增一道测试题。"""
+    from models import AiEvalQuestion
+    from rag_eval import _guess_category
+    question = (data.get("question") or "").strip()
+    ground_truth = (data.get("ground_truth") or "").strip()
+    role = data.get("role", "boss")
+    if not question or not ground_truth:
+        raise HTTPException(status_code=400, detail="问题和标准答案不能为空")
+    if role not in ("boss", "player", "admin", "service"):
+        raise HTTPException(status_code=400, detail="角色必须是 boss/player/admin/service")
+    q = AiEvalQuestion(
+        question=question,
+        ground_truth=ground_truth,
+        role=role,
+        category=data.get("category") or _guess_category(question),
+        enabled=int(data.get("enabled", 1)),
+    )
+    db.add(q)
+    db.commit()
+    db.refresh(q)
+    return {"message": "添加成功", "id": q.id}
+
+
+@router.put("/eval/questions/{qid}")
+def update_eval_question(
+    qid: int,
+    data: dict,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """修改一道测试题。"""
+    from models import AiEvalQuestion
+    q = db.query(AiEvalQuestion).filter(AiEvalQuestion.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="题目不存在")
+    if "question" in data:
+        q.question = data["question"].strip()
+    if "ground_truth" in data:
+        q.ground_truth = data["ground_truth"].strip()
+    if "role" in data:
+        q.role = data["role"]
+    if "category" in data:
+        q.category = data["category"]
+    if "enabled" in data:
+        q.enabled = int(data["enabled"])
+    db.commit()
+    return {"message": "修改成功"}
+
+
+@router.delete("/eval/questions/{qid}")
+def delete_eval_question(
+    qid: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除一道测试题。"""
+    from models import AiEvalQuestion
+    q = db.query(AiEvalQuestion).filter(AiEvalQuestion.id == qid).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="题目不存在")
+    db.delete(q)
+    db.commit()
+    return {"message": "删除成功"}
+
+
+@router.post("/eval/run")
+def run_eval(
+    generate_answer: bool = True,
+    role: str = "boss",
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """运行 RAG 量化评估，返回三个核心指标的得分。
+
+    参数：
+        generate_answer: 是否调用大模型生成答案并计算端到端语义相似度（默认 True，较慢）
+        role: 以哪个角色身份检索（默认 boss）
+
+    评估指标：
+        - Context Precision：检索到的片段中，与标准答案相关的占比
+        - Context Recall：标准答案的关键信息，有多少被检索到了
+        - 语义相似度：AI 答案 vs 标准答案（仅 generate_answer=True 时计算）
+    """
+    global _last_eval_result
+    from rag_eval import evaluate_rag
+
+    role = _check_role(role) if role else "boss"
+    try:
+        result = evaluate_rag(db, test_set=None, role=role,
+                              generate_answer=generate_answer)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"评估失败：{e}")
+
+    _last_eval_result = result
+    return result
+
+
+@router.get("/eval/last")
+def get_last_eval(
+    current_user: User = Depends(require_roles("admin")),
+):
+    """获取最近一次评估结果（不重新跑）。"""
+    if not _last_eval_result:
+        return {"available": False, "message": "还没有运行过评估，请先点「运行评估」"}
+    return {"available": True, "result": _last_eval_result}
+
+
+@router.get("/eval/history")
+def list_eval_history(
+    limit: int = 20,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """获取最近的评估历史记录列表（不含逐题详情）。"""
+    import rag_eval
+    history = rag_eval.get_eval_history(db, limit=limit)
+    return {"total": len(history), "items": history}
+
+
+@router.get("/eval/history/{eval_id}")
+def get_eval_detail(
+    eval_id: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """获取单次评估的完整详情（含逐题详情）。"""
+    import rag_eval
+    detail = rag_eval.get_eval_detail(db, eval_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"评估记录 {eval_id} 不存在")
+    return detail
+
+
+@router.get("/eval/compare")
+def compare_eval(
+    a: int,
+    b: int,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """A/B 对比两次评估结果，返回各指标差异。
+
+    参数：
+        a: 第一次评估的 ID
+        b: 第二次评估的 ID
+
+    返回：
+        两次评估的基本信息 + 5 个指标的数值对比 + 变化量（B - A）
+    """
+    import rag_eval
+    detail_a = rag_eval.get_eval_detail(db, a)
+    detail_b = rag_eval.get_eval_detail(db, b)
+    if not detail_a:
+        raise HTTPException(status_code=404, detail=f"评估记录 {a} 不存在")
+    if not detail_b:
+        raise HTTPException(status_code=404, detail=f"评估记录 {b} 不存在")
+
+    metrics = [
+        ("avg_precision", "检索精确率"),
+        ("avg_recall", "检索召回率"),
+        ("avg_similarity", "端到端相似度"),
+        ("avg_faithfulness", "忠实度"),
+        ("avg_answer_relevancy", "答案相关性"),
+    ]
+    comparison = []
+    for key, label in metrics:
+        va = detail_a.get(key)
+        vb = detail_b.get(key)
+        diff = None
+        if va is not None and vb is not None:
+            diff = round(vb - va, 4)
+        comparison.append({
+            "key": key,
+            "label": label,
+            "value_a": va,
+            "value_b": vb,
+            "diff": diff,
+            "better": "up" if (diff is not None and diff > 0) else ("down" if (diff is not None and diff < 0) else "same"),
+        })
+
+    return {
+        "a": {"id": a, "created_at": detail_a.get("created_at"), "rerank_mode": detail_a.get("rerank_mode"),
+              "role": detail_a.get("role"), "total": detail_a.get("total")},
+        "b": {"id": b, "created_at": detail_b.get("created_at"), "rerank_mode": detail_b.get("rerank_mode"),
+              "role": detail_b.get("role"), "total": detail_b.get("total")},
+        "metrics": comparison,
+    }

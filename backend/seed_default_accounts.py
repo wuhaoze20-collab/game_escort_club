@@ -24,7 +24,7 @@ from auth import hash_password
 # ========== 默认账户（密码统一 123456，存储为 bcrypt 哈希） ==========
 DEFAULT_USERS = [
     {"username": "guanliyuan", "password": "123456", "role": "admin", "role_name": "管理员", "nickname": "店长", "avatar": "avatar_admin.jpg"},
-    {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服", "nickname": "客服小蜜", "avatar": "avatar_service.png"},
+    {"username": "kefu", "password": "123456", "role": "service", "role_name": "客服", "nickname": "布鲁斯", "avatar": "avatar_service.png"},
     {"username": "laoban", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板阿昊", "avatar": "avatar_boss.png"},
     {"username": "laoban_02", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板二狗", "avatar": "avatar_boss.png"},
     {"username": "laoban_03", "password": "123456", "role": "boss", "role_name": "老板", "nickname": "老板三少", "avatar": "avatar_boss.png"},

@@ -22,6 +22,7 @@ from .vector_retriever import VectorRetriever
 from .keyword_retriever import KeywordRetriever
 from .fusion import FusionModule
 from .reranker import Reranker
+from .cross_encoder_reranker import CrossEncoderReranker
 from .context_builder import ContextBuilder
 from .pipeline import ModularRAG
 
@@ -32,6 +33,7 @@ __all__ = [
     "KeywordRetriever",
     "FusionModule",
     "Reranker",
+    "CrossEncoderReranker",
     "ContextBuilder",
     "ModularRAG",
 ]
