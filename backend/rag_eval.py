@@ -273,109 +273,170 @@ def calc_answer_relevancy(ai_answer: str, question: str):
     return round(_semantic_similarity(ai_answer, question), 4)
 
 
+# —— 查询类型：对应评估数据集"覆盖性"原则的三个维度 ——
+#   fact    事实型：答案在某一处就能直接找到（"抽成比例是多少"）
+#   reason  推理型：需要跨段落组合条件或多步推导（"好评率是怎么计算的"）
+#   compare 对比型：需要比对两处信息才能回答（"提现冷却期和打赏到账有什么不同"）
+# 抽题时按这个字段分层、每类保底覆盖，避免整类被漏掉。
+QUERY_TYPE_LABELS = {"fact": "事实型", "reason": "推理型", "compare": "对比型"}
+QUERY_TYPES = ("fact", "reason", "compare")
+
+
 # —— 内置测试集（覆盖平台核心业务场景）——
-# 每条：question（问题）、ground_truth（标准答案）、role（适用角色）
+# 每条：question（问题）、ground_truth（标准答案）、role（适用角色）、
+#       query_type（查询类型，见上方说明）
 DEFAULT_TEST_SET = [
     {
         "question": "平台抽成比例是多少？",
         "ground_truth": "平台抽成30%，打手实得70%。订单结单后金额先进入打手后台金额，提现时扣除平台抽成。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "打手提现的冷却期是几天？",
         "ground_truth": "打手获得的金额有30天冷却期，冷却期满后才能申请提现。提现需在「我的工作」→「提现中心」操作。",
         "role": "player",
+        "query_type": "fact",
     },
     {
         "question": "大狗币和人民币的兑换比例是多少？",
         "ground_truth": "大狗币与人民币比例为1:1，充值1元人民币获得1大狗币。老板点单消耗大狗币，订单结单后到达打手后台自动转换为人民币。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "打赏有什么限制？",
         "ground_truth": "老板结单后可以给打手打赏，打赏上限不可超过订单单价的30%，打赏金额无冷却期，直接进入打手后台金额。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "打手有哪些等级？",
         "ground_truth": "打手分为娱乐陪和技术陪两大类。技术陪由低到高分为：985、211、大专、魔王护、明星护五个等级。打手可自己添加标签，由管理员或客服审核通过后对外展示。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "好评率是怎么计算的？",
         "ground_truth": "好评率 = 好评订单数 / 总评价订单数。结单后三天没评价的订单默认为好评；老板投诉的订单自动记为差评，若打手申诉成功则撤销该差评，计算好评率时屏蔽申诉成功的订单。没有被评价过的打手好评率显示为\"-\"。",
         "role": "boss",
+        "query_type": "reason",
     },
     {
         "question": "连续输错密码会怎样？",
         "ground_truth": "连续输错密码5次会锁定账户10分钟，10分钟后自动解锁。锁定期间无法登录。如忘记密码可点击「忘记密码」重置。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "怎么充值大狗币？",
         "ground_truth": "老板在「充值中心」选择充值金额，选择后弹出支付方式，支持微信、支付宝等。充值满100送10大狗币，满300送50，满500送120，满1000送300。充值后立即到账。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "订单的流程是什么？",
         "ground_truth": "老板点单 → 打手接单 → 打手开始服务 → 打手提交结单 → 老板审核确认结单 → 金额转入打手后台。老板也可以提价备注，打手可根据备注自行决定是否接单。客服可人工派单。",
         "role": "boss",
+        "query_type": "fact",
     },
     {
         "question": "被拉黑了会怎么样？",
         "ground_truth": "管理员可以拉黑老板和打手账户。被拉黑后，打手的后台金额会转入公司后台，并在处罚公告里发布拉黑通知。被拉黑账户无法登录和使用平台功能。",
         "role": "player",
+        "query_type": "reason",
     },
     # —— 以下为第二版扩充题（依据《用户服务协议》《打手服务规范》《退款投诉争议规则》）——
     {
         "question": "打手有哪些禁止行为？",
         "ground_truth": "打手禁止代练账号共享、使用外挂、代充与套现、引导私下交易、辱骂骚扰、恶意刷单、虚假战绩承诺等。违反者按情节给予警告、停单3天或封禁账号处理，构成严重违规的永久封禁并扣除后台金额。",
         "role": "player",
+        "query_type": "fact",
     },
     {
         "question": "打手无故拒单会怎么处理？",
         "ground_truth": "打手收到派单后应在规定时间内确认或拒绝，不得无故拒单。无故拒单属于中度违规，平台处以停单3天；因打手无故拒单导致订单取消的，全额退款并对打手按中度违规处理。",
         "role": "player",
+        "query_type": "fact",
     },
     {
         "question": "打手的昵称、简介和标签有什么长度限制？",
         "ground_truth": "打手昵称最长20个字符，简介最长100个字符，标签最长20个字符。昵称、简介与标签不得包含违法、低俗、侮辱、广告、联系方式及误导性内容。",
         "role": "player",
+        "query_type": "fact",
     },
     {
         "question": "打手被处罚后怎么申诉？需要提供哪些材料？",
         "ground_truth": "打手对处罚有异议的，可在收到处罚通知后3日内通过客服渠道提交申诉，材料包括订单号、聊天记录、录屏、系统通知截图等。管理员审核后作出最终决定。同一事项仅可申诉一次，有新证据可在驳回后7日内申请复核。",
         "role": "player",
+        "query_type": "reason",
     },
     {
         "question": "收到投诉后多久响应？处理时限是多久？",
         "ground_truth": "客服在收到投诉后1个工作日内首次响应，告知受理结果与后续流程。投诉应在订单结束后3日内发起，涉及作弊、诈骗等严重违规的不受3日期限限制。",
         "role": "service",
+        "query_type": "fact",
     },
     {
         "question": "哪些情况下老板可以申请退款？",
         "ground_truth": "订单尚未派单、或在打手确认前取消的，可全额退款；打手接单后长时间未开始服务、无故拒单、使用外挂作弊、辱骂骚扰老板或引导私下交易的，老板可申请退款，平台核实后支持。已确认结单的订单除存在违规情形外，原则上不予退款。",
         "role": "service",
+        "query_type": "fact",
     },
     {
         "question": "结单争议怎么处理？争议期间费用由谁保管？",
         "ground_truth": "老板对结单有异议的，应当在确认前于订单页面发起结单争议。客服核对订单信息、服务记录、双方陈述与证据材料后处理，处理时限一般为受理后3个工作日内给出处理意见。争议期间订单费用继续由平台托管，打手不得催促或威胁老板确认结单。",
         "role": "service",
+        "query_type": "reason",
     },
     {
         "question": "平台对违规行为有哪几档处罚？",
         "ground_truth": "平台实行三档处罚体系：警告、停单3天、封禁账号。言语不当、消极服务等轻微违规给予警告，警告累计3次升级为停单处罚；无故拒单、态度恶劣等中度违规处以停单3天；作弊、诈骗、恶意刷单等严重违规永久封禁账号并扣除后台金额，账号被拉黑后后台金额转入公司账户。",
         "role": "admin",
+        "query_type": "fact",
     },
     {
         "question": "用户对处罚决定有异议，申诉流程是怎样的？",
         "ground_truth": "用户可在收到处罚通知后3日内通过客服渠道提交申诉，并提供相应证据。管理员独立审核，结合订单记录、双方陈述与证据材料作出最终决定。申诉期间原处罚一般继续执行，管理员认定处罚确有错误的，予以撤销或调整。",
         "role": "admin",
+        "query_type": "fact",
     },
     {
         "question": "恶意投诉会怎么处理？",
         "ground_truth": "恶意投诉指明知投诉事由不实、以索取不当利益或损害他人为目的、反复提交无依据投诉或伪造证据投诉等行为。对恶意投诉的老板，可视情节给予警告、限制投诉权限、限制下单或封禁账号；对恶意投诉的打手，可视情节给予警告、停单3天或封禁账号，涉及伪造证据的从重处理。",
         "role": "admin",
+        "query_type": "reason",
+    },
+    # —— 第三版扩充题：对比型（需要比对两处信息才能回答）——
+    {
+        "question": "打手提现的到账规则，和老板打赏的到账规则有什么不同？",
+        "ground_truth": "两者到账规则不同：打手通过订单获得的金额有30天冷却期，冷却期满后才能申请提现，提现时平台扣除30%抽成、打手实得70%；而老板结单后的打赏金额无冷却期，直接进入打手后台金额，且打赏上限不可超过订单单价的30%。",
+        "role": "player",
+        "query_type": "compare",
+    },
+    {
+        "question": "轻微违规和中度违规分别会受到什么处罚？",
+        "ground_truth": "平台三档处罚为警告、停单3天、封禁账号。言语不当、消极服务等轻微违规给予警告，警告累计3次升级为停单处罚；无故拒单、态度恶劣等中度违规处以停单3天；作弊、诈骗、恶意刷单等严重违规永久封禁账号并扣除后台金额。",
+        "role": "service",
+        "query_type": "compare",
+    },
+    {
+        "question": "老板和打手分别会因为什么被处罚？处理方式有什么不同？",
+        "ground_truth": "老板侧主要针对恶意投诉：明知投诉事由不实、以索取不当利益或损害他人为目的、反复提交无依据投诉或伪造证据的，可视情节给予警告、限制投诉权限、限制下单或封禁账号。打手侧范围更广：代练账号共享、使用外挂、引导私下交易、辱骂骚扰、恶意刷单等禁止行为按情节给予警告、停单3天或封禁账号；无故拒单属中度违规处以停单3天；涉及伪造证据的从重处理。",
+        "role": "admin",
+        "query_type": "compare",
+    },
+    {
+        "question": "打手无故拒单，对老板和对打手分别有什么后果？",
+        "ground_truth": "对打手：无故拒单属于中度违规，平台处以停单3天。对老板：因打手无故拒单导致订单取消的，全额退款。打手收到派单后应在规定时间内确认或拒绝，不得无故拒单。",
+        "role": "player",
+        "query_type": "compare",
+    },
+    {
+        "question": "老板点单时能看到打手的哪些信息？哪些信息看不到？",
+        "ground_truth": "老板点单时可以看到打手的公开数据：昵称、头像、简介、等级（娱乐陪/技术陪及技术陪子等级）、经审核通过的自定义标签、接单次数、好评率，以及其他老板留下的评价；提价备注会随订单一起展示给打手。打手的后台金额等敏感信息对老板隐藏，只有本人、客服和管理员可见。",
+        "role": "boss",
+        "query_type": "compare",
     },
 ]
 
@@ -385,13 +446,28 @@ def init_eval_questions(db):
 
     在后端启动时调用一次，确保 ai_eval_questions 表有初始数据。
     后续管理员可以在前端增删改查，不再依赖硬编码。
+
+    除了插入新题，还会给老库里的既有题目回填 query_type
+    —— 该字段是 V4.7.0 新增的（对应数据集"覆盖性"原则），
+    之前入库的题目这一列是空的，不回填就没有分层抽样的依据。
     """
     from models import AiEvalQuestion
     existing = {q.question.strip(): q for q in db.query(AiEvalQuestion).all()}
     added = 0
+    backfilled = 0
     for item in DEFAULT_TEST_SET:
         q = item["question"].strip()
-        if q in existing:
+        qtype = item.get("query_type", "fact")
+        row = existing.get(q)
+        if row is not None:
+            # 回填老库。注意不能只看"值是否合法"：加列时 MySQL 会给既有行
+            # 填上默认值 'fact'，于是推理型/对比型全被压成事实型，而 'fact'
+            # 本身是合法值，那种判断法查不出问题。
+            # 所以拿内置标注来校准：内置集里不是 fact、库里却还是 fact 的，
+            # 就是没回填过。只处理能在内置集里匹配到的题，管理员自建题不受影响。
+            if qtype != "fact" and (row.query_type or "fact") == "fact":
+                row.query_type = qtype
+                backfilled += 1
             continue
         db.add(AiEvalQuestion(
             question=item["question"],
@@ -399,11 +475,14 @@ def init_eval_questions(db):
             role=item.get("role", "boss"),
             # 题目自带 category 时优先使用，否则按关键词自动猜测
             category=item.get("category") or _guess_category(item["question"]),
+            query_type=qtype,
             enabled=1,
         ))
         added += 1
-    if added:
+    if added or backfilled:
         db.commit()
+    if backfilled:
+        print(f"[eval] 题库回填查询类型：{backfilled} 道")
     return added
 
 
@@ -441,8 +520,9 @@ def get_test_questions(db, role: str = None, only_enabled: bool = True) -> List[
         only_enabled: 只返回启用的题目（默认 True）
     返回：
         [{"id": 题目ID, "question": 问题, "ground_truth": 标准答案,
-          "role": 角色, "category": 分类}, ...]
-        id 用于「固定题集」记录本次抽中了哪几道题。
+          "role": 角色, "category": 分类, "query_type": 查询类型}, ...]
+        id 用于「固定题集」记录本次抽中了哪几道题；
+        query_type 用于分层抽样（保证事实型/推理型/对比型都被覆盖）。
     """
     from models import AiEvalQuestion
     query = db.query(AiEvalQuestion)
@@ -453,13 +533,15 @@ def get_test_questions(db, role: str = None, only_enabled: bool = True) -> List[
     rows = query.order_by(AiEvalQuestion.id.asc()).all()
     return [
         {"id": r.id, "question": r.question, "ground_truth": r.ground_truth,
-         "role": r.role, "category": r.category or "通用"}
+         "role": r.role, "category": r.category or "通用",
+         "query_type": r.query_type or "fact"}
         for r in rows
     ]
 
 
 def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
-                 generate_answer: bool = True, ai_model: str = None) -> Dict:
+                 generate_answer: bool = True, ai_model: str = None,
+                 fixed_set_version: int = 0) -> Dict:
     """运行 RAG 量化评估，返回每条问答的详细得分和整体平均分。
 
     执行流程：
@@ -508,6 +590,10 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
         test_set = get_test_questions(db, role=role_filter)
         if not test_set:
             test_set = DEFAULT_TEST_SET
+    # 记录本次实际考了哪几道题。题集表会不断新增版本，
+    # 不在这里留一份，事后就没法还原当时的评估依据。
+    question_ids = [it.get("id") for it in test_set if it.get("id")]
+
     rag = ModularRAG(db)
     results = []
     start = time.time()
@@ -634,6 +720,8 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
         "model": _sim_model_name if _sim_model != "_dashscope_api" else "千问 embedding API",
         "rerank_mode": rerank_mode,
         "config_snapshot": rag_params,
+        "question_ids": question_ids,
+        "fixed_set_version": fixed_set_version,
     }
 
     # 自动保存评估历史到数据库
@@ -758,6 +846,8 @@ def save_eval_history(db, result: Dict, role: str = "boss", generate_answer: boo
         rerank_mode=result.get("rerank_mode", "rule"),
         config_json=json.dumps(result.get("config_snapshot", {}), ensure_ascii=False),
         items_json=json.dumps(items_slim, ensure_ascii=False),
+        question_ids=json.dumps(result.get("question_ids", []), ensure_ascii=False),
+        fixed_set_version=result.get("fixed_set_version", 0),
     )
     db.add(record)
     db.commit()

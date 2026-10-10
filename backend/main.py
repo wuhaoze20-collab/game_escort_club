@@ -69,6 +69,23 @@ ADD_COLUMNS = (
     # 注意：MySQL 的 TEXT 列不能带 DEFAULT（errno 1101），所以不写默认值。
     ("ai_eval_history", "config_json",
      "ALTER TABLE ai_eval_history ADD COLUMN config_json TEXT"),
+    # ---- V4.7.0 评估数据集规范：查询类型 / 题集版本 / 评估留痕 ----
+    # 题库加"查询类型"（事实型/推理型/对比型）。数据集的覆盖性原则要求三类
+    # 都覆盖，抽题时按这个字段分层保底；老库升级上来会缺列，这里自动补齐。
+    ("ai_eval_questions", "query_type",
+     "ALTER TABLE ai_eval_questions ADD COLUMN query_type VARCHAR(20) DEFAULT 'fact'"),
+    # 固定题集从"只留最新一行"改成"每次抽题留一行"，需要版本号与分布快照
+    ("ai_eval_fixed_set", "version",
+     "ALTER TABLE ai_eval_fixed_set ADD COLUMN version INTEGER DEFAULT 1"),
+    ("ai_eval_fixed_set", "role_dist",
+     "ALTER TABLE ai_eval_fixed_set ADD COLUMN role_dist TEXT"),
+    ("ai_eval_fixed_set", "query_type_dist",
+     "ALTER TABLE ai_eval_fixed_set ADD COLUMN query_type_dist TEXT"),
+    # 评估历史留一份"当时考了哪几道题"，否则题集重抽之后无法回溯
+    ("ai_eval_history", "question_ids",
+     "ALTER TABLE ai_eval_history ADD COLUMN question_ids TEXT"),
+    ("ai_eval_history", "fixed_set_version",
+     "ALTER TABLE ai_eval_history ADD COLUMN fixed_set_version INTEGER DEFAULT 0"),
 )
 
 

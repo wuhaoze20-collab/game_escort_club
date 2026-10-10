@@ -600,6 +600,7 @@ def list_eval_questions(
             "ground_truth": r.ground_truth,
             "role": r.role,
             "category": r.category,
+            "query_type": r.query_type or "fact",
             "enabled": r.enabled,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         } for r in rows],
@@ -614,7 +615,7 @@ def create_eval_question(
 ):
     """新增一道测试题。"""
     from models import AiEvalQuestion
-    from rag_eval import _guess_category
+    from rag_eval import _guess_category, QUERY_TYPES
     question = (data.get("question") or "").strip()
     ground_truth = (data.get("ground_truth") or "").strip()
     role = data.get("role", "boss")
@@ -622,11 +623,15 @@ def create_eval_question(
         raise HTTPException(status_code=400, detail="问题和标准答案不能为空")
     if role not in ("boss", "player", "admin", "service"):
         raise HTTPException(status_code=400, detail="角色必须是 boss/player/admin/service")
+    query_type = data.get("query_type", "fact")
+    if query_type not in QUERY_TYPES:
+        raise HTTPException(status_code=400, detail="查询类型必须是 fact/reason/compare")
     q = AiEvalQuestion(
         question=question,
         ground_truth=ground_truth,
         role=role,
         category=data.get("category") or _guess_category(question),
+        query_type=query_type,
         enabled=int(data.get("enabled", 1)),
     )
     db.add(q)
@@ -655,6 +660,11 @@ def update_eval_question(
         q.role = data["role"]
     if "category" in data:
         q.category = data["category"]
+    if "query_type" in data:
+        from rag_eval import QUERY_TYPES
+        if data["query_type"] not in QUERY_TYPES:
+            raise HTTPException(status_code=400, detail="查询类型必须是 fact/reason/compare")
+        q.query_type = data["query_type"]
     if "enabled" in data:
         q.enabled = int(data["enabled"])
     db.commit()
@@ -678,13 +688,167 @@ def delete_eval_question(
 
 
 # ============================================================
+# 评估数据集构建：分层抽样
+#
+# 评估数据集要满足三条原则，而抽题方式直接决定前两条能不能成立：
+#   覆盖性 —— 事实型 / 推理型 / 对比型查询全覆盖
+#   代表性 —— 贴合真实用户查询分布
+#
+# 纯等概率随机抽样做不到这两点：题库里"只有 1 道题的类型"被整类漏掉的
+# 概率高达 75%（C(19,5)/C(20,5) ≈ 0.75），而等概率抽样还隐含假设
+# "四类角色的提问量相同"，与线上实际情况不符。
+# 所以改成两层分层抽样：先保题型覆盖，再按真实角色分布配额。
+# ============================================================
+
+# 真实提问样本少于这个数就不拿它当配额依据（退回均匀分配）
+MIN_ROLE_SAMPLES = 10
+
+
+def _real_role_weights(db) -> dict:
+    """统计真实用户提问的角色分布，作为抽题配额依据。
+
+    按「会话数」而不是「消息数」统计：一个用户可能在一个会话里连问十几条，
+    按消息数会让活跃用户被过度放大，会话数更接近"有多少个提问场景"。
+    """
+    from sqlalchemy import func
+    from models import AiConversation
+
+    rows = (db.query(User.role, func.count(AiConversation.id))
+              .join(AiConversation, AiConversation.username == User.username)
+              .group_by(User.role).all())
+    weights = {str(r): int(c or 0) for r, c in rows if r and c}
+    total = sum(weights.values())
+    # 样本太少不足为据（几条自测数据就能把配比带偏），退回均匀分配
+    if total < MIN_ROLE_SAMPLES:
+        return {}
+    return weights
+
+
+def _largest_remainder(weights: dict, total: int) -> dict:
+    """按权重把 total 个名额分给各项（最大余数法）。
+
+    不能直接 round(权重占比 × 总数)：各项四舍五入后之和常常不等于总数
+    （都进位就超了、都舍去就不够）。最大余数法先各自取整发基础名额，
+    剩余名额按小数部分从大到小补，保证总数刚好等于 total。
+    """
+    items = [(k, max(0.0, float(v or 0))) for k, v in weights.items()]
+    if not items:
+        return {}
+    s = sum(v for _, v in items)
+    if s <= 0:
+        # 权重全为 0：退化为均匀分配
+        base = {k: total // len(items) for k, _ in items}
+        rest = total - sum(base.values())
+        for k, _ in items:
+            if rest <= 0:
+                break
+            base[k] += 1
+            rest -= 1
+        return base
+
+    raw = {k: v / s * total for k, v in items}
+    base = {k: int(v) for k, v in raw.items()}
+    rest = total - sum(base.values())
+    for k, _ in sorted(raw.items(), key=lambda kv: -(kv[1] - int(kv[1]))):
+        if rest <= 0:
+            break
+        base[k] += 1
+        rest -= 1
+    return base
+
+
+def _stratified_sample(pool: list, n: int, role_weights: dict = None) -> list:
+    """分层抽样：题型保底 → 角色保底 → 按真实分布配额。
+
+    对应评估数据集的两条原则：
+      覆盖性 —— 事实型/推理型/对比型各保底 1 道，每个角色的题也保底 1 道
+      代表性 —— 剩余名额按真实用户提问的角色分布分配
+
+    层内随机取题。名额不够时按"题型保底 > 角色保底 > 真实配额 > 随机填充"
+    的顺序退让。
+
+    参数：
+        pool: 候选题列表（每项含 id / role / query_type）
+        n: 要抽几道
+        role_weights: 各角色真实提问权重；空 dict 表示退回均匀分配
+    """
+    pool = [q for q in pool if q.get("id")]
+    n = max(1, min(int(n), len(pool)))
+    picked, chosen = [], set()
+
+    def take(candidates):
+        """从候选里随机取一道还没选过的题；取不到返回 None。"""
+        rest = [q for q in candidates if q["id"] not in chosen]
+        if not rest:
+            return None
+        q = random.choice(rest)
+        chosen.add(q["id"])
+        picked.append(q)
+        return q
+
+    # —— 第一层：题型保底（覆盖性）——
+    # 每类先占 1 个名额，避免"唯一的对比型题没抽到 → 整类缺失"。
+    by_type = {}
+    for q in pool:
+        by_type.setdefault(q.get("query_type") or "fact", []).append(q)
+    # 题数少的类型优先保底：名额有限时先救"更容易被整类漏掉"的那类
+    for qtype in sorted(by_type, key=lambda t: len(by_type[t])):
+        if len(picked) >= n:
+            break
+        take(by_type[qtype])
+
+    # —— 第二层：角色保底（覆盖性）——
+    # 每个角色的题至少露一次面。真实分布里"客服提问很少"（实测 service
+    # 占比个位数），只按权重配额的话客服题会长期一道都考不到，等于客服
+    # 场景没人监控。所以先各保 1 道，剩余名额再按真实分布分配。
+    by_role = {}
+    for q in pool:
+        by_role.setdefault(q.get("role") or "boss", []).append(q)
+    roles = [r for r in by_role if by_role[r]]
+    for r in sorted(roles, key=lambda x: len(by_role[x])):  # 题少的角色先保
+        if len(picked) >= n:
+            break
+        take(by_role[r])
+
+    # —— 第三层：角色真实分布配额（代表性）——
+    if roles and len(picked) < n:
+        left = n - len(picked)
+        weights = role_weights or {r: 1 for r in roles}
+        quota = _largest_remainder({r: weights.get(r, 0) for r in roles}, left)
+        # 名额多的先抽，避免后面名额被占满
+        for r in sorted(roles, key=lambda x: -quota.get(x, 0)):
+            for _ in range(quota.get(r, 0)):
+                if len(picked) >= n:
+                    break
+                take(by_role[r])
+
+    # —— 兜底：某角色题库不够 / 配额落空时，全池随机补满 ——
+    while len(picked) < n:
+        if take(pool) is None:
+            break
+    return picked
+
+
+# ============================================================
 # 固定题集：抽一次就固定住，后续评估一直复用同一批题
 #
 # 为什么不每次重抽：题库里各题难度差异很大（实测标准差约 0.25），
 # 抽 5 题时，两次评估光凭"抽题运气"就能差出约 0.16，比参数优化通常
 # 带来的提升（0.05~0.10）还大 —— 那样 A/B 对比反映的是抽题差异，
 # 不是参数效果。固定下来之后，两次评估的题目完全一致，对比才可信。
+#
+# V4.7.0 起每次抽题新增一行并保留历史（不再覆盖），带版本号，
+# 这样"上个月那次评估用的是哪批题"才还原得出来。
 # ============================================================
+
+def _safe_json(raw) -> dict:
+    """把表里存的 JSON 字符串安全解析成 dict（脏数据不抛异常）。"""
+    try:
+        val = json.loads(raw or "{}")
+        return val if isinstance(val, dict) else {}
+    except Exception:
+        return {}
+
 
 def _fixed_set_payload(db) -> dict:
     """组装固定题集的响应：抽取信息 + 题目详情（按当前题库实时展开）。"""
@@ -711,16 +875,26 @@ def _fixed_set_payload(db) -> dict:
             missing.append(qid)  # 题目被删除或被禁用了
         else:
             questions.append({"id": q["id"], "question": q["question"],
-                              "role": q["role"], "category": q["category"]})
+                              "role": q["role"], "category": q["category"],
+                              "query_type": q.get("query_type") or "fact"})
+
+    # 本次题集的实际构成：实时统计，题目被禁用后这里会同步反映
+    role_dist, qtype_dist = {}, {}
+    for q in questions:
+        role_dist[q["role"]] = role_dist.get(q["role"], 0) + 1
+        qtype_dist[q["query_type"]] = qtype_dist.get(q["query_type"], 0) + 1
 
     return {
         "exists": bool(ids),
         "sample_size": row.sample_size or len(ids),
+        "version": row.version or 0,
         "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else "",
         "created_by": row.created_by or "",
         "total_pool": len(pool),
         "questions": questions,
         "missing": missing,
+        "role_dist": role_dist,
+        "query_type_dist": qtype_dist,
     }
 
 
@@ -735,14 +909,19 @@ def get_fixed_set(
 
 @router.post("/eval/fixed-set")
 def draw_fixed_set(
-    sample_size: int = 5,
+    sample_size: int = 10,
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
-    """重新随机抽取固定题集（覆盖上一批）。
+    """重新抽一批固定题集（保留历史，不再覆盖）。
+
+    抽样方式（V4.7.0 起改为分层抽样）：
+      · 先按查询类型保底 —— 事实型/推理型/对比型每类至少 1 道（覆盖性）
+      · 剩余名额按真实用户提问的角色分布分配（代表性）
+      · 层内随机，避免每次都抽到同一批
 
     抽完即固定：之后每次评估都用这批题，直到再次调用本接口。
-    表里只保留最新一行，不积累历史。
+    每次抽题新增一行并递增版本号，历史版本仍可在「题集版本」里查到。
     """
     from rag_eval import get_test_questions
 
@@ -750,27 +929,117 @@ def draw_fixed_set(
     if not pool:
         raise HTTPException(status_code=400, detail="题库为空，无法抽题")
 
-    n = max(1, min(int(sample_size or 5), len(pool)))
-    picked = random.sample(pool, n)
+    n = max(1, min(int(sample_size or 10), len(pool)))
+    weights = _real_role_weights(db)
+    picked = _stratified_sample(pool, n, weights)
 
-    row = db.query(AiEvalFixedSet).order_by(AiEvalFixedSet.id.desc()).first()
-    if row is None:
-        row = AiEvalFixedSet()
-        db.add(row)
-    row.question_ids = json.dumps([q["id"] for q in picked])
-    row.sample_size = n
-    row.created_at = datetime.now()
-    row.created_by = current_user.username
+    # 版本号 = 上一版 + 1（首次为 1）
+    last = db.query(AiEvalFixedSet).order_by(AiEvalFixedSet.id.desc()).first()
+    next_version = (int(last.version or 0) + 1) if last else 1
+
+    role_dist, qtype_dist = {}, {}
+    for q in picked:
+        role_dist[q["role"]] = role_dist.get(q["role"], 0) + 1
+        qt = q.get("query_type") or "fact"
+        qtype_dist[qt] = qtype_dist.get(qt, 0) + 1
+
+    row = AiEvalFixedSet(
+        question_ids=json.dumps([q["id"] for q in picked]),
+        sample_size=len(picked),
+        version=next_version,
+        role_dist=json.dumps(role_dist, ensure_ascii=False),
+        query_type_dist=json.dumps(qtype_dist, ensure_ascii=False),
+        created_at=datetime.now(),
+        created_by=current_user.username,
+    )
+    db.add(row)
     db.commit()
 
     return _fixed_set_payload(db)
+
+
+@router.get("/eval/fixed-set/history")
+def get_fixed_set_history(
+    limit: int = 20,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """列出历史题集版本（最新在前）。
+
+    题目在库里可能被改过或删过，所以这里同时返回抽题当时存下的分布快照，
+    用于回溯"那一版到底考了什么"。
+    """
+    rows = (db.query(AiEvalFixedSet)
+              .order_by(AiEvalFixedSet.id.desc())
+              .limit(max(1, min(int(limit or 20), 100))).all())
+    out = []
+    for r in rows:
+        try:
+            ids = json.loads(r.question_ids or "[]")
+        except Exception:
+            ids = []
+        out.append({
+            "version": r.version or 0,
+            "sample_size": r.sample_size or len(ids),
+            "question_ids": ids,
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+            "created_by": r.created_by or "",
+            "role_dist": _safe_json(r.role_dist),
+            "query_type_dist": _safe_json(r.query_type_dist),
+        })
+    return {"total": len(out), "items": out}
+
+
+@router.get("/eval/role-distribution")
+def get_role_distribution(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """真实用户提问的角色分布 vs 题库的角色分布。
+
+    用来回答"这套评估到底代不代表真实用户"：真实分布从 AI 会话统计，
+    题库分布从当前启用的题目统计。两者偏差大，说明评估的构成和线上
+    实际场景不一致，就该调整题库配额（而不是靠抽样去补）。
+    """
+    from sqlalchemy import func
+    from models import AiConversation
+    from rag_eval import get_test_questions
+
+    rows = (db.query(User.role, func.count(AiConversation.id))
+              .join(AiConversation, AiConversation.username == User.username)
+              .group_by(User.role).all())
+    real = {str(r): int(c or 0) for r, c in rows if r and c}
+    real_total = sum(real.values())
+
+    pool = get_test_questions(db, role=None)
+    bank = {}
+    for q in pool:
+        bank[q["role"]] = bank.get(q["role"], 0) + 1
+    bank_total = sum(bank.values())
+
+    def _pct(dist, total):
+        if not total:
+            return {}
+        return {k: round(v * 100.0 / total, 1) for k, v in dist.items()}
+
+    return {
+        "real": real,
+        "real_pct": _pct(real, real_total),
+        "real_total": real_total,
+        "bank": bank,
+        "bank_pct": _pct(bank, bank_total),
+        "bank_total": bank_total,
+        # 真实样本够不够作为抽样配额依据（不够则抽样退回均匀分配）
+        "used_for_sampling": real_total >= MIN_ROLE_SAMPLES,
+        "min_samples": MIN_ROLE_SAMPLES,
+    }
 
 
 @router.post("/eval/run")
 def run_eval(
     generate_answer: bool = True,
     role: str = "boss",
-    sample_size: int = 5,
+    sample_size: int = 10,
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
@@ -813,7 +1082,8 @@ def run_eval(
                     detail="固定题集里的题目已被删除或禁用，请重新抽题")
             # 每题仍用自己的 role 去检索（q_role 在 evaluate_rag 内决定）
             result = evaluate_rag(db, test_set=test_set, role="random",
-                                  generate_answer=generate_answer)
+                                  generate_answer=generate_answer,
+                                  fixed_set_version=fixed.get("version", 0))
         else:
             # role 为空或 all 时不按角色过滤；否则校验角色合法性
             role = _check_role(role) if role and role != "all" else "all"

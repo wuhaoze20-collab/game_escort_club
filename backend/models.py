@@ -395,6 +395,10 @@ class AiEvalHistory(Base):
     rerank_mode = Column(String(20), default="rule")  # 重排序模式：rule/semantic/off
     config_json = Column(Text, default="")  # 评估时的RAG参数快照（JSON字符串，用于A/B对比参数差异）
     items_json = Column(Text, default="")  # 逐题详情（JSON 字符串）
+    # 本次评估用的是哪几道题（JSON 数组）。题集表会不断新增版本，
+    # 但"评估当时到底用了哪批题"只有在这里留一份才能事后还原。
+    question_ids = Column(Text, default="")
+    fixed_set_version = Column(Integer, default=0)  # 对应的题集版本；0=非固定题集模式
 
 
 class AiEvalQuestion(Base):
@@ -406,6 +410,9 @@ class AiEvalQuestion(Base):
     ground_truth = Column(Text, nullable=False)  # 标准答案（用于端到端相似度对比）
     role = Column(String(20), default="boss")  # 适用角色：boss/player/admin/service
     category = Column(String(50), default="通用")  # 题目分类：充值/订单/提现/账号等
+    # 查询类型：fact=事实型 / reason=推理型 / compare=对比型。
+    # 评估数据集的"覆盖性"原则要求三类都覆盖，抽题时按这个字段分层保底。
+    query_type = Column(String(20), default="fact")
     enabled = Column(Integer, default=1)  # 是否启用（0=禁用，不参与评估）
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -426,12 +433,16 @@ class AiEvalFixedSet(Base):
     所以把随机题集固定下来：只有管理员点「重新随机」才会变，
     这样连续几次评估的题目完全一致，A/B 对比才反映真实效果。
 
-    表里只保留最新一行（重抽时覆盖）。
+    每次抽题插入一行新记录并保留历史（不再覆盖），取 id 最大的一行为当前题集。
+    这样"上个月那次评估用的是哪批题"才还原得出来。
     """
     __tablename__ = "ai_eval_fixed_set"
 
     id = Column(Integer, primary_key=True, index=True)
     question_ids = Column(Text, default="[]")  # JSON 数组，固定的题目 ID 列表
-    sample_size = Column(Integer, default=5)  # 抽取数量（展示用）
+    sample_size = Column(Integer, default=10)  # 抽取数量（展示用）
+    version = Column(Integer, default=1)  # 题集版本号，从 1 起递增
+    role_dist = Column(Text, default="")  # 抽题时的角色分布（JSON），用于事后复盘
+    query_type_dist = Column(Text, default="")  # 抽题时的题型分布（JSON）
     created_at = Column(DateTime, default=datetime.now)  # 抽取时间
     created_by = Column(String(50), default="")  # 抽取人

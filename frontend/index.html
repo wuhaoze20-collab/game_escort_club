@@ -1484,10 +1484,21 @@
                             </p>
                         </div>
 
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                            <div class="text-sm font-medium text-blue-800 mb-1">抽题方式：分层抽样</div>
+                            <p class="text-xs text-blue-700 leading-relaxed">
+                                不再用等概率随机 —— 纯随机很容易整类漏掉：题库里"只有 1 道题的类型"被整类漏掉的概率高达 <b>75%</b>。<br>
+                                现在的抽法分三层：<b>①题型保底</b>（事实型/推理型/对比型各至少 1 道）
+                                → <b>②角色保底</b>（每个角色的题至少露一次面）
+                                → <b>③剩余名额按真实提问分布分配</b>（谁问得多就多考谁）。<br>
+                                每道题仍用自己的角色身份去检索，角色上下文不变。
+                            </p>
+                        </div>
+
                         <div class="border border-gray-200 rounded-lg p-4 mb-4">
                             <div class="flex flex-wrap items-center gap-3">
                                 <label class="text-sm text-gray-600">抽题数量</label>
-                                <input type="number" id="fixed-set-size" value="5" min="1" max="20"
+                                <input type="number" id="fixed-set-size" value="10" min="1" max="25"
                                     class="w-20 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                                 <span class="text-sm text-gray-500">道</span>
                                 <button onclick="drawFixedSet()" class="px-4 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition">重新随机</button>
@@ -1496,12 +1507,26 @@
                             <p id="fixed-set-hint" class="text-xs text-gray-500 mt-2"></p>
                         </div>
 
-                        <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="border border-gray-200 rounded-lg p-4 mb-4">
                             <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
                                 <div class="text-sm font-medium text-gray-800 whitespace-nowrap">当前固定的题目</div>
                                 <span id="fixed-set-meta" class="text-xs text-gray-500"></span>
                             </div>
+                            <div id="fixed-set-dist" class="mb-3"></div>
                             <div id="fixed-set-list" class="text-sm text-gray-500">加载中...</div>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg p-4 mb-4">
+                            <div class="text-sm font-medium text-gray-800 mb-3">真实提问分布 vs 题库分布</div>
+                            <div id="role-dist-box" class="text-sm text-gray-500">加载中...</div>
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg p-4">
+                            <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                                <div class="text-sm font-medium text-gray-800 whitespace-nowrap">题集版本历史</div>
+                                <button onclick="loadFixedSetHistory()" class="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">刷新</button>
+                            </div>
+                            <div id="fixed-set-history" class="text-sm text-gray-500">加载中...</div>
                         </div>
                     </div>
 
@@ -1531,6 +1556,14 @@
                                         <option value="player">打手</option>
                                         <option value="admin">管理员</option>
                                         <option value="service">客服</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">查询类型</label>
+                                    <select id="eq-query-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                                        <option value="fact">事实型（单点事实）</option>
+                                        <option value="reason">推理型（要判断/推演）</option>
+                                        <option value="compare">对比型（两类角色或规则对比）</option>
                                     </select>
                                 </div>
                                 <div class="flex-1">
@@ -3060,28 +3093,50 @@
             } catch (e) {
                 box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
             }
+            // 分布与版本历史是辅助信息，单独拉取，失败不影响主区域
+            loadRoleDistribution();
+            loadFixedSetHistory();
         }
+
+        // 查询类型 / 角色的展示名（与后端 QUERY_TYPE_LABELS 对应）
+        const QUERY_TYPE_MAP = { fact: '事实型', reason: '推理型', compare: '对比型' };
+        const ROLE_LABEL_MAP = { boss: '老板', player: '打手', admin: '管理员', service: '客服' };
 
         function renderFixedSet(d) {
             const box = document.getElementById('fixed-set-list');
             const meta = document.getElementById('fixed-set-meta');
+            const dist = document.getElementById('fixed-set-dist');
             const hint = document.getElementById('fixed-set-hint');
             const sizeInput = document.getElementById('fixed-set-size');
             if (!box) return;
 
             if (meta) {
                 meta.textContent = d.exists
-                    ? ('题库共 ' + d.total_pool + ' 道 · 本批 ' + d.questions.length + ' 道 · '
-                       + d.created_at + ' 由 ' + (d.created_by || '-') + ' 抽取')
+                    ? ('版本 v' + (d.version || 0) + ' · 题库共 ' + d.total_pool + ' 道 · 本批 '
+                       + d.questions.length + ' 道 · ' + d.created_at + ' 由 ' + (d.created_by || '-') + ' 抽取')
                     : ('题库共 ' + d.total_pool + ' 道 · 尚未抽取');
             }
             if (sizeInput && d.exists && !sizeInput.value) sizeInput.value = d.sample_size;
 
             if (!d.exists) {
+                if (dist) dist.innerHTML = '';
                 box.innerHTML = '<div class="text-sm text-amber-600">还没有抽取固定题集。'
                     + '选好数量后点「重新随机」抽一批，之后评估会一直用这批题。</div>';
                 if (hint) hint.textContent = '「量化评估」里的混合随机检测依赖这里抽好的题，没抽题时无法评估。';
                 return;
+            }
+
+            // 本批题集的构成：题型 + 角色，一眼看出分层抽样有没有生效
+            if (dist) {
+                const mk = (obj, map, color) => Object.keys(obj || {}).map(k =>
+                    '<span class="text-xs px-2 py-0.5 ' + color + ' rounded">'
+                    + escapeHtml(map[k] || k) + ' ' + obj[k] + '</span>').join(' ');
+                dist.innerHTML = '<div class="flex flex-wrap items-center gap-2">'
+                    + '<span class="text-xs text-gray-500">题型构成</span>'
+                    + mk(d.query_type_dist, QUERY_TYPE_MAP, 'bg-emerald-50 text-emerald-700') + '</div>'
+                    + '<div class="flex flex-wrap items-center gap-2 mt-1.5">'
+                    + '<span class="text-xs text-gray-500">角色构成</span>'
+                    + mk(d.role_dist, ROLE_LABEL_MAP, 'bg-blue-50 text-blue-600') + '</div>';
             }
 
             let html = '';
@@ -3089,12 +3144,13 @@
                 html += '<div class="text-xs text-red-500 mb-2">有 ' + d.missing.length
                     + ' 道题已被删除或禁用，评估时会自动跳过，建议重新抽题。</div>';
             }
-            const roleMap = { boss: '老板', player: '打手', admin: '管理员', service: '客服' };
+            const roleMap = ROLE_LABEL_MAP;
             html += '<table class="w-full text-sm">'
                 + '<thead><tr class="text-xs text-gray-500 border-b border-gray-200">'
                 + '<th class="text-left py-2 pr-3 w-10">#</th>'
                 + '<th class="text-left py-2 pr-3">题目</th>'
                 + '<th class="text-left py-2 pr-3 w-20">角色</th>'
+                + '<th class="text-left py-2 pr-3 w-20">类型</th>'
                 + '<th class="text-left py-2 w-28">分类</th>'
                 + '</tr></thead><tbody>';
             d.questions.forEach((q, i) => {
@@ -3103,6 +3159,8 @@
                     + '<td class="py-2 pr-3 text-gray-700">' + escapeHtml(q.question) + '</td>'
                     + '<td class="py-2 pr-3"><span class="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">'
                     + escapeHtml(roleMap[q.role] || q.role) + '</span></td>'
+                    + '<td class="py-2 pr-3"><span class="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">'
+                    + escapeHtml(QUERY_TYPE_MAP[q.query_type] || q.query_type || '-') + '</span></td>'
                     + '<td class="py-2 text-xs text-gray-500 whitespace-nowrap">' + escapeHtml(q.category || '-') + '</td>'
                     + '</tr>';
             });
@@ -3114,16 +3172,114 @@
 
         async function drawFixedSet() {
             const input = document.getElementById('fixed-set-size');
-            let n = parseInt((input && input.value) || '5', 10);
-            if (!n || n < 1) n = 1;
+            let n = parseInt((input && input.value) || '10', 10);
+            if (!n || n < 1) n = 10;
             const hint = document.getElementById('fixed-set-hint');
             if (hint) hint.textContent = '正在抽题...';
             try {
                 const d = await apiRequest('/api/ai/kb/eval/fixed-set?sample_size=' + n, 'POST');
                 renderFixedSet(d);
+                loadFixedSetHistory();
             } catch (e) {
                 if (hint) hint.textContent = '抽题失败：' + e.message;
             }
+        }
+
+        // —— 真实提问分布 vs 题库分布 ——
+        // 回答"这套评估代不代表真实用户"：两边偏差大，说明该调整题库配额，
+        // 而不是靠抽样去硬凑。
+        async function loadRoleDistribution() {
+            const box = document.getElementById('role-dist-box');
+            if (!box) return;
+            try {
+                const d = await apiRequest('/api/ai/kb/eval/role-distribution');
+                renderRoleDistribution(d);
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function renderRoleDistribution(d) {
+            const box = document.getElementById('role-dist-box');
+            if (!box) return;
+            const roles = ['boss', 'player', 'service', 'admin'];
+            let html = '<table class="w-full text-sm">'
+                + '<thead><tr class="text-xs text-gray-500 border-b border-gray-200">'
+                + '<th class="text-left py-2 pr-3 w-20">角色</th>'
+                + '<th class="text-left py-2 pr-3">真实提问</th>'
+                + '<th class="text-left py-2">题库题量</th>'
+                + '</tr></thead><tbody>';
+            roles.forEach(r => {
+                const rv = (d.real || {})[r] || 0;
+                const rp = (d.real_pct || {})[r] || 0;
+                const bv = (d.bank || {})[r] || 0;
+                const bp = (d.bank_pct || {})[r] || 0;
+                html += '<tr class="border-b border-gray-100 last:border-0">'
+                    + '<td class="py-2 pr-3 text-gray-700">' + escapeHtml(ROLE_LABEL_MAP[r]) + '</td>'
+                    + '<td class="py-2 pr-3 text-gray-600">' + rv + ' 条会话 <span class="text-xs text-gray-400">(' + rp + '%)</span></td>'
+                    + '<td class="py-2 text-gray-600">' + bv + ' 道 <span class="text-xs text-gray-400">(' + bp + '%)</span></td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '<p class="text-xs mt-3 ' + (d.used_for_sampling ? 'text-gray-500' : 'text-amber-600') + '">'
+                + (d.used_for_sampling
+                    ? '真实样本 ' + d.real_total + ' 条，已作为抽题的配额依据（剩余名额按此比例分配）。'
+                    : '真实样本仅 ' + d.real_total + ' 条，不足 ' + d.min_samples + ' 条，抽题退回均匀分配 —— 样本太少不足以代表真实分布。')
+                + '</p>';
+            box.innerHTML = html;
+        }
+
+        // —— 题集版本历史 ——
+        async function loadFixedSetHistory() {
+            const box = document.getElementById('fixed-set-history');
+            if (!box) return;
+            try {
+                const d = await apiRequest('/api/ai/kb/eval/fixed-set/history?limit=20');
+                renderFixedSetHistory(d);
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        function renderFixedSetHistory(d) {
+            const box = document.getElementById('fixed-set-history');
+            if (!box) return;
+            const items = (d && d.items) || [];
+            if (!items.length) {
+                box.innerHTML = '<div class="text-sm text-gray-500">还没有抽过题。</div>';
+                return;
+            }
+            // 卡片式而不是表格：题型/角色这类多值字段在窄列里会挤成好几行
+            const mk = (obj, map, color) => Object.keys(obj || {}).map(k =>
+                '<span class="text-xs px-1.5 py-0.5 ' + color + ' rounded mr-1">'
+                + escapeHtml(map[k] || k) + ' ' + obj[k] + '</span>').join('');
+            let html = '';
+            items.forEach((it, i) => {
+                const isCurrent = (i === 0);
+                html += '<div class="border rounded-lg p-3 mb-2 '
+                    + (isCurrent ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200') + '">'
+                    + '<div class="flex flex-wrap items-center gap-2 mb-2">'
+                    + '<span class="text-sm font-medium text-gray-800">v' + it.version + '</span>'
+                    + (isCurrent ? '<span class="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">当前</span>' : '')
+                    + '<span class="text-xs text-gray-500">' + it.sample_size + ' 道题</span>'
+                    + '<span class="text-xs text-gray-400">' + escapeHtml(it.created_at || '-')
+                    + (it.created_by ? ' · ' + escapeHtml(it.created_by) : '') + '</span>'
+                    + '</div>';
+                const t = mk(it.query_type_dist, QUERY_TYPE_MAP, 'bg-emerald-50 text-emerald-700');
+                const r = mk(it.role_dist, ROLE_LABEL_MAP, 'bg-blue-50 text-blue-600');
+                if (t || r) {
+                    html += '<div class="flex flex-wrap items-center gap-1 mb-1">'
+                        + '<span class="text-xs text-gray-500 w-12 shrink-0">题型</span>'
+                        + (t || '<span class="text-xs text-gray-400">-</span>') + '</div>'
+                        + '<div class="flex flex-wrap items-center gap-1">'
+                        + '<span class="text-xs text-gray-500 w-12 shrink-0">角色</span>'
+                        + (r || '<span class="text-xs text-gray-400">-</span>') + '</div>';
+                } else {
+                    html += '<div class="text-xs text-gray-400">旧版本未记录构成（V4.7.0 之前抽取）</div>';
+                }
+                html += '</div>';
+            });
+            box.innerHTML = html;
         }
 
         function onEvalRoleChange() {
@@ -3595,7 +3751,8 @@
                     html += '    <div class="flex items-center gap-2">';
                     html += '      <span class="text-xs text-gray-400">#' + q.id + '</span>';
                     html += '      <span class="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">' + roleLabel + '</span>';
-                    html += '      <span class="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">' + escapeHtml(q.category || '通用') + '</span>';
+                    html += '      <span class="text-xs px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded">' + escapeHtml(QUERY_TYPE_MAP[q.query_type] || '事实型') + '</span>';
+                    html += '      <span class="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">' + escapeHtml(q.category || '通用') + '</span>';
                     html += '      ' + enabledBadge;
                     html += '    </div>';
                     html += '    <div class="flex gap-1">';
@@ -3629,6 +3786,7 @@
             document.getElementById('eq-question').value = '';
             document.getElementById('eq-ground-truth').value = '';
             document.getElementById('eq-role').value = 'boss';
+            document.getElementById('eq-query-type').value = 'fact';
             document.getElementById('eq-category').value = '';
             document.getElementById('eq-enabled').checked = true;
             document.getElementById('eval-question-form').classList.remove('hidden');
@@ -3645,6 +3803,7 @@
                 document.getElementById('eq-question').value = q.question;
                 document.getElementById('eq-ground-truth').value = q.ground_truth;
                 document.getElementById('eq-role').value = q.role;
+                document.getElementById('eq-query-type').value = q.query_type || 'fact';
                 document.getElementById('eq-category').value = q.category || '';
                 document.getElementById('eq-enabled').checked = q.enabled === 1;
                 document.getElementById('eval-question-form').classList.remove('hidden');
@@ -3657,6 +3816,7 @@
                 question: document.getElementById('eq-question').value,
                 ground_truth: document.getElementById('eq-ground-truth').value,
                 role: document.getElementById('eq-role').value,
+                query_type: document.getElementById('eq-query-type').value,
                 category: document.getElementById('eq-category').value,
                 enabled: document.getElementById('eq-enabled').checked ? 1 : 0,
             };
