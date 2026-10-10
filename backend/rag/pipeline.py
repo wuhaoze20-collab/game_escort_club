@@ -75,13 +75,15 @@ class ModularRAG:
             db: 数据库会话
         """
         self.db = db
-        # 延迟导入常量，避免循环导入
-        from ai_rag import RRF_K, CHANNEL_WEIGHT
+        # 延迟导入配置读取函数，避免循环导入
+        from ai_rag import _rrf_k, _channel_weights
 
         self.rewriter = QueryRewriter(db)
         self.vector_retriever = VectorRetriever(db)
         self.keyword_retriever = KeywordRetriever(db)
-        self.fusion = FusionModule(rrf_k=RRF_K, channel_weights=CHANNEL_WEIGHT)
+        # RRF 平滑常数与多路通道权重都从系统参数读：ModularRAG 每次查询都会
+        # 重新实例化，所以管理员改完参数下一次提问即生效，不用重启服务
+        self.fusion = FusionModule(rrf_k=_rrf_k(db), channel_weights=_channel_weights(db))
         self.reranker = Reranker(db)
         self.cross_encoder = CrossEncoderReranker(db)
         self.context_builder = ContextBuilder(db)
@@ -109,7 +111,7 @@ class ModularRAG:
             无相关内容时返回空字符串。
         """
         import ai_service
-        from ai_rag import (_top_k, _min_score, _max_chars,
+        from ai_rag import (_top_k, _min_score, _max_chars, _keyword_limit,
                             module_query_rewrite_enabled,
                             module_vector_retrieval_enabled,
                             module_keyword_retrieval_enabled,
@@ -150,7 +152,8 @@ class ModularRAG:
 
             # FAQ 通道 —— 关键词 BM25（精确匹配），模块关闭时跳过
             if use_keyword and "keyword" in use_ch:
-                for rank, doc in enumerate(self.keyword_retriever.retrieve(q, role)):
+                for rank, doc in enumerate(self.keyword_retriever.retrieve(
+                        q, role, limit=_keyword_limit(self.db))):
                     all_kw_hits.append((doc.score, doc.chunk, qi, rank))
 
             # 向量通道 —— 文档通道与 FAQ 通道各自独立召回，模块关闭时跳过

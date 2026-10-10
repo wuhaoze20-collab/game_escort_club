@@ -97,6 +97,69 @@ def _max_chars(db) -> int:
     except Exception:
         return 3000
 
+def _child_chunk_size(db) -> int:
+    """父子分块的子块字符数。
+
+    配置填 0 时按「文档分块字符数 × 0.3」自动派生（保持原有行为），
+    这样不改这个参数的人不会受影响；填了具体值就用具体值。
+    子块是真正被向量化、用来检索的最小单位，它的大小直接决定检索粒度。
+    """
+    try:
+        v = int(config_service.get_config("ai_rag_child_chunk_size", db) or 0)
+    except Exception:
+        v = 0
+    if v <= 0:
+        v = int(_chunk_size(db) * 0.3)
+    return max(60, v)
+
+def _automerge_ratio(db) -> float:
+    """AutoMerging 触发比例：同一章里命中的子块占比超过它就返回整章。"""
+    try:
+        v = float(config_service.get_config("rag_automerge_ratio", db))
+    except Exception:
+        v = _AUTOMERGE_RATIO
+    return min(1.0, max(0.0, v))
+
+def _rrf_k(db) -> int:
+    """RRF 融合的平滑常数 k（公式 1/(k+排名)）。"""
+    try:
+        return max(1, int(config_service.get_config("rag_rrf_k", db)))
+    except Exception:
+        return RRF_K
+
+def _channel_weights(db) -> dict:
+    """多路召回的通道权重，形如 {"document": 1.0, "faq": 1.2}。"""
+    try:
+        doc_w = float(config_service.get_config("rag_weight_document", db))
+    except Exception:
+        doc_w = CHANNEL_WEIGHT["document"]
+    try:
+        faq_w = float(config_service.get_config("rag_weight_faq", db))
+    except Exception:
+        faq_w = CHANNEL_WEIGHT["faq"]
+    return {"document": doc_w, "faq": faq_w}
+
+def _keyword_limit(db) -> int:
+    """关键词（BM25）通道每次最多召回几条 FAQ。"""
+    try:
+        return max(1, int(config_service.get_config("rag_keyword_limit", db)))
+    except Exception:
+        return 20
+
+def _rerank_weights(db) -> dict:
+    """规则式重排序的加权系数（RRF 分 / 向量分 / 关键词分 / FAQ 来源加成）。"""
+    def _f(key, default):
+        try:
+            return float(config_service.get_config(key, db))
+        except Exception:
+            return default
+    return {
+        "rrf": _f("rag_rerank_weight_rrf", 0.4),
+        "vec": _f("rag_rerank_weight_vec", 0.3),
+        "kw": _f("rag_rerank_weight_kw", 0.15),
+        "source_bonus": _f("rag_rerank_source_bonus", 0.1),
+    }
+
 
 # —— RAG 模块开关读取（每个模块可独立关闭，便于调试对比）——
 def _module_enabled(db, key: str, default: bool = True) -> bool:
@@ -496,7 +559,7 @@ def rebuild_index(db, force: bool = False) -> dict:
     """
     from models import AiChunk, AiVector
     model = _embed_model(db)
-    child_size = max(60, int(_chunk_size(db) * 0.3))
+    child_size = _child_chunk_size(db)
 
     # ① 规划
     plan = []
@@ -667,7 +730,7 @@ def pending_sources(db) -> list:
                 for r in db.query(AiChunk).all()}
     # 预加载所有向量记录，按 chunk_id 索引
     vec_by_chunk = {v.chunk_id: v for v in db.query(AiVector).all()}
-    child_size = max(60, int(_chunk_size(db) * 0.3))
+    child_size = _child_chunk_size(db)
     model = _embed_model(db)
     out = []
     seen = set()

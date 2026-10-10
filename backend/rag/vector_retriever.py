@@ -61,7 +61,7 @@ class VectorRetriever:
         import json
         from models import AiChunk, AiVector
         # 延迟导入 ai_rag 中的工具函数，避免循环导入
-        from ai_rag import embed_texts, _embed_model, _cosine, _AUTOMERGE_RATIO
+        from ai_rag import embed_texts, _embed_model, _cosine, _automerge_ratio
 
         question = (question or "").strip()
         if not question:
@@ -142,7 +142,7 @@ class VectorRetriever:
                 if parent_row:
                     results.append(Document(
                         content=parent_row.content or "",
-                        metadata={"merged": ratio >= _AUTOMERGE_RATIO,
+                        metadata={"merged": ratio >= _automerge_ratio(self.db),
                                   "hit_ratio": round(ratio, 2)},
                         score=info["max_score"],
                         source_type=parent_row.source_type or "document",

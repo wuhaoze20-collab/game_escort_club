@@ -574,6 +574,54 @@
             opacity: 0.65;
             pointer-events: none;
         }
+
+        /* ==================== 参数跳转高亮 ====================
+           诊断建议点「去调整」后，目标参数卡片闪烁 0.5 秒（0.25s × 2 次）。
+           亮色模式用蓝，暗色模式用品牌洋红，两种主题下都醒目。 */
+        @keyframes cfg-flash {
+            0%   { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.85); background-color: rgba(59, 130, 246, 0.20); }
+            50%  { box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.18); background-color: rgba(59, 130, 246, 0.04); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); background-color: transparent; }
+        }
+        .cfg-flash {
+            animation: cfg-flash 0.25s ease-in-out 2 !important;
+            border-color: #3b82f6 !important;
+        }
+        @keyframes cfg-flash-dark {
+            0%   { box-shadow: 0 0 0 0 rgba(255, 70, 85, 0.85); background-color: rgba(255, 70, 85, 0.22); }
+            50%  { box-shadow: 0 0 0 7px rgba(255, 70, 85, 0.18); background-color: rgba(255, 70, 85, 0.05); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 70, 85, 0); background-color: transparent; }
+        }
+        [data-theme="dark"] .cfg-flash {
+            animation: cfg-flash-dark 0.25s ease-in-out 2 !important;
+            border-color: #ff4655 !important;
+        }
+        /* 诊断建议里的「去调整」按钮 */
+        .cfg-jump-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.6rem;
+            font-size: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.10);
+            color: #2563eb;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .cfg-jump-btn:hover {
+            background: rgba(59, 130, 246, 0.20);
+            border-color: rgba(59, 130, 246, 0.75);
+        }
+        [data-theme="dark"] .cfg-jump-btn {
+            border-color: rgba(255, 70, 85, 0.45);
+            background: rgba(255, 70, 85, 0.12);
+            color: #ff8a94;
+        }
+        [data-theme="dark"] .cfg-jump-btn:hover {
+            background: rgba(255, 70, 85, 0.24);
+            border-color: rgba(255, 70, 85, 0.75);
+        }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
@@ -2796,7 +2844,7 @@
         }
 
         // RAG 相关的参数分组（这些移到「RAG 调试」页面，不在系统参数里显示）
-        const RAG_CONFIG_GROUPS = ['AI 知识库', 'RAG 模块开关', '查询优化', 'Self-RAG'];
+        const RAG_CONFIG_GROUPS = ['AI 知识库', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
 
         function renderConfigTable() {
             renderConfigAlerts();
@@ -2832,12 +2880,12 @@
                     return ''
                         + '<div class="border border-gray-200 rounded-lg p-4">'
                         + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
-                        + '    <div class="flex-1 min-w-0">'
+                        + '    <div class="flex-1 min-w-0" style="min-width:15rem">'
                         + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
                         + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
                         + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
                         + '    </div>'
-                        + '    <div class="flex gap-2 shrink-0 items-center">'
+                        + '    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">'
                         + controlHtml
                         + '    </div>'
                         + '  </div>'
@@ -2963,14 +3011,14 @@
                             + '<button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>';
                     }
                     return ''
-                        + '<div class="border border-gray-200 rounded-lg p-4">'
+                        + '<div class="border border-gray-200 rounded-lg p-4" id="cfg-card-' + escapeHtml(c.config_key) + '">'
                         + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
-                        + '    <div class="flex-1 min-w-0">'
+                        + '    <div class="flex-1 min-w-0" style="min-width:15rem">'
                         + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
                         + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
                         + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
                         + '    </div>'
-                        + '    <div class="flex gap-2 shrink-0 items-center">'
+                        + '    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">'
                         + controlHtml
                         + '    </div>'
                         + '  </div>'
@@ -3654,6 +3702,54 @@
             return c.config_value === '1' || c.config_value === 'true' || c.config_value === 'True';
         }
 
+        // —— 参数跳转：从诊断建议一键跳到对应参数卡片 ——
+
+        // 展开某个参数所在的分组（分组平时是可折叠的）
+        function expandRagConfigGroupOf(key) {
+            // 按和 renderRagConfigTable 完全相同的顺序算分组下标，否则会展开错组
+            const groups = {};
+            const order = [];
+            configCache.forEach(c => {
+                const g = c.group || '其他';
+                if (RAG_CONFIG_GROUPS.indexOf(g) === -1) return;
+                if (!groups[g]) { groups[g] = []; order.push(g); }
+                groups[g].push(c);
+            });
+            const target = configCache.find(c => c.config_key === key);
+            if (!target) return;
+            const gi = order.indexOf(target.group || '其他');
+            if (gi < 0) return;
+            const body = document.getElementById('rag-cfg-group-body-' + gi);
+            if (!body) return;
+            if (body.style.display === 'none') {
+                body.style.display = '';
+                const arrow = body.previousElementSibling.querySelector('.rag-cfg-group-arrow');
+                if (arrow) arrow.style.transform = '';
+            }
+        }
+
+        // 让目标卡片闪烁 0.5 秒（先移除类再强制重排，保证连续点击也能重放动画）
+        function flashConfigCard(key) {
+            const card = document.getElementById('cfg-card-' + key);
+            if (!card) return;
+            card.classList.remove('cfg-flash');
+            void card.offsetWidth;
+            card.classList.add('cfg-flash');
+            setTimeout(() => card.classList.remove('cfg-flash'), 700);
+        }
+
+        // 跳转到某个参数：切标签页 → 重渲染 → 展开分组 → 滚动定位 → 闪烁提醒
+        function jumpToRagConfig(key) {
+            switchRagTab('params');
+            renderRagConfigTable();
+            expandRagConfigGroupOf(key);
+            const card = document.getElementById('cfg-card-' + key);
+            if (!card) return;
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // 等滚动基本到位再闪，否则用户还没看到卡片就已经闪完了
+            setTimeout(() => flashConfigCard(key), 320);
+        }
+
         function renderRagDiagnosis(result) {
             const box = document.getElementById('rag-eval-diagnosis');
             if (!box || !result) return;
@@ -3669,61 +3765,116 @@
             const rerankOn = _configEnabled('rag_module_rerank');
             const selfRagOn = _configEnabled('ai_self_rag_enabled') && _configEnabled('ai_self_rag_relevance_filter');
             const semanticRerank = rerankOn && (configCache.find(x => x.config_key === 'rag_rerank_mode')?.config_value === 'semantic');
+            const rewriteOn = _configEnabled('ai_query_rewrite_enabled');
 
-            // 根据指标自动诊断
-            if (r < 0.6) {
-                suggestions.push({ level: 'high', text: '召回率过低（' + r.toFixed(2) + '），检索不到相关内容。建议：①增大 top_k 参数；②降低 min_score 相似度阈值；③检查文档是否已正确索引。' });
-            } else if (r < 0.8) {
-                suggestions.push({ level: 'medium', text: '召回率一般（' + r.toFixed(2) + '）。建议适当增大 top_k 或优化查询改写模块。' });
+            const num = v => (v == null ? '-' : Number(v).toFixed(4));
+
+            // 每条建议的结构：{ level, title, detail, targets:[{key,label}], hint }
+            // targets 会渲染成「去调整」按钮，点了直接跳到那个参数的卡片并高亮
+            if (r < 0.8) {
+                suggestions.push({
+                    level: r < 0.6 ? 'high' : 'medium',
+                    title: '召回率偏低（' + num(r) + '）',
+                    detail: '该找的内容没找全 —— 知识库里明明有，检索却没把它捞回来，模型自然答不上。',
+                    targets: [
+                        { key: 'ai_rag_top_k', label: '增大召回条数' },
+                        { key: 'ai_rag_min_score', label: '放低相似度门槛' },
+                        { key: 'rag_keyword_limit', label: '加大关键词召回' },
+                    ],
+                    hint: '调完仍没起色，就去「知识库管理」看文档是否已重建索引。',
+                });
             }
 
-            if (p < 0.6) {
-                let tip = '精确率过低（' + p.toFixed(2) + '），检索结果噪声大。建议：①提高 min_score 阈值；';
-                if (!rerankOn) tip += '②启用重排序（Rerank）模块；';
-                else if (!semanticRerank) tip += '②将重排序模式切换为语义级 Cross-Encoder；';
-                else tip += '②进一步提高 min_score 阈值或减小 top_k；';
-                tip += '③优化分块策略，减小 chunk_size。';
-                suggestions.push({ level: 'high', text: tip });
-            } else if (p < 0.75) {
-                let tip = '精确率一般（' + p.toFixed(2) + '）。';
-                if (!rerankOn) tip += '建议启用重排序模块过滤不相关片段。';
-                else if (!semanticRerank) tip += '建议将重排序模式切换为语义级 Cross-Encoder，提升语义判断能力。';
-                else tip += '当前已用语义级重排序，可尝试提高 min_score 阈值或减小 top_k 进一步提升精确率。';
-                suggestions.push({ level: 'medium', text: tip });
+            if (p < 0.75) {
+                const targets = [{ key: 'ai_rag_min_score', label: '提高相似度门槛' }];
+                if (!rerankOn) targets.push({ key: 'rag_module_rerank', label: '打开重排序' });
+                else if (!semanticRerank) targets.push({ key: 'rag_rerank_mode', label: '切换语义级重排序' });
+                else targets.push({ key: 'rag_rerank_weight_rrf', label: '调重排序权重' });
+                targets.push({ key: 'ai_rag_child_chunk_size', label: '调分块粒度' });
+
+                suggestions.push({
+                    level: p < 0.6 ? 'high' : 'medium',
+                    title: '精确率偏低（' + num(p) + '）',
+                    detail: '捞回来一堆相关度不高的片段。噪声会带偏模型 —— 塞错内容比不塞更糟。',
+                    targets: targets,
+                    hint: '建议一次只改一项，改完重新评估做 A/B 对比，才知道是哪一项起了作用。',
+                });
             }
 
             if (s != null && s < 0.6) {
-                suggestions.push({ level: 'high', text: '端到端相似度低（' + s.toFixed(2) + '），AI 答案和标准答案差距大。建议检查系统提示词，或增加检索上下文的注入量。' });
+                suggestions.push({
+                    level: 'high',
+                    title: '端到端相似度低（' + num(s) + '）',
+                    detail: 'AI 给的答案和标准答案差距较大，可能是检索上下文不够，也可能是提示词没说清。',
+                    targets: [
+                        { key: 'ai_rag_max_chars', label: '放宽上下文字数' },
+                        { key: 'ai_rag_top_k', label: '增加注入片段数' },
+                    ],
+                    hint: '提示词本身也能改：去「提示词管理」看 AI 问答的系统提示词。',
+                });
             }
 
             if (f != null && f < 0.7) {
-                let tip = '忠实度低（' + f.toFixed(2) + '），AI 可能在编造内容。建议：①在提示词中强调"只根据参考资料回答"；②增加检索上下文数量；';
-                if (!selfRagOn) tip += '③考虑启用 Self-RAG 检索后过滤。';
-                else tip += '③Self-RAG 已开启，可尝试调整相关性过滤阈值（≤2分过滤）或增加检索上下文数量。';
-                suggestions.push({ level: 'high', text: tip });
+                const targets = [{ key: 'ai_rag_max_chars', label: '放宽上下文字数' }];
+                if (!selfRagOn) targets.push({ key: 'ai_self_rag_relevance_filter', label: '开启相关性过滤' });
+                else targets.push({ key: 'ai_self_rag_relevance_threshold', label: '调相关性阈值' });
+
+                suggestions.push({
+                    level: 'high',
+                    title: '忠实度偏低（' + num(f) + '）',
+                    detail: '答案里出现了参考资料里没有的内容，说明模型在"编"。',
+                    targets: targets,
+                    hint: '检索后相关性过滤会先把不相关片段丢掉，模型能编的素材就少了。',
+                });
             }
 
             if (rel != null && rel < 0.7) {
-                suggestions.push({ level: 'medium', text: '答案相关性低（' + rel.toFixed(2) + '），AI 可能答非所问。建议优化查询改写模块，确保问题被正确理解。' });
-            }
+                const targets = [];
+                if (!rewriteOn) targets.push({ key: 'ai_query_rewrite_enabled', label: '开启查询重写' });
+                targets.push({ key: 'ai_query_decompose_enabled', label: '开启子查询分解' });
+                targets.push({ key: 'ai_query_expand_enabled', label: '开启查询扩展' });
 
-            if (p >= 0.85 && r >= 0.8 && (s == null || s >= 0.8) && (f == null || f >= 0.85)) {
-                suggestions.push({ level: 'good', text: '各项指标均达到优秀水平，RAG 系统运行良好。可以继续监控历史趋势，关注指标是否有退化。' });
+                suggestions.push({
+                    level: 'medium',
+                    title: '答案相关性偏低（' + num(rel) + '）',
+                    detail: '答案没正面回答用户的问题，多半是没吃准到底在问什么。',
+                    targets: targets,
+                    hint: '查询优化每个开关都会多调一次大模型，按需开启就好。',
+                });
             }
 
             if (!suggestions.length) {
-                suggestions.push({ level: 'good', text: '指标整体合格，无明显问题。建议定期运行评估，监控指标变化趋势。' });
+                suggestions.push({
+                    level: 'good',
+                    title: '各项指标均达标',
+                    detail: 'P=' + num(p) + '　R=' + num(r) + '　相似度=' + num(s) + '　忠实度=' + num(f) + '　相关性=' + num(rel),
+                    targets: [],
+                    hint: '想继续压榨效果，可以去「融合与召回」「重排序打分」两组微调，再用 A/B 对比验证。',
+                });
             }
 
             let html = '<div class="bg-gray-50 rounded-lg p-4">';
-            html += '<div class="text-sm font-medium text-gray-700 mb-3">失效诊断与优化建议</div>';
+            html += '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">';
+            html += '  <div class="text-sm font-medium text-gray-700">失效诊断与优化建议</div>';
+            html += '  <div class="text-xs text-gray-400">点建议里的按钮可直接跳到对应参数并高亮提示</div>';
+            html += '</div>';
             suggestions.forEach(sg => {
                 const color = sg.level === 'high' ? 'text-red-600 bg-red-50 border-red-200'
                     : sg.level === 'medium' ? 'text-amber-600 bg-amber-50 border-amber-200'
                     : 'text-green-600 bg-green-50 border-green-200';
                 const icon = sg.level === 'high' ? '⚠️' : sg.level === 'medium' ? '💡' : '✅';
                 html += '<div class="border rounded-lg p-3 mb-2 ' + color + '">';
-                html += '  <div class="text-sm">' + icon + ' ' + escapeHtml(sg.text) + '</div>';
+                html += '  <div class="text-sm font-medium">' + icon + ' ' + escapeHtml(sg.title) + '</div>';
+                if (sg.detail) html += '  <div class="text-sm mt-1">' + escapeHtml(sg.detail) + '</div>';
+                if (sg.hint) html += '  <div class="text-xs mt-1.5 opacity-80">' + escapeHtml(sg.hint) + '</div>';
+                if (sg.targets && sg.targets.length) {
+                    html += '  <div class="flex flex-wrap gap-2 mt-2">';
+                    sg.targets.forEach(t => {
+                        html += '<button class="cfg-jump-btn" onclick="jumpToRagConfig(\'' + t.key + '\')" title="跳到参数：' + escapeHtml(t.key) + '">'
+                            + escapeHtml(t.label) + ' →</button>';
+                    });
+                    html += '  </div>';
+                }
                 html += '</div>';
             });
             html += '</div>';

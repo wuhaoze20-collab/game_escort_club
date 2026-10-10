@@ -184,6 +184,11 @@ CONFIG_META: dict[str, dict] = {
         "default": 500, "type": "int", "group": "AI 知识库", "label": "文档分块字符数",
         "desc": "长篇文档按此长度切成片段再向量化。太小会丢上下文，太大会稀释相关性",
     },
+    "ai_rag_child_chunk_size": {
+        "default": 0, "type": "int", "group": "AI 知识库", "label": "父子分块·子块字符数",
+        "desc": "长文档检索用的小片段（子块）大小。填 0 = 自动，取「文档分块字符数 × 0.3」。"
+                "子块越小检索越精准但上下文越碎，越大越完整但相关性被稀释。改完需回「知识库管理」重建索引才生效",
+    },
     "ai_rag_max_chars": {
         "default": 3000, "type": "int", "group": "AI 知识库", "label": "检索片段总字数上限",
         "desc": "单次注入的检索结果总长度上限，防止一次命中过多把提示词撑爆",
@@ -225,6 +230,50 @@ CONFIG_META: dict[str, dict] = {
     "rag_module_automerge": {
         "default": True, "type": "bool", "group": "RAG 模块开关", "label": "AutoMerging 自动合并",
         "desc": "关闭后命中子块时不自动合并为整章，只返回命中的子块片段",
+    },
+    "rag_automerge_ratio": {
+        "default": 0.5, "type": "float", "group": "RAG 模块开关", "label": "自动合并触发比例",
+        "desc": "同一章里被命中的子块占比超过此值时，自动改返回整章（上下文更完整）。"
+                "0.5 = 命中一半就合并；调小更容易合并，调大则更倾向只返回命中片段",
+    },
+
+    # —— 融合与召回：控制多路召回的数量与 RRF 融合的排序强弱 ——
+    # 这些参数直接影响「哪些片段能进候选池、候选怎么排序」，是调参最见效的一组
+    "rag_rrf_k": {
+        "default": 60, "type": "int", "group": "融合与召回", "label": "RRF 平滑常数 k",
+        "desc": "RRF 公式 1/(k+排名) 里的 k。k 越小，排名靠前的片段优势越大（更看重头部）；"
+                "k 越大，排名差异被拉平（多路结果更平均）。原论文推荐 60，常用范围 10~100",
+    },
+    "rag_weight_document": {
+        "default": 1.0, "type": "float", "group": "融合与召回", "label": "文档通道权重",
+        "desc": "长文档（用户协议、员工手册等）在 RRF 融合时的权重。调高则更倾向引用长文档",
+    },
+    "rag_weight_faq": {
+        "default": 1.2, "type": "float", "group": "融合与召回", "label": "FAQ 通道权重",
+        "desc": "人工维护的问答库在 RRF 融合时的权重。FAQ 答案是人工写的、更权威，所以默认 1.2 略高于文档",
+    },
+    "rag_keyword_limit": {
+        "default": 20, "type": "int", "group": "融合与召回", "label": "关键词召回条数上限",
+        "desc": "关键词（BM25）通道每次最多召回多少条 FAQ。调大召回更全、后段压力更大；"
+                "调小则更依赖向量通道",
+    },
+
+    # —— 重排序打分：规则式重排序的加权公式，各分项权重之和不必等于 1 ——
+    "rag_rerank_weight_rrf": {
+        "default": 0.4, "type": "float", "group": "重排序打分", "label": "重排·RRF 分权重",
+        "desc": "规则式重排序里，融合排序分（已归一化到 0~1）占的比重。这是主项，一般保持最大",
+    },
+    "rag_rerank_weight_vec": {
+        "default": 0.3, "type": "float", "group": "重排序打分", "label": "重排·向量分权重",
+        "desc": "语义相似度（余弦相似度 0~1）占的比重。调高更看重语义接近程度",
+    },
+    "rag_rerank_weight_kw": {
+        "default": 0.15, "type": "float", "group": "重排序打分", "label": "重排·关键词分权重",
+        "desc": "关键词匹配分（已归一化）占的比重。调高更看重字面命中",
+    },
+    "rag_rerank_source_bonus": {
+        "default": 0.1, "type": "float", "group": "重排序打分", "label": "重排·FAQ 来源加成",
+        "desc": "命中 FAQ（人工维护）时额外加的分。设为 0 则不做来源倾斜",
     },
 
     # —— 查询优化（检索前）：默认全关，需要时手动开启，每个开关都会多调一次大模型 ——

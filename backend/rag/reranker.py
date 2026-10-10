@@ -61,6 +61,10 @@ class Reranker:
 
         question = (question or "").strip()
 
+        # 读取加权公式的系数（管理员可在「RAG 调试 → RAG 参数 → 重排序打分」里调）
+        from ai_rag import _rerank_weights
+        w = _rerank_weights(self.db)
+
         # ① 收集每个 key 的最高向量分数和最高关键词分数
         vec_score_by_key = {}
         for h in all_vec_hits:
@@ -105,19 +109,19 @@ class Reranker:
             # 关键词最高分数（归一化到 0~1）
             kw_norm = kw_score_by_key.get(key, 0.0) / max_kw
 
-            # 来源类型加成：FAQ 人工维护，更权威，加 0.1
+            # 来源类型加成：FAQ 人工维护，更权威（加成分值可在参数里调）
             source_type = key[0] if len(key) > 0 else ""
-            source_bonus = 0.1 if source_type == "faq" else 0.0
+            source_bonus = w["source_bonus"] if source_type == "faq" else 0.0
 
             # 标题匹配加分：问题中的关键词出现在标题/问题中
             title_bonus = self._title_match_bonus(
                 question, chunk, faq_row)
 
-            # 综合分（加权求和）
+            # 综合分（加权求和，各项权重见「重排序打分」参数组）
             combined = (
-                rrf_norm * 0.4
-                + vec_score * 0.3
-                + kw_norm * 0.15
+                rrf_norm * w["rrf"]
+                + vec_score * w["vec"]
+                + kw_norm * w["kw"]
                 + source_bonus
                 + title_bonus
             )
