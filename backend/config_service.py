@@ -207,6 +207,12 @@ CONFIG_META: dict[str, dict] = {
         "default": True, "type": "bool", "group": "RAG 模块开关", "label": "关键词检索模块",
         "desc": "关闭后不做 FAQ 关键词匹配，只用向量语义检索",
     },
+    "rag_module_graph_retrieval": {
+        "default": True, "type": "bool", "group": "RAG 模块开关", "label": "知识图谱检索模块",
+        "desc": "多路召回的第三路：问题里出现具体账户名/订单号/游戏名/标签时，"
+                "从 Neo4j 取回实体之间的一跳关系事实。关闭后只剩向量 + 关键词两路，"
+                "「这个老板找过哪些打手」这类关系型问题就只能靠语义相似度硬猜",
+    },
     "rag_module_fusion": {
         "default": True, "type": "bool", "group": "RAG 模块开关", "label": "RRF 融合模块",
         "desc": "关闭后两路结果简单合并（向量在前关键词在后），不做加权 RRF 排序",
@@ -285,6 +291,16 @@ CONFIG_META: dict[str, dict] = {
     "rag_weight_faq": {
         "default": 1.2, "type": "float", "group": "融合与召回", "label": "FAQ 通道权重",
         "desc": "人工维护的问答库在 RRF 融合时的权重。FAQ 答案是人工写的、更权威，所以默认 1.2 略高于文档",
+    },
+    "rag_weight_graph": {
+        "default": 1.3, "type": "float", "group": "融合与召回", "label": "图谱通道权重",
+        "desc": "知识图谱事实在 RRF 融合时的权重。图谱只在问题真的出现具体实体时才产出，"
+                "一旦命中就说明用户在问某个具体的人/单，所以默认 1.3 略高于 FAQ",
+    },
+    "rag_graph_limit": {
+        "default": 3, "type": "int", "group": "融合与召回", "label": "图谱召回条数上限",
+        "desc": "图谱通道每次最多注入几条实体事实（每条含该实体的一跳关系）。"
+                "调大能覆盖更多实体，但事实是按结构化字段铺开的，条数多了会挤占上下文预算",
     },
     "rag_keyword_limit": {
         "default": 20, "type": "int", "group": "融合与召回", "label": "关键词召回条数上限",

@@ -36,24 +36,32 @@ class FusionModule:
 
         参数：
             rrf_k: RRF 常数（默认 60，用于平滑，排名靠后的贡献衰减）
-            channel_weights: 各通道权重，默认 {"document": 1.0, "faq": 1.2}
-                            FAQ 权重更高，因为人工维护的问答库更权威
+            channel_weights: 各通道权重，默认带 document / faq / graph 三路
+                            FAQ 权重更高，因为人工维护的问答库更权威；
+                            图谱权重居中，它只在问题提到具体实体时才有输出
         """
         self.rrf_k = rrf_k
-        self.channel_weights = channel_weights or {"document": 1.0, "faq": 1.2}
+        self.channel_weights = channel_weights or {
+            "document": 1.0, "faq": 1.2, "graph": 1.3,
+        }
 
-    def fuse(self, all_kw_hits: list, all_vec_hits: list) -> Tuple[list, dict]:
+    def fuse(self, all_kw_hits: list, all_vec_hits: list,
+             all_graph_hits: list = None) -> Tuple[list, dict]:
         """加权 RRF 融合，返回 (ordered, pool)。
 
         参数：
             all_kw_hits: 关键词命中列表，每条为 (score, faq_row, query_index, rank)
             all_vec_hits: 向量命中列表，每条为字典：
                 {"score", "chunk", "channel", "query_index", "rank_in_query", ...}
+            all_graph_hits: 图谱命中列表（Document 对象，source_type="graph"）。
+                这一路没有"查询变体"的概念——实体链接是对原始问题做的，
+                所以按列表顺序当作排名即可。
 
         返回：
             ordered: [(key, rrf_score)] 按 RRF 分数降序排列
                      key = (source_type, source_key, chunk_index)
-            pool: {key: {"faq": faq_row, "chunk": chunk_row}} 命中对象映射
+                     图谱的 key 形如 ("graph", <elementId>, 0)
+            pool: {key: {"faq": ..., "chunk": ..., "graph": ...}} 命中对象映射
                   用于后续 ContextBuilder 渲染时获取原始内容
         """
         pool = {}
@@ -76,6 +84,18 @@ class FusionModule:
             channel = h.get("channel", c.source_type or "document")
             contribution = (1.0 / (self.rrf_k + h["rank_in_query"] + 1)
                             * self.channel_weights.get(channel, 1.0))
+            ranks[key] = ranks.get(key, 0.0) + contribution
+
+        # 图谱通道的 RRF 贡献。
+        # 图谱这一路天然不会有"两路撞同一条"的情况（一个节点一条事实），
+        # 所以排名直接用列表下标，不需要像向量那样按查询变体分组。
+        for rank, doc in enumerate(all_graph_hits or []):
+            meta = getattr(doc, "metadata", None) or {}
+            node_id = str(meta.get("node_id") or getattr(doc, "content", "")[:24])
+            key = ("graph", node_id, 0)
+            pool.setdefault(key, {})["graph"] = doc
+            contribution = (1.0 / (self.rrf_k + rank + 1)
+                            * self.channel_weights.get("graph", 1.0))
             ranks[key] = ranks.get(key, 0.0) + contribution
 
         # 按 RRF 分数降序排列

@@ -83,6 +83,18 @@ class Reranker:
             if key not in kw_score_by_key or s > kw_score_by_key[key]:
                 kw_score_by_key[key] = s
 
+        # 图谱通道的"相关度"：GraphRetriever 把实体匹配的可信度放在了 doc.score 里
+        # （账户名/订单号命中=1.0，昵称=0.9，游戏名=0.8，标签=0.7）。
+        # 这里把它并入 vec_score_by_key —— 它和余弦相似度同为 0~1 的相关度，
+        # 语义上可以共用「向量分」这一项权重，不必再单独开一个系数。
+        for key, _rrf in ordered:
+            g = (pool.get(key) or {}).get("graph")
+            if g is None:
+                continue
+            s = float(getattr(g, "score", 0) or 0)
+            if key not in vec_score_by_key or s > vec_score_by_key[key]:
+                vec_score_by_key[key] = s
+
         # ② 归一化 RRF 分数（除以最大值，缩放到 0~1）
         max_rrf = max((score for _, score in ordered), default=1.0)
         if max_rrf <= 0:

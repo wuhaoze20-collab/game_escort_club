@@ -16,6 +16,7 @@
 from .query_rewriter import QueryRewriter
 from .vector_retriever import VectorRetriever
 from .keyword_retriever import KeywordRetriever
+from .graph_retriever import GraphRetriever
 from .fusion import FusionModule
 from .reranker import Reranker
 from .cross_encoder_reranker import CrossEncoderReranker
@@ -81,6 +82,9 @@ class ModularRAG:
         self.rewriter = QueryRewriter(db)
         self.vector_retriever = VectorRetriever(db)
         self.keyword_retriever = KeywordRetriever(db)
+        # 第三路召回：知识图谱。只在问题里出现具体实体（账户名/订单号/游戏名/
+        # 标签）时才产出，平时是空列表，不会稀释另外两路的结果。
+        self.graph_retriever = GraphRetriever(db)
         # RRF 平滑常数与多路通道权重都从系统参数读：ModularRAG 每次查询都会
         # 重新实例化，所以管理员改完参数下一次提问即生效，不用重启服务
         self.fusion = FusionModule(rrf_k=_rrf_k(db), channel_weights=_channel_weights(db))
@@ -89,13 +93,15 @@ class ModularRAG:
         self.context_builder = ContextBuilder(db)
 
     def query(self, question: str, role: str, top_k: int = None,
-              min_score: float = None, debug: dict = None) -> str:
+              min_score: float = None, debug: dict = None,
+              username: str = None) -> str:
         """执行完整 RAG 查询流程，返回格式化后的上下文文本。
 
         执行流程：
             ① 查询改写：query_optimizer 生成多个查询变体
-            ② 多路召回：每个变体分别做关键词检索（FAQ）+ 向量检索（文档/FAQ）
-            ③ 加权 RRF 融合：两路结果合并排序
+            ② 多路召回：每个变体分别做关键词检索（FAQ）+ 向量检索（文档/FAQ），
+                       另外对原始问题单独做一路知识图谱检索
+            ③ 加权 RRF 融合：三路结果合并排序
             ④ 重排序（Re-rank）：综合向量分数、关键词分数、来源类型、标题匹配，二次排序
             ⑤ 上下文构建：渲染为引用块，受 top_k 和 max_chars 限制
 
@@ -105,6 +111,8 @@ class ModularRAG:
             top_k: 返回最相关的前 K 条（None 时用系统参数 rag_top_k，默认 4）
             min_score: 最低相似度阈值（None 时用系统参数 rag_min_score，默认 0.35）
             debug: 调试信息字典，用于前端展示检索过程（查询变体、各通道命中、RRF 分数等）
+            username: 当前用户的账户名。图谱这一路要靠它把老板/打手的可见范围
+                      收敛到本人（不传也不会报错，只是老板/打手视角会少一路召回）
 
         返回：
             str，格式化后的检索上下文文本，可直接拼进系统提示词的"参考资料"部分。
@@ -115,6 +123,7 @@ class ModularRAG:
                             module_query_rewrite_enabled,
                             module_vector_retrieval_enabled,
                             module_keyword_retrieval_enabled,
+                            module_graph_retrieval_enabled,
                             module_fusion_enabled,
                             module_rerank_enabled,
                             module_automerge_enabled)
@@ -127,6 +136,7 @@ class ModularRAG:
         use_rewrite = module_query_rewrite_enabled(self.db)
         use_vector = module_vector_retrieval_enabled(self.db)
         use_keyword = module_keyword_retrieval_enabled(self.db)
+        use_graph = module_graph_retrieval_enabled(self.db)
         use_fusion = module_fusion_enabled(self.db)
         use_rerank = module_rerank_enabled(self.db)
         use_automerge = module_automerge_enabled(self.db)
@@ -139,8 +149,9 @@ class ModularRAG:
                         "channels": ["keyword", "vector"]}]
 
         # ② 多路召回
-        all_kw_hits = []   # FAQ 关键词命中：[(score, faq_row, query_index, rank)]
-        all_vec_hits = []  # 向量命中：[{"score", "chunk", "channel", "query_index", "rank_in_query", ...}]
+        all_kw_hits = []    # FAQ 关键词命中：[(score, faq_row, query_index, rank)]
+        all_vec_hits = []   # 向量命中：[{"score", "chunk", "channel", "query_index", "rank_in_query", ...}]
+        all_graph_hits = []  # 图谱命中：[Document(source_type="graph"), ...]
         vector_errors = []
         tk = _top_k(self.db) if top_k is None else max(1, int(top_k))
         ms = _min_score(self.db) if min_score is None else float(min_score)
@@ -173,16 +184,28 @@ class ModularRAG:
                         vector_errors.append(f"[{qinfo.get('type','?')}/{channel}] {e}")
                         print(f"[rag] 向量检索失败（{channel}，查询{qi}: {q[:30]}）：{e}")
 
-        if not all_kw_hits and not all_vec_hits:
+        # 图谱通道 —— 只用**原始问题**做一次，不跟着查询变体分裂。
+        # 原因：实体链接靠的是问题里出现的账户名/订单号/游戏名这些字面标识，
+        # 而查询改写（同义扩展、HyDE、子查询）产出的变体里往往已经不含这些标识了，
+        # 拿变体去匹配只会白跑几趟 Neo4j。
+        if use_graph:
+            try:
+                all_graph_hits = self.graph_retriever.retrieve(
+                    question, role, username=username)
+            except Exception as e:
+                print(f"[rag] 图谱检索失败，跳过该通道：{type(e).__name__}: {e}")
+                all_graph_hits = []
+
+        if not all_kw_hits and not all_vec_hits and not all_graph_hits:
             return ""
 
         # ③ 结果融合
         if use_fusion:
-            # 加权 RRF 融合（只用排名信息，FAQ权重1.2 / 文档权重1.0）
-            ordered, pool = self.fusion.fuse(all_kw_hits, all_vec_hits)
+            # 加权 RRF 融合（只用排名信息，FAQ权重1.2 / 文档权重1.0 / 图谱权重1.3）
+            ordered, pool = self.fusion.fuse(all_kw_hits, all_vec_hits, all_graph_hits)
         else:
             # 关闭融合：简单合并（向量结果在前，关键词结果在后），不做 RRF 排序
-            ordered, pool = self._simple_merge(all_kw_hits, all_vec_hits)
+            ordered, pool = self._simple_merge(all_kw_hits, all_vec_hits, all_graph_hits)
 
         # ④ 重排序（Re-rank）：综合多维度分数二次排序
         #    两种模式：
@@ -260,11 +283,12 @@ class ModularRAG:
         # ⑤ 调试信息
         if debug is not None:
             self._fill_debug(debug, queries, all_kw_hits, all_vec_hits,
-                             ordered, final_ordered, vector_errors)
+                             ordered, final_ordered, vector_errors, all_graph_hits)
             debug["module_switches"] = {
                 "query_rewrite": use_rewrite,
                 "vector_retrieval": use_vector,
                 "keyword_retrieval": use_keyword,
+                "graph_retrieval": use_graph,
                 "fusion": use_fusion,
                 "rerank": use_rerank,
                 "rerank_mode": rerank_type if use_rerank else "off",
@@ -298,10 +322,13 @@ class ModularRAG:
         return context
 
     @staticmethod
-    def _simple_merge(all_kw_hits: list, all_vec_hits: list):
-        """融合模块关闭时的简单合并：向量结果在前（按相似度降序），关键词结果在后。
+    def _simple_merge(all_kw_hits: list, all_vec_hits: list,
+                      all_graph_hits: list = None):
+        """融合模块关闭时的简单合并：图谱 → 向量 → 关键词。
 
-        不做 RRF 加权融合，直接把两路结果拼在一起，用于对比测试。
+        不做 RRF 加权融合，直接把三路结果拼在一起，用于对比测试。
+        图谱排最前，是因为它只在问题里出现具体实体时才产出，
+        一旦命中就说明是"问某个具体人/单"的关系型问题，含金量最高。
 
         返回：
             (ordered, pool) 与 FusionModule.fuse() 相同格式
@@ -309,7 +336,15 @@ class ModularRAG:
         pool = {}
         ordered = []
 
-        # 向量结果在前（按相似度降序）
+        # 图谱事实在前（按实体匹配可信度降序）
+        for doc in sorted(all_graph_hits or [],
+                          key=lambda d: -(getattr(d, "score", 0) or 0)):
+            meta = getattr(doc, "metadata", None) or {}
+            key = ("graph", str(meta.get("node_id") or ""), 0)
+            pool.setdefault(key, {})["graph"] = doc
+            ordered.append((key, float(getattr(doc, "score", 0) or 0)))
+
+        # 向量结果次之（按相似度降序）
         vec_sorted = sorted(all_vec_hits, key=lambda h: -h.get("score", 0))
         for h in vec_sorted:
             c = h.get("chunk")
@@ -319,7 +354,7 @@ class ModularRAG:
             pool.setdefault(key, {})["chunk"] = c
             ordered.append((key, float(h.get("score", 0))))
 
-        # 关键词结果在后（按 BM25 分数降序）
+        # 关键词结果最后（按 BM25 分数降序）
         kw_sorted = sorted(all_kw_hits, key=lambda x: -float(x[0]))
         for _s, r, _qi, _rank in kw_sorted:
             key = ("faq", str(r.id), 0)
@@ -332,7 +367,7 @@ class ModularRAG:
 
     def _fill_debug(self, debug: dict, queries: list, all_kw_hits: list,
                     all_vec_hits: list, ordered: list, reranked: list,
-                    vector_errors: list):
+                    vector_errors: list, all_graph_hits: list = None):
         """填充调试信息（查询变体、各通道命中、RRF 分数、重排序结果等），供前端展示检索过程。
 
         参数：
@@ -343,6 +378,7 @@ class ModularRAG:
             ordered: RRF 融合后的排序列表
             reranked: 重排序后的排序列表
             vector_errors: 向量检索错误列表
+            all_graph_hits: 图谱命中列表（Document 对象）
         """
         import ai_service
 
@@ -361,10 +397,25 @@ class ModularRAG:
                     "content": ai_service.render_placeholders(h["chunk"].content or "", self.db)[:100],
                 } for h in q_vec[:5]],
             })
+
+        # 图谱这一路不对应任何查询变体（它只吃原始问题），单独列一段
+        graph_items = []
+        for doc in (all_graph_hits or []):
+            meta = getattr(doc, "metadata", None) or {}
+            graph_items.append({
+                "label": meta.get("label", ""),
+                "key": meta.get("key", ""),
+                "node_name": meta.get("node_name", ""),
+                "match_field": meta.get("match_field", ""),
+                "score": round(float(getattr(doc, "score", 0) or 0), 4),
+                "content": (getattr(doc, "content", "") or "")[:200],
+            })
+
         debug.update({
             "vector_error": "; ".join(vector_errors) if vector_errors else "",
             "all_queries": [{"query": q["query"], "type": q.get("type", "?")} for q in queries],
             "per_query_results": per_query,
+            "graph_hits": graph_items,
             "fused_keys": [{"source_type": k[0], "source_key": k[1], "chunk_index": k[2],
                             "rrf": round(v, 6)} for k, v in ordered[:20]],
             "reranked_keys": [{"source_type": k[0], "source_key": k[1], "chunk_index": k[2],

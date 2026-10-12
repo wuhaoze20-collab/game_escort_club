@@ -65,6 +65,7 @@ class ContextBuilder:
                 break
             item = pool.get(key) or {}
             faq_row, chunk = item.get("faq"), item.get("chunk")
+            graph_doc = item.get("graph")
 
             if faq_row is not None:
                 # FAQ 格式：问：xxx\n  答：xxx
@@ -74,6 +75,11 @@ class ContextBuilder:
                 # 文档格式：· 【标题】\n  内容
                 text = (f"· 【{chunk.title or '知识库'}】\n  "
                         + ai_service.render_placeholders(chunk.content, self.db))
+            elif graph_doc is not None:
+                # 图谱格式：GraphRetriever 已经渲染好"主谓宾"列表了，直接用。
+                # 这里不再做占位符替换——图谱内容是库里的真实字段值，
+                # 没有 {平台名} 这类占位符，硬套 render_placeholders 反而会误伤。
+                text = graph_doc.content
             else:
                 continue
 

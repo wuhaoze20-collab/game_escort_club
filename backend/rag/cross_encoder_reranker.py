@@ -23,6 +23,24 @@ import json
 import re
 from typing import List, Tuple
 
+# 图谱事实的保底加成。精确标识符（账户名、订单号）命中给强加成，
+# 昵称/游戏名/标签这类模糊命中，以及"本人兜底"命中给弱加成。
+_GRAPH_BONUS_STRONG = 0.35
+_GRAPH_BONUS_WEAK = 0.15
+
+
+def _graph_hit_is_strong(pool: dict, key) -> bool:
+    """这条候选是不是「精确标识符命中的图谱事实」。
+
+    账户名、订单号是用户在问题里写出来的确定标识，命中就是命中；
+    昵称、游戏名、标签只是字面包含，可能碰巧撞上，所以不算强命中。
+    """
+    g = (pool.get(key) or {}).get("graph")
+    if g is None:
+        return False
+    field = (getattr(g, "metadata", None) or {}).get("match_field")
+    return field in ("username", "order_no")
+
 
 class CrossEncoderReranker:
     """语义级重排序器：用大模型判断候选片段与问题的相关性。"""
@@ -59,13 +77,17 @@ class CrossEncoderReranker:
             item = pool.get(key) or {}
             chunk = item.get("chunk")
             faq_row = item.get("faq")
-            # 优先用FAQ的问答对，否则用文档片段内容
+            graph_doc = item.get("graph")
+            # 优先用FAQ的问答对，其次文档片段，最后图谱事实
             if faq_row is not None:
                 text = f"问：{getattr(faq_row, 'question', '')}\n答：{getattr(faq_row, 'answer', '')}"
             elif chunk is not None:
                 title = getattr(chunk, 'title', '') or ''
                 content = getattr(chunk, 'content', '') or ''
                 text = f"【{title}】\n{content}" if title else content
+            elif graph_doc is not None:
+                # 图谱事实已经是渲染好的人话了，直接送进大模型判断相关性
+                text = getattr(graph_doc, 'content', '') or ''
             else:
                 text = ""
             # 截断，避免单条太长
@@ -97,12 +119,31 @@ class CrossEncoderReranker:
             return ordered[:top_k]
 
         # 按语义分数重新排序
+        #
+        # 图谱事实额外给一点加成：大模型打分时只看"问题 vs 这段文字"，
+        # 而图谱事实是一串订单号、账户名、状态的结构化罗列，字面上跟问题
+        # 重合度不高，容易被判成"部分相关"；但它其实是**拿账户名/订单号
+        # 精确命中**出来的硬证据，不是相似度猜测。不加这个加成，
+        # 「laoban 找过哪些打手」这种问题会被通用条款文档挤到后面去。
         scored = []
         for i, item in enumerate(items):
             score = scores[i] if i < len(scores) else 0.0
+            g = (pool.get(item["key"]) or {}).get("graph")
+            if g is not None:
+                field = (getattr(g, "metadata", None) or {}).get("match_field")
+                score += (_GRAPH_BONUS_STRONG if field in ("username", "order_no")
+                          else _GRAPH_BONUS_WEAK)
             scored.append((item["key"], score))
 
         scored.sort(key=lambda x: -x[1])
+
+        # 精确标识符命中的图谱事实直接置顶。
+        # 理由同上：账户名/订单号是硬证据，不该被"看起来像"的通用条款文档压住——
+        # 上下文预算有限，排第二就可能被截断，用户的问题反而没被回答。
+        strong = [it for it in scored if _graph_hit_is_strong(pool, it[0])]
+        if strong:
+            rest = [it for it in scored if not _graph_hit_is_strong(pool, it[0])]
+            scored = strong + rest
 
         # 记录调试信息
         self._last_scores = [(items[i]["key"], scores[i] if i < len(scores) else 0.0)

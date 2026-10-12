@@ -40,7 +40,7 @@ EMBED_TIMEOUT = 30
 RRF_K = 60  # RRF 平滑常数，原论文推荐值
 
 # 多路召回通道权重（PDF：FAQ 是人工维护的权威问答，权重高；长文档权重标准）
-CHANNEL_WEIGHT = {"document": 1.0, "faq": 1.2}
+CHANNEL_WEIGHT = {"document": 1.0, "faq": 1.2, "graph": 1.3}
 
 # 父子分块
 _CHILD_INDEX_OFFSET = 100000  # 子块 chunk_index 偏移，避免与父块(0~99999)冲突
@@ -167,7 +167,11 @@ def _rrf_k(db) -> int:
         return RRF_K
 
 def _channel_weights(db) -> dict:
-    """多路召回的通道权重，形如 {"document": 1.0, "faq": 1.2}。"""
+    """多路召回的通道权重，形如 {"document": 1.0, "faq": 1.2, "graph": 1.3}。
+
+    图谱这一路权重略高于 FAQ，是因为它只在问题里真的出现具体实体时才产出，
+    一旦出现就说明用户在问"某个具体的人/单"，这种事实比通用条款更贴合提问。
+    """
     try:
         doc_w = float(config_service.get_config("rag_weight_document", db))
     except Exception:
@@ -176,7 +180,18 @@ def _channel_weights(db) -> dict:
         faq_w = float(config_service.get_config("rag_weight_faq", db))
     except Exception:
         faq_w = CHANNEL_WEIGHT["faq"]
-    return {"document": doc_w, "faq": faq_w}
+    try:
+        graph_w = float(config_service.get_config("rag_weight_graph", db))
+    except Exception:
+        graph_w = CHANNEL_WEIGHT.get("graph", 1.3)
+    return {"document": doc_w, "faq": faq_w, "graph": graph_w}
+
+def _graph_limit(db) -> int:
+    """图谱通道每次最多注入几条事实。"""
+    try:
+        return max(1, int(config_service.get_config("rag_graph_limit", db)))
+    except Exception:
+        return 3
 
 def _keyword_limit(db) -> int:
     """关键词（BM25）通道每次最多召回几条 FAQ。"""
@@ -219,6 +234,16 @@ def module_vector_retrieval_enabled(db) -> bool:
 
 def module_keyword_retrieval_enabled(db) -> bool:
     return _module_enabled(db, "rag_module_keyword_retrieval", True)
+
+
+def module_graph_retrieval_enabled(db) -> bool:
+    """知识图谱召回通道开关。
+
+    关掉之后 RAG 只剩向量 + 关键词两路，关系型问题（"这个老板找过谁"）
+    就只能靠向量相似度硬猜。图谱不可用时这一路本来就会自己返回空，
+    这个开关是给"想对比接入图谱前后的效果"准备的。
+    """
+    return _module_enabled(db, "rag_module_graph_retrieval", True)
 
 
 def module_fusion_enabled(db) -> bool:
@@ -983,9 +1008,11 @@ def build_rag_context(db, user, question: str, record_miss: bool = True,
     if not question:
         return ""
     role = getattr(user, "role", "") or ""
+    # 图谱这一路要靠账户名把老板/打手的可见范围收敛到本人
+    uname = getattr(user, "username", "") or ""
 
     rag = ModularRAG(db)
-    context = rag.query(question, role, top_k, min_score, debug)
+    context = rag.query(question, role, top_k, min_score, debug, uname)
 
     # 未命中记录（用于统计知识库覆盖率）
     if not context and record_miss:
