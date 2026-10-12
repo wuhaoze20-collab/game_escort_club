@@ -1,0 +1,26 @@
+=== git status --short ===
+ M .gitignore
+ M CHANGELOG.md
+ M backend/ai_rag.py
+ M backend/api/ai_rag_api.py
+ M backend/config_service.py
+ M backend/rag/vector_retriever.py
+ M backend/requirements.txt
+ M frontend/index.html
+?? backend/rag/chroma_store.py
+?? docs/git-log.csv
+?? docs/git-log.md
+
+=== gitignore 里 _*.log 是否排除 ===
+__pycache__/
+.DS_Store
+*.log
+pip_install_log*
+node_modules/
+frontend/node_modules/
+_git_status.txt
+backend/backend_out.log
+backend/backend_err.log
+backend/_test_rag.py
+backend/_api_test.py
+backend/_deleted_backup.json

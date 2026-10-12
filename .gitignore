@@ -50,3 +50,7 @@ backend/_deleted_backup.json
 # 临时排查脚本与它们的输出（按需创建，用完即删）
 backend/_check_*.py
 backend/_*.txt
+
+# Chroma 本地向量库（运行时生成，不入库）
+backend/chroma_db/
+chroma_db/

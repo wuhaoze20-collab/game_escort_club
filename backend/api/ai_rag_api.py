@@ -486,6 +486,10 @@ def index_stats(
                        if s["last_built"] else ""),
         "pending_sources": pending,
         "pending_total": len(pending),
+        # 向量存储：当前用的哪种后端，以及 Chroma 集合的实际情况
+        # chroma 不可用时前端应提示「已自动降级为 MySQL 全表扫描」
+        "vector_backend": s["vector_backend"],
+        "chroma": s.get("chroma") or {},
     }
 
 

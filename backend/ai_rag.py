@@ -46,6 +46,9 @@ CHANNEL_WEIGHT = {"document": 1.0, "faq": 1.2}
 _CHILD_INDEX_OFFSET = 100000  # 子块 chunk_index 偏移，避免与父块(0~99999)冲突
 _AUTOMERGE_RATIO = 0.5        # 同一父块命中子块超50%时合并返回整章
 
+# Chroma 单次召回的候选条数默认值（可在系统参数 rag_chroma_candidates 里调）
+CHROMA_FETCH_LIMIT = 50
+
 # 句子边界 / 章节边界
 _SENT_RE = re.compile(r"(?<=[。；！？])\s*")
 _CHAPTER_RE = re.compile(r"(?=第[一二三四五六七八九十百零〇\d]+章)")
@@ -119,6 +122,42 @@ def _automerge_ratio(db) -> float:
     except Exception:
         v = _AUTOMERGE_RATIO
     return min(1.0, max(0.0, v))
+
+def _vector_backend(db) -> str:
+    """向量检索后端：chroma（HNSW 索引召回，默认）或 mysql（全表扫描兜底）。
+
+    配置选了 chroma 但 chromadb 实际不可导入时自动降级为 mysql，
+    避免因为一个可选依赖缺失就让整个问答流程失败。
+    """
+    try:
+        v = str(config_service.get_config("rag_vector_backend", db) or "").strip().lower()
+    except Exception:
+        v = ""
+    if v not in ("chroma", "mysql"):
+        v = "chroma"
+    if v == "chroma":
+        try:
+            from rag import chroma_store as cs
+            if not cs.available():
+                return "mysql"
+        except Exception:
+            return "mysql"
+    return v
+
+def _chroma_candidates(db) -> int:
+    """Chroma 单次召回的候选条数（后续还会按角色/通道/阈值过滤）。"""
+    try:
+        return max(5, int(config_service.get_config("rag_chroma_candidates", db)))
+    except Exception:
+        return CHROMA_FETCH_LIMIT
+
+def _to_bool(v) -> bool:
+    """把配置值宽松地转成布尔（兼容 True/1/'1'/'true'/'on' 等写法）。"""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return str(v or "").strip().lower() in ("1", "true", "yes", "on")
 
 def _rrf_k(db) -> int:
     """RRF 融合的平滑常数 k（公式 1/(k+排名)）。"""
@@ -670,7 +709,9 @@ def rebuild_index(db, force: bool = False) -> dict:
                 vec_row.model = model; updated += 1
 
     db.commit()
-    return {
+
+    # ⑥ 同步向量到 Chroma（后端选 chroma 时）；MySQL 的 ai_vectors 仍然保留作为备份
+    result = {
         "model": model, "dim": EMBED_DIM,
         "total": len(plan),
         "parent_chunks": sum(1 for p in plan if p.get("is_parent")),
@@ -678,6 +719,88 @@ def rebuild_index(db, force: bool = False) -> dict:
         "added": added, "updated": updated, "skipped": skipped, "removed": removed,
         "pending": max(0, len(pending) - added - updated), "errors": errors,
     }
+    backend = _vector_backend(db)
+    result["vector_backend"] = backend
+    if backend == "chroma":
+        result["chroma"] = sync_chroma(db, force=force)
+    return result
+
+
+def sync_chroma(db, force: bool = False) -> dict:
+    """把 MySQL 里的向量全量同步到 Chroma 向量库。
+
+    在 RAG 流程中的位置：数据准备阶段（ETL）的最后一步，紧随向量写入 MySQL 之后。
+    幂等：Chroma 里已有的按 id 覆盖，MySQL 里已不存在的从 Chroma 删除。
+
+    为什么保留 MySQL 这一份：
+        ai_chunks 是片段元数据的唯一真相源；ai_vectors 作为可回退的备份。
+        Chroma 损坏或需要换 embedding 模型时，可以直接从 MySQL 重建，不必重调接口。
+
+    参数：
+        db: 数据库会话
+        force: True 时先清空集合再全量写入（换模型/维度、或索引疑似损坏时用）
+
+    返回：
+        dict{ok, error, written, removed, total}
+    """
+    from models import AiChunk, AiVector
+    from rag import chroma_store as cs
+
+    if not cs.available():
+        return {"ok": False, "error": "chromadb 未安装，已跳过同步",
+                "written": 0, "removed": 0, "total": 0}
+
+    try:
+        if force:
+            cs.clear()
+
+        # 只同步「已启用」的片段；父块本来就没有向量，不会出现在 ai_vectors 里
+        rows = (db.query(AiVector, AiChunk)
+                .join(AiChunk, AiVector.chunk_id == AiChunk.id)
+                .all())
+
+        ids, embs, metas = [], [], []
+        wanted = set()
+        for v, c in rows:
+            if int(c.enabled or 0) != 1:
+                continue
+            try:
+                vec = json.loads(v.embedding or "null")
+            except Exception:
+                continue
+            # 维度与当前模型不一致的旧向量跳过（等重新向量化）
+            if not isinstance(vec, list) or len(vec) != EMBED_DIM:
+                continue
+            cid = int(c.id)
+            wanted.add(str(cid))
+            ids.append(str(cid))
+            embs.append(vec)
+            metas.append({
+                "chunk_id": cid,
+                "source_type": c.source_type or "",
+                "source_key": c.source_key or "",
+                "chunk_index": int(c.chunk_index or 0),
+                "parent_id": int(c.parent_id or 0),
+                "role": c.role or "",
+                "enabled": 1,
+            })
+
+        written = cs.upsert_rows(ids, embs, metas) if ids else 0
+
+        # 清理 Chroma 中已失效的 id（源文档被删、片段被切分替换等）
+        removed = 0
+        try:
+            stale = [x for x in cs.all_ids() if x not in wanted]
+            if stale:
+                removed = cs.delete_ids(stale)
+        except Exception:
+            removed = 0
+
+        return {"ok": True, "error": "", "written": written,
+                "removed": removed, "total": cs.count()}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}",
+                "written": 0, "removed": 0, "total": 0}
 
 
 def stats(db) -> dict:
@@ -697,12 +820,25 @@ def stats(db) -> dict:
     ready_count = len(vec_rows)
     models = sorted({(v.model or "") for v in vec_rows if v.model})
     dims = sorted({int(v.dim or 0) for v in vec_rows if v.dim})
+
+    # 向量后端信息：让管理员能在界面上看到「现在用的是谁、索引里有多少条」
+    backend = _vector_backend(db)
+    chroma_info = {}
+    try:
+        from rag import chroma_store as cs
+        chroma_info = cs.stats()
+    except Exception as e:
+        chroma_info = {"available": False, "ready": False, "count": -1,
+                       "path": "", "size_mb": 0.0, "collection": "", "error": str(e)}
+
     return {
         "total_chunks": len(rows), "parent_chunks": parent_count, "child_chunks": child_count,
         "ready_chunks": ready_count, "missing_chunks": len(rows) - ready_count,
         "by_type": by_type, "chars": sum(len(r.content or "") for r in rows),
         "models": models, "dims": dims,
         "last_built": max((v.updated_at for v in vec_rows if v.updated_at), default=None),
+        "vector_backend": backend,
+        "chroma": chroma_info,
     }
 
 
@@ -720,6 +856,15 @@ def drop_source(db, source_type: str, source_key: str) -> int:
          .filter(AiChunk.source_type == source_type)
          .filter(AiChunk.source_key == str(source_key))
          .delete(synchronize_session=False))
+
+    # 同步清掉 Chroma 里的对应向量，否则 AI 仍能检索到已删除的内容。
+    # 失败不阻断主流程（重建索引时会做一次全量对齐）。
+    if chunk_ids and _vector_backend(db) == "chroma":
+        try:
+            from rag import chroma_store as cs
+            cs.delete_ids([str(i) for i in chunk_ids])
+        except Exception:
+            pass
     return int(n or 0)
 
 

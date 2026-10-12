@@ -1,5 +1,86 @@
 # 更新日志 CHANGELOG
 
+## [V4.8.0] 2026-10-12
+
+### ✨ 引入 Chroma 向量数据库：向量存储从"MySQL 表 + 全表扫描"升级为 HNSW 索引召回
+
+起因是一个直球问题：**这个项目的向量数据库用的是哪个？**
+核对之后的答案是——**项目里没有向量数据库**。向量以 JSON 字符串躺在
+MySQL 的 `ai_vectors.embedding`（TEXT 列）里，检索时把整张表读进内存、
+逐条 `json.loads`、再用纯 Python 算余弦相似度，是 O(N) 全表扫描。
+片段涨到几千条时，每次提问都要把全部向量搬进内存，这条路走不远。
+
+#### ① 数据分工：MySQL 管事实，Chroma 管召回
+
+没有把 MySQL 换掉，而是明确分工——这是本次改造最重要的一个决定：
+
+| 存放位置 | 职责 | 说明 |
+|---|---|---|
+| `ai_chunks` | **片段元数据的唯一真相源** | 标题、角色、父子关系、正文 |
+| `ai_vectors` | 向量备份与回退路径 | 原实现保留，MySQL 后端仍可读 |
+| Chroma | **向量 + 最小过滤元数据** | 只负责快速召回 chunk_id |
+
+这样做的好处是：父子分块、AutoMerging、角色过滤、通道过滤、RRF 融合
+这些既有逻辑**一行都不用改**——Chroma 只替换「向量 → 候选片段」这一步，
+命中后仍然回表 MySQL 取正文和标题。
+Chroma 里存的 metadata：`chunk_id / source_type / source_key / chunk_index / parent_id / role / enabled`。
+
+#### ② 双后端可切换 + 自动降级
+
+新增系统参数 **`rag_vector_backend`**（选项形式）：
+
+| 取值 | 行为 |
+|---|---|
+| `chroma`（默认） | 走本地 Chroma 集合，HNSW 近似最近邻索引召回 |
+| `mysql` | 读 `ai_vectors` 全表逐条算余弦（兜底，零外部依赖） |
+
+**chromadb 没装或导入失败时，即使配置选了 chroma 也会自动降级为 mysql**，
+不会因为一个可选依赖缺失就让整个问答流程挂掉。参数组「向量存储」还提供
+`rag_chroma_candidates`（默认 50），控制单次召回的候选条数——
+多取一些是为了给角色过滤、通道过滤、`min_score` 阈值留出被筛掉的余量。
+
+#### ③ 过滤条件下推到索引层
+
+Chroma 的 `where` 条件直接带 `enabled` / `role` / `source_type` 过滤，
+而不是「先取回全部再在 Python 里筛」：
+
+- `enabled = 1` 恒为必要条件；
+- 按角色过滤时用 `role ∈ ["", 当前角色]`——空串表示该片段对全角色可见；
+- 多路召回时按通道限定 `source_type`（`document` / `faq`）。
+
+distance 空间用 `cosine`，检索时 `score = 1 - distance`，
+与原纯 Python 余弦**口径完全对齐**。
+
+#### ④ 索引写入与清理同步
+
+新增 `sync_chroma()`：全量对齐、幂等，重建索引的第 ⑥ 步自动执行；
+换 embedding 模型或索引损坏时可用 `force=True` 先清空再重建。
+文档被删除时 `drop_source()` 会同步清掉 Chroma 里对应的向量，
+否则 AI 仍能检索到已经删掉的内容。
+
+管理员界面「知识库管理」现在会显示向量存储的实际状态：
+用的是 Chroma 还是 MySQL、集合名、集合内向量条数、磁盘占用。
+
+#### ⑤ 顺手修掉一个真实缺陷
+
+`chroma_store.is_ready()` 原本判的是「进程内单例是否非空」，
+而 `stats()` 的字典按顺序求值，`ready` 的判定发生在懒加载之前，
+于是**永远返回 False**，前端会误报成「Chroma 没启用」。
+改为以「集合能否打开」为判据。
+
+#### 验证
+
+| 项目 | 结果 |
+|---|---|
+| 向量同步 | 写入 **141** 条，集合内 141 条，占用 1.3 MB |
+| 两路召回对比 | 同一问题下 chroma 与 mysql 返回的 **chunk id 与分数完全相同** |
+| 端到端问答 | 老板账号提问「退款怎么退」，AI 正确引用退款条款作答 |
+| 项目自检 | `check_schema --strict`、`check_consistency --strict` 全部通过 |
+
+安装与依赖：`pip install chromadb==1.5.9`（已登记进 `requirements.txt`；
+会自带 numpy / onnxruntime 等传递依赖）。本地向量文件生成在
+`backend/chroma_db/`，属于运行时产物，**已加入 `.gitignore`，不入库**。
+
 ## [V4.7.0] 2026-10-10
 
 ### ✨ 评估数据集按"覆盖性 / 代表性 / 可维护性"重构

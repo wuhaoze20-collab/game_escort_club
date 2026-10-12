@@ -1,4 +1,4 @@
-﻿annotated-doc==0.0.5
+annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 bcrypt==5.0.0
@@ -41,3 +41,6 @@ urllib3==2.7.0
 uvicorn==0.52.4
 watchfiles==1.2.0
 websockets==17.1
+
+# 向量数据库：本地持久化 + HNSW 近似最近邻索引（会自带 numpy / onnxruntime 等依赖）
+chromadb==1.5.9

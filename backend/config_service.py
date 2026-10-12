@@ -237,6 +237,23 @@ CONFIG_META: dict[str, dict] = {
                 "0.5 = 命中一半就合并；调小更容易合并，调大则更倾向只返回命中片段",
     },
 
+    # —— 向量存储：向量放哪、用什么索引召回 ——
+    "rag_vector_backend": {
+        "default": "chroma", "type": "select", "group": "向量存储", "label": "向量检索后端",
+        "options": [
+            {"value": "chroma", "label": "Chroma 向量库（HNSW 索引，推荐）"},
+            {"value": "mysql", "label": "MySQL 全表扫描（纯 Python 余弦，兜底）"},
+        ],
+        "desc": "chroma：向量写入本地 Chroma 集合，用 HNSW 近似最近邻索引召回，片段多时更快；"
+                "mysql：读 ai_vectors 全表逐条算余弦，无索引但零依赖。"
+                "chromadb 未安装时，即使选 chroma 也会自动降级为 mysql",
+    },
+    "rag_chroma_candidates": {
+        "default": 50, "type": "int", "group": "向量存储", "label": "Chroma 召回候选数",
+        "desc": "Chroma 每次检索先取回多少条候选，再按角色/通道过滤。调大召回更全但回表更多，"
+                "调小更快但可能漏掉结果。建议设为最终 top_k 的 5~10 倍",
+    },
+
     # —— 融合与召回：控制多路召回的数量与 RRF 融合的排序强弱 ——
     # 这些参数直接影响「哪些片段能进候选池、候选怎么排序」，是调参最见效的一组
     "rag_rrf_k": {
