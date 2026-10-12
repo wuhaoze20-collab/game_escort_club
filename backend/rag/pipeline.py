@@ -239,16 +239,22 @@ class ModularRAG:
         if use_relevance_filter and final_ordered:
             try:
                 # 提取候选片段的纯文本内容（取前 top_k*2 个供大模型筛选）
+                # 三路来源的文本载体不同，都要认出来，否则该路候选会被当成
+                # "空文本"跳过打分，随后被过滤后的集合排除掉——图谱事实就
+                # 是这样被无声丢掉的（它只存了 graph 文档，没有 chunk/faq）。
                 candidate_texts = []
                 candidate_keys = []
                 for key, _score in final_ordered[:tk * 2]:
                     item = pool.get(key) or {}
                     chunk = item.get("chunk")
                     faq_row = item.get("faq")
+                    graph_doc = item.get("graph")
                     if faq_row is not None:
                         text = f"问：{faq_row.question} 答：{faq_row.answer}"
                     elif chunk is not None:
                         text = chunk.content or ""
+                    elif graph_doc is not None:
+                        text = getattr(graph_doc, "content", "") or ""
                     else:
                         continue
                     if text.strip():
@@ -408,7 +414,11 @@ class ModularRAG:
                 "node_name": meta.get("node_name", ""),
                 "match_field": meta.get("match_field", ""),
                 "score": round(float(getattr(doc, "score", 0) or 0), 4),
-                "content": (getattr(doc, "content", "") or "")[:200],
+                # 截断放宽到 600：评估模块要把这段文本当成"检索到的上下文"
+                # 去算 Faithfulness/Recall，而图谱的关键数字（好评率、消费额、
+                # 接单数）都在事实正文的后半段，原先的 200 字符会把它们切掉，
+                # 导致 AI 明明照着实答，却被判成"上下文里没有、属于编造"。
+                "content": (getattr(doc, "content", "") or "")[:600],
             })
 
         debug.update({

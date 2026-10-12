@@ -30,10 +30,11 @@
     RAG 少了这一路照样能答，只是回答不了关系型问题。
 """
 
+import re
+
 # 与 kg/schema.py 保持一致（这里不直接 import，避免 rag 包对 kg 包产生硬依赖：
 # 图谱没装驱动时，rag 仍然要能正常 import）
 _SENSITIVE_FIELDS = {"balance", "consume_amount", "backend_amount", "total_amount"}
-
 # 字段中文名（复用 kg.schema 的登记表；取不到时回退英文字段名）
 _FIELD_CN = {
     "username": "账户名", "nickname": "昵称", "order_count": "点单次数",
@@ -56,8 +57,9 @@ _NAME_FIELD = {
 # pending_* / boss_username 之类）是图谱同步带进来的内部字段或冗余信息——
 # 全铺出来不但把上下文预算吃光，还会让大模型抓错重点。
 _KEY_FIELDS = {
-    "Boss": ["username", "order_count", "balance"],
-    "Player": ["username", "level_type", "tech_level", "good_rate", "order_count"],
+    "Boss": ["username", "order_count", "consume_amount", "balance"],
+    "Player": ["username", "level_type", "tech_level", "good_rate",
+               "order_count", "complaint_count"],
     "Order": ["game_type", "status", "duration_min"],
     "Game": ["order_count"],
     "Tag": [],
@@ -69,6 +71,11 @@ _MAX_EDGES_PER_REL = 4
 
 # 整条事实的硬上限（标题 + 所有边）。超过就截断，保证一条事实不会独占上下文预算。
 _MAX_LINES = 14
+
+# 「本人兜底」的触发条件：问题里得有自称词。
+# 少了这一条，任何一道 boss/player 的题（"大狗币兑换比例是多少"）都会被兜底命中，
+# 把本人的订单列表塞进完全不相关的上下文里。
+_SELF_REF_RE = re.compile(r"我|自己|本人|咱|自家")
 
 # 节点标签 → 中文名
 _LABEL_CN = {
@@ -253,10 +260,16 @@ class GraphRetriever:
         # 兜底：老板/打手问题里没写自己名字时，默认拿本人节点去查
         # （"我的订单""我这个月赚了多少"都不会出现账户名）
         #
-        # 但如果问题里**明明提到了别的实体**（账户名、订单号……），只是当前角色
-        # 没权限看，就绝不能兜底——否则打手问"laoban 的余额是多少"会被悄悄换成
-        # "你自己的记录"，答非所问还容易让人以为看到了别人的数据。
-        if not seeds and not blocked and role in ("boss", "player") and username:
+        # 但必须满足两个条件，否则不能兜底：
+        #   ① 问题里**没有**提到别的实体。若提到了只是没权限看，
+        #      兜底会把"看看 laoban 的余额"悄悄换成"你自己的记录"，答非所问，
+        #      还容易让人以为看到了别人的数据。
+        #   ② 问题里出现了**自称词**（我 / 自己 / 本人 / 咱…）。这是判断
+        #      "问的是不是自己"的唯一可靠线索。少了这一条，任何一道
+        #      boss/player 的题都会被兜底命中，把本人的订单列表硬塞进
+        #      "大狗币兑换比例是多少"这种完全不相关的上下文里。
+        if (not seeds and not blocked and role in ("boss", "player") and username
+                and _SELF_REF_RE.search(question or "")):
             want = "Boss" if role == "boss" else "Player"
             try:
                 own = store.run(
@@ -406,13 +419,18 @@ class GraphRetriever:
 
         参数 role 决定敏感字段是否遮蔽——老板的余额、打手的后台金额
         对非管理员一律不出现，避免 AI 把不该说的数字说出去。
+        但「本人看自己」是例外：老板问"我一共消费了多少"时，
+        消费金额就是他自己的账，遮掉等于答不出题（评估里这道题长期 0 分）。
+        所以兜底命中的那条事实（match_field == "self"）按本人放行。
         """
         is_admin = role in ("admin", "service")
+        is_self = (fact.get("match_field") == "self")
         label = fact["label"]
         lines = []
 
         head = f"· 【图谱事实】{_LABEL_CN.get(label, label)} {fact['node_name']}"
-        own = self._render_props(label, fact.get("props") or {}, is_admin, limit=3)
+        own = self._render_props(label, fact.get("props") or {}, is_admin,
+                                 limit=6, is_self=is_self)
         if own:
             head += "（" + "，".join(own) + "）"
         lines.append(head)
@@ -429,9 +447,9 @@ class GraphRetriever:
                 arrow = "—" + rel_cn + "→" if e["out"] else "←" + rel_cn + "—"
                 peer = f"{_LABEL_CN.get(e['peer_label'], e['peer_label'])} {e['peer_name']}"
                 # 打手/老板这类"人"的邻居，好评率和等级比账户名更值得看，
-                # 所以多给一个字段位（limit=3）
+                # 所以多给几个字段位（limit=4）
                 detail = self._render_props(e["peer_label"], e["peer_props"],
-                                            is_admin, limit=3)
+                                            is_admin, limit=4)
                 if detail:
                     peer += "（" + "，".join(detail) + "）"
                 lines.append(f"  {arrow} {peer}")
@@ -449,14 +467,20 @@ class GraphRetriever:
         return lines
 
     def _render_props(self, label: str, props: dict, is_admin: bool,
-                      limit: int = 3) -> list:
+                      limit: int = 6, is_self: bool = False) -> list:
         """把节点属性渲染成"中文名 值"的短串列表。
 
         只取 _KEY_FIELDS 里登记的字段，按登记顺序输出——顺序稳定，
         大模型每次看到的字段排列一致，更容易学会怎么读。
         节点自己的"名字"字段（如订单号）已经出现在标题或边上，这里跳过不重复。
 
-        敏感字段（余额、后台金额、订单金额）对非管理员直接跳过——
+        关于 limit：原先给的是 3，但 Player 登记的字段有 5~6 个，
+        前 3 个恰好是账户名/等级类型/技术等级，把「好评率」「接单次数」
+        挤掉了——而这两个正是"这个打手好评率多少"的答案所在。
+        评估里表现为：图谱明明召回了节点，回答却答不出数字，白白浪费一次召回。
+        现在放宽到 6，让登记过的字段基本都能露出来。
+
+        敏感字段（余额、累计消费、后台金额、订单金额）对非管理员直接跳过——
         不是显示成 0，而是根本不出现，避免被误读成"余额是 0"。
         """
         out = []
@@ -467,7 +491,7 @@ class GraphRetriever:
             val = props.get(field)
             if val is None or val == "":
                 continue
-            if field in _SENSITIVE_FIELDS and not is_admin:
+            if field in _SENSITIVE_FIELDS and not (is_admin or is_self):
                 continue
             out.append(f"{_FIELD_CN.get(field, field)} {self._fmt(field, val)}")
             if len(out) >= limit:

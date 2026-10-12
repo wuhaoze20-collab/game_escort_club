@@ -186,17 +186,35 @@ class CrossEncoderReranker:
         2. 从文本中提取JSON块
         3. 用正则提取数字
         4. 全部失败则返回全0.5（中性分）
+
+        关于「分数个数」：模型偶尔会少返回几个（候选多时尤其明显）。
+        早先的实现要求 `len(scores) >= expected_count`，只要少一个就整批放弃、
+        退化成全 0.5 —— 而全 0.5 排完序等于原序不动，这一轮重排序就白跑了。
+        现在改成按数量补足：返回几个就用几个，缺的位置补 0.0（视作未评价）。
         """
         reply = (reply or "").strip()
         if not reply:
             return [0.5] * expected_count
 
+        def _fit(scores) -> List[float]:
+            """截到 expected_count 个，不足的补 0.0。"""
+            out = []
+            for s in scores[:expected_count]:
+                try:
+                    v = float(s)
+                except (TypeError, ValueError):
+                    v = 0.0
+                out.append(min(1.0, max(0.0, v)))
+            if len(out) < expected_count:
+                out.extend([0.0] * (expected_count - len(out)))
+            return out
+
         # 方式1：直接解析JSON
         try:
             data = json.loads(reply)
             scores = data.get("scores", [])
-            if isinstance(scores, list) and len(scores) >= expected_count:
-                return [float(s) for s in scores[:expected_count]]
+            if isinstance(scores, list) and scores:
+                return _fit(scores)
         except Exception:
             pass
 
@@ -206,8 +224,8 @@ class CrossEncoderReranker:
             if match:
                 data = json.loads(match.group())
                 scores = data.get("scores", [])
-                if isinstance(scores, list) and len(scores) >= expected_count:
-                    return [float(s) for s in scores[:expected_count]]
+                if isinstance(scores, list) and scores:
+                    return _fit(scores)
         except Exception:
             pass
 
@@ -216,7 +234,7 @@ class CrossEncoderReranker:
             nums = re.findall(r'0?\.\d+|1\.0|1|0', reply)
             floats = [float(n) for n in nums if 0 <= float(n) <= 1]
             if len(floats) >= expected_count:
-                return floats[:expected_count]
+                return _fit(floats)
         except Exception:
             pass
 

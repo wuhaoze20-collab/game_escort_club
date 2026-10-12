@@ -581,6 +581,7 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
         }
     """
     from rag.pipeline import ModularRAG
+    from models import User
 
     # 优先用传入的 test_set；否则从数据库读取启用的测试题；数据库为空时回退到内置默认集
     # 角色过滤：role 为具体角色时只评估该角色的题目（分角色题库）；
@@ -598,6 +599,16 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
     results = []
     start = time.time()
 
+    # 图谱通道需要知道「当前是谁在问」——老板/打手只能看到自己那个节点。
+    # 评估场景没有登录用户，这里按题目角色取该角色的第一个真实账户。
+    # 不补这一步，username 为空，图谱通道对 boss/player 题目会全程空转，
+    # 「图谱开关开/关」对比就永远测不出差异。
+    username_by_role = {}
+    for role_key in ("boss", "player"):
+        row = db.query(User).filter(User.role == role_key).order_by(User.id).first()
+        if row:
+            username_by_role[role_key] = row.username
+
     for i, item in enumerate(test_set):
         question = item["question"]
         ground_truth = item["ground_truth"]
@@ -607,7 +618,8 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
 
         # ① 检索：用 debug 模式拿到检索到的原始片段
         debug = {}
-        context = rag.query(question, q_role, debug=debug)
+        context = rag.query(question, q_role, debug=debug,
+                            username=username_by_role.get(q_role))
 
         # 从 debug 信息中提取检索到的片段文本
         retrieved_chunks = _extract_chunks_from_debug(debug, db)
@@ -636,7 +648,15 @@ def evaluate_rag(db, test_set: List[Dict] = None, role: str = "boss",
             try:
                 import ai_service
                 # 把检索到的上下文拼进 system prompt，让 AI 基于上下文回答
-                context_text = "\n\n".join(retrieved_chunks[:3]) if retrieved_chunks else "（无检索上下文）"
+                # 优先用 rag.query() 返回的最终上下文——它就是线上真正喂给
+                # 大模型的那份文本（已过 top_k / max_chars / 相关性过滤）。
+                # 早前是从 debug 重拼并取前 3 段，而图谱事实排在向量、关键词
+                # 之后，永远进不了前 3 段，等于"图谱开了但生成阶段看不到"，
+                # 端到端指标自然体现不出图谱的作用。
+                context_text = (context or "").strip()
+                if not context_text:
+                    context_text = ("\n\n".join(retrieved_chunks[:3])
+                                    if retrieved_chunks else "（无检索上下文）")
                 system_prompt = (
                     "你是「大狗嚼电竞」的AI客服布鲁斯。请根据下面的参考资料回答用户问题。"
                     "如果资料中没有相关信息，请如实说明，不要编造。\n\n"
@@ -758,6 +778,15 @@ def _extract_chunks_from_debug(debug: dict, db) -> List[str]:
             if q and q not in seen:
                 chunks.append(f"问：{q}")
                 seen.add(q)
+
+    # 从图谱检索结果提取（实体关系事实）。
+    # 图谱是第三路召回，漏掉它，指标就只反映了向量+关键词两路的水平，
+    # 「图谱开关开/关」的对比也就失去了依据。
+    for gh in (debug.get("graph_hits") or []):
+        content = gh.get("content", "")
+        if content and content not in seen:
+            chunks.append(content)
+            seen.add(content)
 
     return chunks
 
