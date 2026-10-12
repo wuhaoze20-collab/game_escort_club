@@ -33,6 +33,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE_DIR)
 INDEX_HTML = os.path.join(ROOT, "frontend", "index.html")
 API_DIR = os.path.join(BASE_DIR, "api")
+# 除 api/ 之外，还可能有独立的业务包自带路由。
+# 例如知识图谱的端点写在 kg/api.py（api/kg_api.py 只做一行转发），
+# 不扫这里就会把 /api/kg/* 误判成"前端调了不存在的接口"。
+EXTRA_ROUTE_DIRS = [os.path.join(BASE_DIR, "kg")]
 
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
@@ -123,6 +127,21 @@ def parse_routes():
         for m in re.finditer(r'@router\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)["\']', src):
             route_set.add((m.group(1).upper(), prefix + m.group(2)))
             path_set.add(norm_path(prefix + m.group(2)))
+
+    for d in EXTRA_ROUTE_DIRS:
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".py"):
+                continue
+            src = open(os.path.join(d, fn), encoding="utf-8").read()
+            pm = re.search(r'APIRouter\(\s*prefix\s*=\s*["\']([^"\']*)["\']', src)
+            if not pm:
+                continue
+            prefix = pm.group(1)
+            for m in re.finditer(r'@router\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)["\']', src):
+                route_set.add((m.group(1).upper(), prefix + m.group(2)))
+                path_set.add(norm_path(prefix + m.group(2)))
 
     # 应用级路由（@app.get(...) 等），如 main.py 的首页 "/"
     main_py = os.path.join(BASE_DIR, "main.py")

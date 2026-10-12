@@ -18,6 +18,28 @@ def _rate(db: Session) -> float:
     """俱乐部抽成比例，取自 system_config（后台可改，默认 0.3）"""
     return config_service.commission_rate(db)
 
+
+def _kg_sync(db: Session, order: Order) -> None:
+    """把订单同步进知识图谱（「后续新订单都存进图谱」的落点）。
+
+    在每个订单状态变更接口的 db.commit() 之后调用：
+    下单时建立 Boss-Order 链路，接单时补上 Player 与 SERVED / HIRED 关系，
+    结单时把状态刷新成最新。
+
+    **这是旁路操作**：图谱写失败绝不能影响下单、结单这些主流程，
+    所以整段包在 try 里，失败只打印一行日志。
+    """
+    try:
+        if not config_service.get_config("kg_enabled", db):
+            return
+        if not config_service.get_config("kg_auto_sync_order", db):
+            return
+        from kg import sync as kg_sync
+        kg_sync.sync_order(db, order)
+    except Exception as e:
+        print(f"[kg] 订单入图失败（订单 {getattr(order, 'order_no', '?')}）："
+              f"{type(e).__name__}: {e}")
+
 # 创建订单（管理员、客服、老板可创建）
 @router.post("/create", response_model=OrderResponse)
 def create_order(
@@ -109,6 +131,7 @@ def create_order(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 新订单入知识图谱
     return order
 
 # 分配打手（管理员、客服可操作）
@@ -152,6 +175,7 @@ def assign_player(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 打手接受订单（根据老板备注自行决定是否接单）
@@ -173,6 +197,7 @@ def accept_order(
     order.status = "assigned"
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     
     # 给老板发通知
     boss_user = db.query(User).filter(User.username == order.boss_username).first()
@@ -221,6 +246,7 @@ def reject_order(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 开始服务
@@ -252,6 +278,7 @@ def start_order(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 结算订单（完成订单并生成工资记录，金额入账）
@@ -316,6 +343,7 @@ def submit_settlement(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 老板确认结单（金额转入打手账户；管理员/客服也可代为确认）
@@ -343,6 +371,7 @@ def confirm_settlement(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 完成订单并结算（管理员/客服直接完成）
@@ -367,6 +396,7 @@ def complete_order(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 取消订单
@@ -400,6 +430,7 @@ def cancel_order(
     
     db.commit()
     db.refresh(order)
+    _kg_sync(db, order)   # 订单状态变更后刷新图谱
     return order
 
 # 获取订单列表（带老板/打手昵称与头像）

@@ -43,6 +43,7 @@ from api.config_api import router as config_router
 from api.ai_api import router as ai_router
 from api.ai_prompt_api import router as ai_prompt_router
 from api.ai_rag_api import router as ai_rag_router
+from api.kg_api import router as kg_router
 
 # 创建数据库表
 Base.metadata.create_all(bind=engine)
@@ -189,6 +190,7 @@ app.include_router(config_router)
 app.include_router(ai_router)
 app.include_router(ai_prompt_router)
 app.include_router(ai_rag_router)
+app.include_router(kg_router)
 
 # 结单后3天未评价的订单自动默认好评（后台线程，每5分钟扫描一次）
 @app.on_event("startup")
@@ -249,6 +251,40 @@ def init_quotes_and_config():
 
 
 init_quotes_and_config()
+
+
+# 知识图谱：启动时自检连通性；若图谱还是空的，自动从 MySQL 同步一次。
+# 它只是"旁路"，任何失败都只打印一行日志，不影响后端启动与其它功能。
+def init_knowledge_graph():
+    try:
+        from kg import store as kg_store, sync as kg_sync
+        if not kg_store.available():
+            print("[kg] 未安装 neo4j 驱动，知识图谱功能关闭（需要时 pip install neo4j）")
+            return
+        if not kg_store.configured():
+            print("[kg] 未配置 NEO4J_PASSWORD，知识图谱功能关闭（见 backend/.env）")
+            return
+        if not kg_store.is_ready():
+            print("[kg] 无法连接 Neo4j，知识图谱功能本次跳过（请确认 Neo4j 服务已启动）")
+            return
+
+        if kg_sync.is_empty():
+            db = SessionLocal()
+            try:
+                r = kg_sync.sync_all(db)
+            finally:
+                db.close()
+            print(f"[kg] 图谱为空，已自动同步：老板 {r['bosses']} 个、打手 {r['players']} 个、"
+                  f"订单 {r['orders']} 笔、游戏 {r['games']} 个")
+        else:
+            st = kg_store.stats()
+            print(f"[kg] 知识图谱就绪：{st['nodes']} 个节点 / {st['rels']} 条关系")
+    except Exception as e:
+        print(f"[kg] 知识图谱初始化异常（不影响其它功能）：{e}")
+
+
+init_knowledge_graph()
+
 
 @app.get("/")
 def root():

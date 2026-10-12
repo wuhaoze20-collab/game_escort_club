@@ -44,3 +44,6 @@ websockets==17.1
 
 # 向量数据库：本地持久化 + HNSW 近似最近邻索引（会自带 numpy / onnxruntime 等依赖）
 chromadb==1.5.9
+
+# 图数据库驱动：知识图谱（老板 / 打手 / 订单 / 游戏 / 标签）走 Neo4j Bolt 协议
+neo4j==6.4.0

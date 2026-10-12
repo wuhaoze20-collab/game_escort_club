@@ -1383,6 +1383,42 @@
                     <div id="quote-table" class="space-y-2"><div class="loading">加载中...</div></div>
                 </section>
 
+                <!-- 16.11 知识图谱（仅管理员）：老板/打手/订单/游戏/标签的实体关系图 -->
+                <section id="page-kg-graph" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-800">知识图谱</h2>
+                            <p class="text-sm text-gray-500 mt-1">老板、打手、订单、游戏、标签以实体和关系的形式存进 Neo4j。新产生的订单会自动入图。</p>
+                            <p class="text-xs text-gray-400 mt-1">滚轮缩放 · 拖住空白处平移 · 双击复位 · 点击节点看明细</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="loadKgGraph()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                            <button onclick="rebuildKgGraph()" class="px-4 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">重建图谱</button>
+                        </div>
+                    </div>
+
+                    <div id="kg-status" class="text-sm mb-4"></div>
+
+                    <div class="flex flex-wrap items-center gap-2 mb-3">
+                        <span class="text-xs text-gray-500">节点类型：</span>
+                        <div id="kg-filters" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="flex gap-2 mb-4">
+                        <input id="kg-search" type="text" placeholder="搜索老板 / 打手 / 订单号 / 游戏 / 标签名…" onkeydown="if(event.key==='Enter')searchKgGraph()" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="searchKgGraph()" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">搜索</button>
+                        <button onclick="clearKgSearch()" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">返回全图</button>
+                    </div>
+
+                    <div id="kg-canvas" style="position:relative;width:100%;height:540px;border-radius:12px;overflow:hidden;background-color:rgba(128,128,128,0.05)">
+                        <svg id="kg-svg" style="width:100%;height:100%;display:block"></svg>
+                        <div id="kg-empty" style="position:absolute;left:0;right:0;top:0;bottom:0;display:none;align-items:center;justify-content:center;font-size:14px;color:var(--text-card-muted);padding:0 24px;text-align:center"></div>
+                    </div>
+
+                    <div id="kg-legend" class="flex flex-wrap gap-4 mt-4 text-xs"></div>
+                    <div id="kg-detail" style="display:none" class="mt-4 rounded-xl p-4" style="background-color:rgba(128,128,128,0.06)"></div>
+                </section>
+
                 <!-- 16.10 RAG 调试（仅管理员）：RAG 参数、模块开关、知识库管理、量化评估集中在此 -->
                 <section id="page-rag-debug" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -2474,6 +2510,7 @@
                     { key: 'ai-prompt', label: '提示词管理' },
                     { key: 'ai-faq', label: 'AI 问答库' },
                     { key: 'rag-debug', label: 'RAG 调试' },
+                    { key: 'kg-graph', label: '知识图谱' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2957,6 +2994,450 @@
             body.style.display = collapsed ? '' : 'none';
             const arrow = body.previousElementSibling.querySelector('.cfg-group-arrow');
             if (arrow) arrow.style.transform = collapsed ? '' : 'rotate(-90deg)';
+        }
+
+        // ==================== 知识图谱 ====================
+        // 数据来自 /api/kg/graph（节点 + 边，后端已按角色过滤敏感字段）。
+        // 布局用最朴素的力导向：斥力把节点推开、连线把两端拉近、再拉向中心，
+        // 跑固定轮数就停（不做持续动画，避免页面一直重绘耗电）。
+        let kgData = { nodes: [], edges: [] };
+        let kgMeta = { types: [], relations: [] };
+        let kgActiveTypes = [];          // 空数组 = 不筛选，显示全部类型
+        let kgPos = {};                  // "Label:key" -> {x, y}
+        let kgDrag = null;               // 拖拽中的节点
+        let kgView = { w: 1680, h: 940 }; // SVG 逻辑坐标系（比容器大，节点才铺得开）
+
+        async function loadKgGraph() {
+            const q = kgActiveTypes.length ? ('?labels=' + kgActiveTypes.join(',')) : '';
+            try {
+                const data = await apiRequest('/api/kg/graph' + q);
+                kgData = { nodes: data.nodes || [], edges: data.edges || [] };
+                if (data.types && data.types.length) kgMeta.types = data.types;
+                if (data.relations && data.relations.length) kgMeta.relations = data.relations;
+
+                renderKgStatus(data);
+                renderKgFilters();
+                renderKgLegend();
+
+                if (data.available === false) {
+                    showKgEmpty(data.reason || '知识图谱未启用');
+                    return;
+                }
+                if (!kgData.nodes.length) {
+                    showKgEmpty(data.reason || '图谱中还没有数据，点右上角「重建图谱」从数据库同步一次');
+                    return;
+                }
+                hideKgEmpty();
+                layoutKg();
+                drawKg();
+            } catch (e) {
+                showKgEmpty('加载失败：' + (e && e.message ? e.message : e));
+            }
+        }
+
+        function renderKgStatus(data) {
+            const box = document.getElementById('kg-status');
+            const n = (data.nodes || []).length;
+            const total = data.total_nodes != null ? data.total_nodes : n;
+            let html = '<span class="text-gray-600">当前显示 <b>' + n + '</b> 个节点'
+                     + (total > n ? '（全库共 ' + total + ' 个，已截断）' : '') + '</span>';
+            if (data.self_only) {
+                html += ' <span class="text-amber-600 ml-2">（你只能看到与自己相关的部分）</span>';
+            }
+            if (data.available === false) {
+                html = '<span class="text-amber-600">' + escapeHtml(data.reason || '图谱不可用') + '</span>';
+            }
+            box.innerHTML = html;
+        }
+
+        function renderKgFilters() {
+            const box = document.getElementById('kg-filters');
+            box.innerHTML = kgMeta.types.map(function (t) {
+                const on = kgActiveTypes.indexOf(t.label) !== -1;
+                const style = on
+                    ? 'background:' + t.color + ';color:#fff;border-color:' + t.color
+                    : 'background:transparent;color:inherit;border-color:rgba(128,128,128,0.4)';
+                return '<button onclick="toggleKgType(\'' + t.label + '\')" '
+                     + 'class="px-3 py-1 text-xs rounded-full border transition" style="' + style + '">'
+                     + escapeHtml(t.name) + '</button>';
+            }).join('');
+        }
+
+        function toggleKgType(label) {
+            const i = kgActiveTypes.indexOf(label);
+            if (i === -1) kgActiveTypes.push(label);
+            else kgActiveTypes.splice(i, 1);
+            // 全都取消勾选时回到「显示全部」，避免出现空图
+            if (kgActiveTypes.length === kgMeta.types.length) kgActiveTypes = [];
+            loadKgGraph();
+        }
+
+        function renderKgLegend() {
+            const box = document.getElementById('kg-legend');
+            let html = '<span class="flex items-center gap-2">';
+            html += kgMeta.types.map(function (t) {
+                return '<span class="flex items-center gap-1" style="color:var(--text-card-muted)">'
+                     + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'
+                     + t.color + '"></span>' + escapeHtml(t.name) + '</span>';
+            }).join('');
+            html += '</span><span class="flex items-center gap-2">';
+            html += kgMeta.relations.map(function (r) {
+                return '<span class="flex items-center gap-1" style="color:var(--text-card-muted)">'
+                     + '<span style="display:inline-block;width:14px;height:2px;background:'
+                     + r.color + '"></span>' + escapeHtml(r.name) + '</span>';
+            }).join('');
+            html += '</span>';
+            box.innerHTML = html;
+        }
+
+        function showKgEmpty(msg) {
+            const el = document.getElementById('kg-empty');
+            el.textContent = msg;
+            el.style.display = 'flex';
+            document.getElementById('kg-svg').innerHTML = '';
+        }
+
+        function hideKgEmpty() {
+            document.getElementById('kg-empty').style.display = 'none';
+        }
+
+        function kgKey(n) { return n.label + ':' + n.key; }
+
+        // 力导向布局：固定轮数，跑完即停
+        function layoutKg() {
+            const W = kgView.w, H = kgView.h;
+            const nodes = kgData.nodes;
+            const n = nodes.length;
+            const idx = {};
+            nodes.forEach(function (nd, i) {
+                idx[kgKey(nd)] = i;
+                if (!kgPos[kgKey(nd)]) {
+                    // 没有历史位置的节点，撒在中心附近的圆环上，比全塞在一点收敛快
+                    const a = (i / Math.max(n, 1)) * Math.PI * 2;
+                    const r = Math.min(W, H) * 0.28;
+                    kgPos[kgKey(nd)] = {
+                        x: W / 2 + Math.cos(a) * r + (Math.random() - 0.5) * 40,
+                        y: H / 2 + Math.sin(a) * r + (Math.random() - 0.5) * 40
+                    };
+                }
+            });
+
+            const links = [];
+            kgData.edges.forEach(function (e) {
+                const a = idx[e.source], b = idx[e.target];
+                if (a != null && b != null) links.push([a, b]);
+            });
+
+            const REP = 26000;    // 斥力强度（节点铺得开，避免全挤在中心）
+            const SPRING = 0.014; // 弹簧强度
+            const REST = 170;     // 连线自然长度
+            const CENTER = 0.0022; // 向心力（很弱，只防节点飘出画布）
+
+            for (let step = 0; step < 220; step++) {
+                const dx = new Array(n), dy = new Array(n);
+                for (let i = 0; i < n; i++) { dx[i] = 0; dy[i] = 0; }
+
+                // 节点两两斥力
+                for (let i = 0; i < n; i++) {
+                    for (let j = i + 1; j < n; j++) {
+                        const pa = kgPos[kgKey(nodes[i])];
+                        const pb = kgPos[kgKey(nodes[j])];
+                        let vx = pa.x - pb.x, vy = pa.y - pb.y;
+                        let d2 = vx * vx + vy * vy;
+                        if (d2 < 1) { vx = Math.random() - 0.5; vy = Math.random() - 0.5; d2 = 1; }
+                        const f = REP / d2;
+                        const d = Math.sqrt(d2);
+                        dx[i] += vx / d * f; dy[i] += vy / d * f;
+                        dx[j] -= vx / d * f; dy[j] -= vy / d * f;
+                    }
+                }
+
+                // 连线弹簧
+                for (let k = 0; k < links.length; k++) {
+                    const i = links[k][0], j = links[k][1];
+                    const pa = kgPos[kgKey(nodes[i])];
+                    const pb = kgPos[kgKey(nodes[j])];
+                    const vx = pb.x - pa.x, vy = pb.y - pa.y;
+                    const d = Math.sqrt(vx * vx + vy * vy) || 1;
+                    const f = (d - REST) * SPRING;
+                    dx[i] += vx / d * f; dy[i] += vy / d * f;
+                    dx[j] -= vx / d * f; dy[j] -= vy / d * f;
+                }
+
+                // 向心 + 位移
+                for (let i = 0; i < n; i++) {
+                    const p = kgPos[kgKey(nodes[i])];
+                    dx[i] += (W / 2 - p.x) * CENTER;
+                    dy[i] += (H / 2 - p.y) * CENTER;
+                    p.x += Math.max(-14, Math.min(14, dx[i]));
+                    p.y += Math.max(-14, Math.min(14, dy[i]));
+                    p.x = Math.max(40, Math.min(W - 40, p.x));
+                    p.y = Math.max(34, Math.min(H - 34, p.y));
+                }
+            }
+        }
+
+        function kgColorOf(label) {
+            const t = kgMeta.types.find(function (x) { return x.label === label; });
+            return t ? t.color : '#9ca3af';
+        }
+
+        function kgNameOf(label) {
+            const t = kgMeta.types.find(function (x) { return x.label === label; });
+            return t ? t.name : label;
+        }
+
+        function kgRelName(key) {
+            const r = kgMeta.relations.find(function (x) { return x.key === key; });
+            return r ? r.name : key;
+        }
+
+        function kgRelColor(key) {
+            const r = kgMeta.relations.find(function (x) { return x.key === key; });
+            return r ? r.color : '#9ca3af';
+        }
+
+        function drawKg() {
+            const svg = document.getElementById('kg-svg');
+            // viewBox 只在没有时设一次默认值——否则会把用户的缩放/平移重置掉
+            if (!svg.getAttribute('viewBox')) {
+                svg.setAttribute('viewBox', '0 0 ' + kgView.w + ' ' + kgView.h);
+            }
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            kgInitInteraction();
+
+            const pos = {};
+            kgData.nodes.forEach(function (nd) { pos[kgKey(nd)] = kgPos[kgKey(nd)]; });
+
+            let html = '';
+            // 连线
+            kgData.edges.forEach(function (e) {
+                const a = pos[e.source], b = pos[e.target];
+                if (!a || !b) return;
+                const color = kgRelColor(e.rel);
+                html += '<line x1="' + a.x.toFixed(1) + '" y1="' + a.y.toFixed(1)
+                     + '" x2="' + b.x.toFixed(1) + '" y2="' + b.y.toFixed(1)
+                     + '" stroke="' + color + '" stroke-width="1" stroke-opacity="0.42"></line>';
+                // 关系名标在中点
+                html += '<text x="' + ((a.x + b.x) / 2).toFixed(1) + '" y="'
+                     + ((a.y + b.y) / 2 - 3).toFixed(1)
+                     + '" font-size="9" fill="' + color + '" fill-opacity="0.75" text-anchor="middle" '
+                     + 'style="pointer-events:none">' + escapeHtml(e.rel_name || kgRelName(e.rel)) + '</text>';
+            });
+
+            // 节点
+            kgData.nodes.forEach(function (nd) {
+                const p = pos[kgKey(nd)];
+                if (!p) return;
+                const color = nd.color || kgColorOf(nd.label);
+                const r = nd.label === 'Order' ? 7 : 10;
+                const name = nd.display || nd.key;
+                const short = name.length > 10 ? name.slice(0, 9) + '…' : name;
+                html += '<g class="kg-node" style="cursor:pointer" '
+                     + 'onclick="showKgNode(\'' + nd.label + '\',\'' + String(nd.key).replace(/'/g, "\\'") + '\')">'
+                     + '<title>' + escapeHtml(kgNameOf(nd.label) + ' · ' + name) + '</title>'
+                     + '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + r
+                     + '" fill="' + color + '" stroke="#fff" stroke-width="1.5"></circle>'
+                     + '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + r + 11).toFixed(1)
+                     + '" font-size="10" fill="currentColor" text-anchor="middle" '
+                     + 'style="pointer-events:none;opacity:0.85">' + escapeHtml(short) + '</text>'
+                     + '</g>';
+            });
+
+            svg.innerHTML = html;
+        }
+
+        // ———— 缩放与平移 ————
+        // 画布可用宽度有限，74 个节点平铺时标签会挤在一起，
+        // 所以支持：滚轮以光标为中心缩放、拖住空白处平移、双击复位。
+        function kgResetView() {
+            const svg = document.getElementById('kg-svg');
+            svg.setAttribute('viewBox', '0 0 ' + kgView.w + ' ' + kgView.h);
+        }
+
+        function kgZoomAt(factor, cx, cy) {
+            const svg = document.getElementById('kg-svg');
+            const vb = svg.viewBox.baseVal;
+            let w = vb.width / factor;
+            let h = vb.height / factor;
+            // 缩放范围限制在 0.25x ~ 8x，避免缩没或放大到失去参照
+            const minW = kgView.w / 8, maxW = kgView.w / 0.25;
+            if (w < minW || w > maxW) return;
+            const x = cx - (cx - vb.x) / factor;
+            const y = cy - (cy - vb.y) / factor;
+            svg.setAttribute('viewBox', x + ' ' + y + ' ' + w + ' ' + h);
+        }
+
+        function kgInitInteraction() {
+            const svg = document.getElementById('kg-svg');
+            if (!svg || svg.dataset.kgBound === '1') return;
+            svg.dataset.kgBound = '1';
+            svg.style.cursor = 'grab';
+
+            // 滚轮缩放：把屏幕坐标换算成 SVG 逻辑坐标作为缩放中心
+            svg.addEventListener('wheel', function (ev) {
+                ev.preventDefault();
+                const rect = svg.getBoundingClientRect();
+                const vb = svg.viewBox.baseVal;
+                const px = (ev.clientX - rect.left) / rect.width;
+                const py = (ev.clientY - rect.top) / rect.height;
+                // 等比缩放后画布上下可能有留白，用实际渲染比例换算
+                const scale = Math.min(rect.width / vb.width, rect.height / vb.height);
+                const offX = (vb.x) + (rect.width / scale - vb.width) / 2;
+                const offY = (vb.y) + (rect.height / scale - vb.height) / 2;
+                const cx = offX + (ev.clientX - rect.left) / scale;
+                const cy = offY + (ev.clientY - rect.top) / scale;
+                kgZoomAt(ev.deltaY < 0 ? 1.18 : 1 / 1.18, cx, cy);
+            }, { passive: false });
+
+            // 拖拽平移（按在空白处才平移，按在节点上是点节点）
+            let panning = null;
+            svg.addEventListener('mousedown', function (ev) {
+                if (ev.target.closest && ev.target.closest('.kg-node')) return;
+                panning = { x: ev.clientX, y: ev.clientY,
+                            vx: svg.viewBox.baseVal.x, vy: svg.viewBox.baseVal.y };
+                svg.style.cursor = 'grabbing';
+            });
+            window.addEventListener('mousemove', function (ev) {
+                if (!panning) return;
+                const rect = svg.getBoundingClientRect();
+                const vb = svg.viewBox.baseVal;
+                const scale = Math.min(rect.width / vb.width, rect.height / vb.height);
+                const dx = (ev.clientX - panning.x) / scale;
+                const dy = (ev.clientY - panning.y) / scale;
+                svg.setAttribute('viewBox',
+                    (panning.vx - dx) + ' ' + (panning.vy - dy) + ' ' + vb.width + ' ' + vb.height);
+            });
+            window.addEventListener('mouseup', function () {
+                if (!panning) return;
+                panning = null;
+                svg.style.cursor = 'grab';
+            });
+
+            // 双击复位
+            svg.addEventListener('dblclick', function () { kgResetView(); });
+        }
+
+        // 图谱属性值的展示格式：金额换单位、布尔换中文、好评率空值换破折号。
+        // 单位口径以后端同步时写入的原值为准：consume_amount/total_amount/backend_amount 是「分」，
+        // balance 是「大狗币」（1 大狗币 = 1 元）。
+        function formatKgVal(v, key) {
+            if (v === '' || v == null) return '—';
+            if (key === 'good_rate') {
+                return (typeof v === 'number' && v < 0) ? '—' : (Number(v).toFixed(1) + '%');
+            }
+            if (key === 'blacklisted') return v ? '是' : '否';
+            if (key === 'consume_amount' || key === 'total_amount' || key === 'backend_amount') {
+                return (Number(v) / 100).toFixed(2) + ' 元';
+            }
+            if (key === 'balance') return Number(v).toFixed(2) + ' 大狗币';
+            return String(v);
+        }
+
+        async function showKgNode(label, key) {
+            const box = document.getElementById('kg-detail');
+            box.style.display = 'block';
+            box.innerHTML = '<div class="text-sm text-gray-400">加载中…</div>';
+            try {
+                const d = await apiRequest('/api/kg/node/' + encodeURIComponent(label) + '/'
+                                          + encodeURIComponent(key));
+                const node = d.node || {};
+                const meta = kgMeta.types.find(function (x) { return x.label === label; }) || {};
+                let html = '<div class="flex items-center justify-between mb-3">';
+                html += '<div class="text-sm font-medium text-gray-800">'
+                     + escapeHtml((meta.name || label) + ' · ' + (node.display || key)) + '</div>';
+                html += '<button onclick="document.getElementById(\'kg-detail\').style.display=\'none\'" '
+                     + 'class="text-xs text-gray-400 hover:text-gray-600">关闭</button></div>';
+
+                html += '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 16px">';
+                const props = node.props || {};
+                // 字段的中文名与顺序都来自后端 types 里的 fields 定义，
+                // 前端不写死；没定义的字段排在后面、直接用原名。
+                const typeMeta = kgMeta.types.find(function (x) { return x.label === label; }) || {};
+                const defs = typeMeta.fields || [];
+                const shown = {};
+                defs.forEach(function (f) {
+                    if (!(f.key in props)) return;
+                    shown[f.key] = 1;
+                    html += '<div class="text-xs"><span style="color:var(--text-card-muted)">'
+                         + escapeHtml(f.name || f.key) + '：</span><span class="text-gray-800">'
+                         + escapeHtml(formatKgVal(props[f.key], f.key))
+                         + '</span></div>';
+                });
+                Object.keys(props).forEach(function (k) {
+                    if (shown[k]) return;
+                    html += '<div class="text-xs"><span style="color:var(--text-card-muted)">'
+                         + escapeHtml(k) + '：</span><span class="text-gray-800">'
+                         + escapeHtml(formatKgVal(props[k], k)) + '</span></div>';
+                });
+                html += '</div>';
+
+                const nb = d.neighbors || [];
+                if (nb.length) {
+                    html += '<div class="text-xs mt-4 mb-2" style="color:var(--text-card-muted)">关联（'
+                         + nb.length + '）：</div>';
+                    html += '<div class="flex flex-wrap gap-2">';
+                    nb.forEach(function (x) {
+                        html += '<span class="px-2 py-1 text-xs rounded-lg" style="background-color:rgba(128,128,128,0.14)">'
+                             + escapeHtml((x.rel_name || kgRelName(x.rel)) + ' → ' + (x.display || x.key)) + '</span>';
+                    });
+                    html += '</div>';
+                }
+                box.innerHTML = html;
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：'
+                              + escapeHtml(e && e.message ? e.message : String(e)) + '</div>';
+            }
+        }
+
+        async function searchKgGraph() {
+            const kw = (document.getElementById('kg-search').value || '').trim();
+            if (!kw) { clearKgSearch(); return; }
+            try {
+                const d = await apiRequest('/api/kg/search?q=' + encodeURIComponent(kw));
+                const items = d.items || [];
+                if (!items.length) { alert('没有找到匹配的实体'); return; }
+                // 把搜索结果当作一个子图来画：节点是命中的实体
+                kgData = {
+                    nodes: items.map(function (x) {
+                        return { label: x.label, key: x.key, display: x.display,
+                                 color: x.color };
+                    }),
+                    edges: []
+                };
+                renderKgStatus({ nodes: kgData.nodes, total_nodes: kgData.nodes.length });
+                hideKgEmpty();
+                kgPos = {};
+                layoutKg();
+                drawKg();
+            } catch (e) {
+                alert('搜索失败：' + (e && e.message ? e.message : e));
+            }
+        }
+
+        function clearKgSearch() {
+            document.getElementById('kg-search').value = '';
+            kgPos = {};
+            kgResetView();   // 一并把缩放/平移复位，真正回到「全图」
+            loadKgGraph();
+        }
+
+        async function rebuildKgGraph() {
+            if (!confirm('将从 MySQL 重新全量同步一次图谱（会清掉图谱里已有的数据再重建）。继续吗？')) return;
+            const box = document.getElementById('kg-status');
+            box.innerHTML = '<span class="text-blue-600">正在重建，请稍候…</span>';
+            try {
+                const d = await apiRequest('/api/kg/rebuild', 'POST', {});
+                const r = d.result || {};
+                box.innerHTML = '<span class="text-green-600">重建完成：老板 ' + (r.bosses || 0)
+                     + ' 个、打手 ' + (r.players || 0) + ' 个、订单 ' + (r.orders || 0)
+                     + ' 笔、游戏 ' + (r.games || 0) + ' 个，耗时 ' + (r.elapsed_ms || 0) + ' ms</span>';
+                kgPos = {};
+                await loadKgGraph();
+            } catch (e) {
+                box.innerHTML = '<span class="text-red-500">重建失败：'
+                     + escapeHtml(e && e.message ? e.message : String(e)) + '</span>';
+            }
         }
 
         // ==================== RAG 调试中心 ====================
@@ -4708,6 +5189,9 @@
             // 页面特定的数据加载
             if (key === 'rag-debug') {
                 loadRagDebugPage();
+            }
+            if (key === 'kg-graph') {
+                loadKgGraph();
             }
             // 记录当前页面，刷新后恢复
             try { localStorage.setItem('app_last_page', key); } catch (e) {}
