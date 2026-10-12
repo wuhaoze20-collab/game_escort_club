@@ -29,9 +29,16 @@ MERGE 的语义是「有就匹配、没有就创建」。图谱同步天然是�
 """
 
 from datetime import datetime
+import hashlib
+import json
+import re
 
-from models import User, BossInfo, PlayerInfo, PlayerTag, Order
+from models import (User, BossInfo, PlayerInfo, PlayerTag, Order,
+                    PlayerRating, TipRecord, WithdrawalRecord, ContentConfig)
 from kg import store, schema
+
+# 处罚通告正文里用「」括出被处罚账号，如「老板「laoban」被管理员拉黑封禁」
+_PUNISH_TARGET_RE = re.compile(r"「([^」]+)」")
 
 
 # ——————————————————————————————————————————————
@@ -298,6 +305,301 @@ def sync_order_by_no(db, order_no: str) -> None:
 
 
 # ——————————————————————————————————————————————
+# 订单之后发生的事：评价 / 投诉 / 打赏 / 提现 / 处罚
+#
+# 订单只记录「服务发生了」，而评价、打赏、投诉、提现记录的是「结果如何」。
+# 没有这几类节点，图谱就答不出「谁给谁打赏过」「这个打手被投诉几次」——
+# 这类问题的答案不在文档里，也不在订单里，而在事后单据里。
+# ——————————————————————————————————————————————
+
+def _order_no_of(db, order_id) -> str:
+    """按 orders.id 反查订单号；查不到返回空串（那这条记录就只连人不连单）。"""
+    if not order_id:
+        return ""
+    row = db.query(Order.order_no).filter(Order.id == order_id).first()
+    return (row[0] if row else "") or ""
+
+
+def _is_complaint(comment: str) -> bool:
+    """这条评价是不是投诉。
+
+    判定口径必须与 rating_api 完全一致——投诉不会被单独建表，
+    而是把评价正文改成「【老板投诉】…」并把订单记成差评。
+    """
+    return (comment or "").strip().startswith("【老板投诉】")
+
+
+def _refresh_complained(db, boss: str, player: str) -> None:
+    """重算「某老板投诉过某打手」这条派生边（含次数）。
+
+    投诉可撤销（打手申诉成功 → review_status=removed），
+    所以这条边不能只在投诉时累加，必须按当前**有效**投诉条数重算，
+    否则申诉成功后图上还挂着一条不该存在的投诉。
+    """
+    rows = db.query(PlayerRating).filter(
+        PlayerRating.boss_username == boss,
+        PlayerRating.player_username == player,
+    ).all()
+    n = sum(1 for r in rows
+            if _is_complaint(r.comment) and (r.review_status or "normal") != "removed")
+
+    store.run_safe(
+        "MATCH (b:Boss {username: $boss})-[c:COMPLAINED]->(p:Player {username: $player}) "
+        "DELETE c",
+        {"boss": boss, "player": player}, tag=f"clear_complained({boss}->{player})",
+    )
+    if n > 0:
+        store.run_safe(
+            "MERGE (b:Boss {username: $boss}) "
+            "MERGE (p:Player {username: $player}) "
+            "MERGE (b)-[c:COMPLAINED]->(p) "
+            "SET c.count = $n, c.updated_at = $now",
+            {"boss": boss, "player": player, "n": n,
+             "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+            tag=f"link_complained({boss}->{player})",
+        )
+
+
+def sync_rating(db, rating: PlayerRating) -> None:
+    """把一条评价写进图谱（投诉型评价也在这张表里）。
+
+        (Boss)-[:RATED]->(Rating)-[:ABOUT]->(Player)
+                                 └-[:FOR_ORDER]->(Order)
+
+    投诉型评价额外补一条人—人派生边 (Boss)-[:COMPLAINED]->(Player)：
+    「这个老板投诉过谁」不必绕道评价节点，一跳就能拿到。
+    """
+    if rating is None:
+        return
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    rid = f"rating:{rating.id}"
+    comment = (rating.comment or "").strip()
+    complaint = _is_complaint(comment)
+    order_no = _order_no_of(db, rating.order_id)
+
+    sync_boss(db, rating.boss_username)
+    sync_player(db, rating.player_username)
+
+    store.run_safe(
+        "MERGE (r:Rating {rating_id: $rid}) "
+        "SET r.rating = $rating, r.comment = $comment, r.reply = $reply, "
+        "    r.is_complaint = $complaint, r.review_status = $review_status, "
+        "    r.review_status_text = $review_text, "
+        "    r.boss_username = $boss, r.player_username = $player, "
+        "    r.order_no = $order_no, r.created_at = $created_at, r.updated_at = $now",
+        {
+            "rid": rid,
+            "rating": int(rating.rating or 0),
+            "comment": comment,
+            "reply": (rating.reply or "").strip(),
+            "complaint": complaint,
+            "review_status": rating.review_status or "normal",
+            "review_text": schema.REVIEW_STATUS_TEXT.get(rating.review_status or "normal", ""),
+            "boss": rating.boss_username or "",
+            "player": rating.player_username or "",
+            "order_no": order_no,
+            "created_at": _dt(rating.created_at),
+            "now": now,
+        },
+        tag=f"sync_rating({rating.id})",
+    )
+
+    # 三条结构边先清后建，避免评价被改动后留下旧边
+    store.run_safe(
+        "MATCH (r:Rating {rating_id: $rid})-[e:RATED|ABOUT|FOR_ORDER]->() DELETE e",
+        {"rid": rid}, tag=f"clear_rating_edges({rating.id})",
+    )
+    store.run_safe(
+        "MERGE (b:Boss {username: $boss}) "
+        "MERGE (r:Rating {rating_id: $rid}) "
+        "MERGE (b)-[:RATED]->(r)",
+        {"boss": rating.boss_username, "rid": rid},
+        tag=f"link_rated({rating.id})",
+    )
+    store.run_safe(
+        "MERGE (p:Player {username: $player}) "
+        "MERGE (r:Rating {rating_id: $rid}) "
+        "MERGE (r)-[:ABOUT]->(p)",
+        {"player": rating.player_username, "rid": rid},
+        tag=f"link_about({rating.id})",
+    )
+    if order_no:
+        store.run_safe(
+            "MERGE (o:Order {order_no: $order_no}) "
+            "MERGE (r:Rating {rating_id: $rid}) "
+            "MERGE (r)-[:FOR_ORDER]->(o)",
+            {"order_no": order_no, "rid": rid},
+            tag=f"link_rating_order({rating.id})",
+        )
+
+    # 派生边：投诉过（按当前有效投诉数重算）
+    _refresh_complained(db, rating.boss_username, rating.player_username)
+
+
+def sync_tip(db, tip: TipRecord) -> None:
+    """把一条打赏写进图谱。
+
+        (Boss)-[:TIPPED]->(Tip)-[:TO]->(Player)
+                                └-[:FOR_ORDER]->(Order)
+    """
+    if tip is None:
+        return
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    tid = f"tip:{tip.id}"
+    order_no = _order_no_of(db, tip.order_id)
+
+    sync_boss(db, tip.boss_username)
+    sync_player(db, tip.player_username)
+
+    store.run_safe(
+        "MERGE (t:Tip {tip_id: $tid}) "
+        "SET t.amount = $amount, t.boss_username = $boss, "
+        "    t.player_username = $player, t.order_no = $order_no, "
+        "    t.created_at = $created_at, t.updated_at = $now",
+        {
+            "tid": tid,
+            "amount": int(tip.amount or 0),
+            "boss": tip.boss_username or "",
+            "player": tip.player_username or "",
+            "order_no": order_no,
+            "created_at": _dt(tip.created_at),
+            "now": now,
+        },
+        tag=f"sync_tip({tip.id})",
+    )
+    store.run_safe(
+        "MATCH (t:Tip {tip_id: $tid})-[e:TIPPED|TO|FOR_ORDER]->() DELETE e",
+        {"tid": tid}, tag=f"clear_tip_edges({tip.id})",
+    )
+    store.run_safe(
+        "MERGE (b:Boss {username: $boss}) "
+        "MERGE (t:Tip {tip_id: $tid}) "
+        "MERGE (b)-[:TIPPED]->(t)",
+        {"boss": tip.boss_username, "tid": tid}, tag=f"link_tipped({tip.id})",
+    )
+    store.run_safe(
+        "MERGE (p:Player {username: $player}) "
+        "MERGE (t:Tip {tip_id: $tid}) "
+        "MERGE (t)-[:TO]->(p)",
+        {"player": tip.player_username, "tid": tid}, tag=f"link_tip_to({tip.id})",
+    )
+    if order_no:
+        store.run_safe(
+            "MERGE (o:Order {order_no: $order_no}) "
+            "MERGE (t:Tip {tip_id: $tid}) "
+            "MERGE (t)-[:FOR_ORDER]->(o)",
+            {"order_no": order_no, "tid": tid}, tag=f"link_tip_order({tip.id})",
+        )
+
+
+def sync_withdrawal(db, wd: WithdrawalRecord) -> None:
+    """把一条提现申请写进图谱：(Player)-[:WITHDREW]->(Withdrawal)。
+
+    提现没有对应订单，所以图上是一棵只挂人的单边链——
+    「这个打手提过几次现、审核结果如何」靠它回答。
+    """
+    if wd is None:
+        return
+
+    wid = f"wd:{wd.id}"
+    sync_player(db, wd.player_username)
+
+    store.run_safe(
+        "MERGE (w:Withdrawal {wd_id: $wid}) "
+        "SET w.amount = $amount, w.status = $status, w.status_text = $status_text, "
+        "    w.note = $note, w.player_username = $player, "
+        "    w.created_at = $created_at, w.processed_at = $processed_at, "
+        "    w.updated_at = $now",
+        {
+            "wid": wid,
+            "amount": int(wd.amount or 0),
+            "status": wd.status or "pending",
+            "status_text": schema.WITHDRAW_STATUS_TEXT.get(wd.status or "pending", ""),
+            "note": (wd.note or "").strip(),
+            "player": wd.player_username or "",
+            "created_at": _dt(wd.created_at),
+            "processed_at": _dt(wd.processed_at),
+            "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        },
+        tag=f"sync_withdrawal({wd.id})",
+    )
+    store.run_safe(
+        "MATCH (w:Withdrawal {wd_id: $wid})<-[e:WITHDREW]-() DELETE e",
+        {"wid": wid}, tag=f"clear_wd_edges({wd.id})",
+    )
+    store.run_safe(
+        "MERGE (p:Player {username: $player}) "
+        "MERGE (w:Withdrawal {wd_id: $wid}) "
+        "MERGE (p)-[:WITHDREW]->(w)",
+        {"player": wd.player_username, "wid": wid},
+        tag=f"link_withdrew({wd.id})",
+    )
+
+
+def sync_punishments(db) -> int:
+    """把「处罚通告」里的条目写进图谱（通告存在 content_config.punishment）。
+
+    通告正文是一段自由文本（如「老板「laoban」被管理员拉黑封禁，账户余额…」），
+    没有外键指向具体账号，所以用「」把账号名括出来的写法里提取目标建边；
+    提不到目标就只建节点——节点照样能被全文检索和统计命中，只是没有边。
+
+    每次都按当前通告内容重建全部处罚节点（通告会被追加，条目数不多），
+    以 desc 的哈希当主键，同一件事同步多次也只会有一份。
+    """
+    row = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if not row:
+        return 0
+
+    try:
+        items = json.loads(row.config_value or "[]")
+    except Exception:
+        return 0
+    if not isinstance(items, list):
+        return 0
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    n = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        level = (it.get("level") or "").strip()
+        desc = (it.get("desc") or "").strip()
+        date = (it.get("date") or "").strip()
+        if not desc:
+            continue
+        pkey = "pn:" + hashlib.md5(f"{level}|{desc}".encode("utf-8")).hexdigest()[:16]
+        target = ""
+        m = _PUNISH_TARGET_RE.search(desc)
+        if m:
+            target = m.group(1).strip()
+
+        store.run_safe(
+            "MERGE (n:Punishment {punish_key: $key}) "
+            "SET n.level = $level, n.desc = $desc, n.date = $date, "
+            "    n.target = $target, n.updated_at = $now",
+            {"key": pkey, "level": level, "desc": desc, "date": date,
+             "target": target, "now": now},
+            tag=f"sync_punishment({pkey})",
+        )
+        n += 1
+
+        if not target:
+            continue
+        # 目标可能是老板也可能是打手；哪个存在就连哪个
+        for label in (schema.LABEL_BOSS, schema.LABEL_PLAYER):
+            store.run_safe(
+                f"MATCH (u:{label} {{username: $u}}) "
+                "MATCH (n:Punishment {punish_key: $key}) "
+                "MERGE (u)-[:PUNISHED]->(n)",
+                {"u": target, "key": pkey},
+                tag=f"link_punished({target}/{pkey})",
+            )
+    return n
+
+
+# ——————————————————————————————————————————————
 # 全量同步
 # ——————————————————————————————————————————————
 
@@ -310,6 +612,7 @@ def sync_all(db, force: bool = False) -> dict:
     """
     started = datetime.now()
     result = {"bosses": 0, "players": 0, "tags": 0, "orders": 0, "games": 0,
+              "ratings": 0, "tips": 0, "withdrawals": 0, "punishments": 0,
               "cleared": False, "errors": []}
 
     if not store.is_ready():
@@ -360,7 +663,37 @@ def sync_all(db, force: bool = False) -> dict:
         except Exception as e:
             result["errors"].append(f"订单 {o.order_no}: {e}")
 
-    # ④ 游戏节点的订单数：按关系现场数出来，不另存一份计数（避免两份数据对不上）
+    # ④ 评价（含投诉）——必须在订单之后：评价要靠订单号连到 Order 节点
+    for r in db.query(PlayerRating).all():
+        try:
+            sync_rating(db, r)
+            result["ratings"] += 1
+        except Exception as e:
+            result["errors"].append(f"评价 {r.id}: {e}")
+
+    # ⑤ 打赏
+    for t in db.query(TipRecord).all():
+        try:
+            sync_tip(db, t)
+            result["tips"] += 1
+        except Exception as e:
+            result["errors"].append(f"打赏 {t.id}: {e}")
+
+    # ⑥ 提现
+    for w in db.query(WithdrawalRecord).all():
+        try:
+            sync_withdrawal(db, w)
+            result["withdrawals"] += 1
+        except Exception as e:
+            result["errors"].append(f"提现 {w.id}: {e}")
+
+    # ⑦ 处罚通告
+    try:
+        result["punishments"] = sync_punishments(db)
+    except Exception as e:
+        result["errors"].append(f"处罚通告: {e}")
+
+    # ⑧ 游戏节点的订单数：按关系现场数出来，不另存一份计数（避免两份数据对不上）
     try:
         store.run(
             "MATCH (g:Game)<-[:FOR_GAME]-(o:Order) "
@@ -371,7 +704,7 @@ def sync_all(db, force: bool = False) -> dict:
     except Exception as e:
         result["errors"].append(f"游戏统计: {e}")
 
-    # ⑤ 雇佣关系上的订单数（同样现场数出来）
+    # ⑨ 雇佣关系上的订单数（同样现场数出来）
     try:
         store.run(
             "MATCH (b:Boss)-[h:HIRED]->(p:Player) "
@@ -381,6 +714,15 @@ def sync_all(db, force: bool = False) -> dict:
             mode="w")
     except Exception as e:
         result["errors"].append(f"雇佣关系统计: {e}")
+
+    # ⑩ 打手身上的收到打赏总额（现场聚合，口径与业务表一致：分）
+    try:
+        store.run(
+            "MATCH (p:Player)<-[:TO]-(t:Tip) "
+            "WITH p, sum(coalesce(t.amount, 0)) AS s SET p.tip_amount = s",
+            mode="w")
+    except Exception as e:
+        result["errors"].append(f"打赏汇总: {e}")
 
     result["elapsed_ms"] = int((datetime.now() - started).total_seconds() * 1000)
     result["stats"] = store.stats()

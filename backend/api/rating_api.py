@@ -33,6 +33,21 @@ def _rating_profile(db: Session, r: PlayerRating):
         "created_at": r.created_at
     }
 
+# 把一条评价同步进知识图谱（评价 / 投诉 / 申诉都会走这里）
+def _kg_sync_rating(db: Session, rating: PlayerRating) -> None:
+    """旁路操作：图谱写失败绝不能影响评价、投诉这些主流程，所以整段包在 try 里。
+
+    申诉审核通过（review_status=removed）也调用它——图谱里那条
+    「投诉过」派生边会按当前有效投诉数重算，从而跟着撤销。
+    """
+    try:
+        from kg import sync as kg_sync
+        kg_sync.sync_rating(db, rating)
+    except Exception as e:
+        print(f"[kg] 评价入图失败（评价 {getattr(rating, 'id', '?')}）："
+              f"{type(e).__name__}: {e}")
+
+
 # 重新计算打手好评率（仅统计有效评价：normal状态，好评=4星及以上）
 def recalc_good_rate(db: Session, player_username: str):
     player = db.query(PlayerInfo).filter(PlayerInfo.username == player_username).first()
@@ -130,6 +145,7 @@ def complaint_order(
     recalc_good_rate(db, order.player_username)
     db.commit()
     db.refresh(rating)
+    _kg_sync_rating(db, rating)   # 投诉入知识图谱（含 COMPLAINED 派生边）
     return rating
 
 # 老板对已完成的订单评价（一单一评）
@@ -186,6 +202,7 @@ def create_rating(
     
     db.commit()
     db.refresh(rating)
+    _kg_sync_rating(db, rating)   # 评价入知识图谱
     return rating
 
 # 查询某打手的有效评价列表（所有登录用户可看，已移除的评价不显示）
@@ -251,6 +268,7 @@ def reply_rating(
     rating.reply_time = datetime.now()
     db.commit()
     db.refresh(rating)
+    _kg_sync_rating(db, rating)   # 回复刷新图谱（评价内容变了）
     return rating
 
 # 打手对评价提交复查申请（被移除的评价不能再次申请）
@@ -349,4 +367,7 @@ def review_decision(
     
     db.commit()
     db.refresh(rating)
+    # 审核结果刷新图谱：申诉通过（removed）时那条「投诉过」派生边会被重算掉，
+    # 与好评率口径保持一致——申诉成功的订单不计入差评，也不该留在图上
+    _kg_sync_rating(db, rating)
     return rating

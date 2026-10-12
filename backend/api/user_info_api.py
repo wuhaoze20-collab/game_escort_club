@@ -561,6 +561,14 @@ def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bo
     create_notification(db, user.id, "账号被封禁",
                         "您的账号已被拉黑注销，如有疑问请联系管理员", "warning", "/")
 
+    # 处罚通告同步进知识图谱（「谁被处罚过、因为什么」靠它回答）。
+    # 旁路操作：图谱写失败绝不能影响拉黑这条不可逆主流程，整段包在 try 里。
+    try:
+        from kg import sync as kg_sync
+        kg_sync.sync_punishments(db)
+    except Exception as e:
+        print(f"[kg] 处罚通告入图失败：{type(e).__name__}: {e}")
+
     # 账号注销，无法登录
     user.account_status = "rejected"
     return amount

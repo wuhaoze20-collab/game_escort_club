@@ -30,6 +30,10 @@ LABEL_PLAYER = "Player"
 LABEL_ORDER = "Order"
 LABEL_GAME = "Game"
 LABEL_TAG = "Tag"
+LABEL_RATING = "Rating"
+LABEL_TIP = "Tip"
+LABEL_WITHDRAWAL = "Withdrawal"
+LABEL_PUNISHMENT = "Punishment"
 
 # 节点定义：标签 → 元信息
 #   name    中文显示名
@@ -105,6 +109,58 @@ NODE_TYPES = {
             "status": ("审核状态", False),
         },
     },
+    # 以下四类来自 V4.11.0：把「一单结束之后发生的事」也接进图谱。
+    # 订单只记录"服务发生了"，评价/打赏/投诉/提现记录的是"结果如何"——
+    # 没有这几类节点，图谱答不出「谁给谁打赏过」「这个打手被投诉几次」。
+    LABEL_RATING: {
+        "name": "评价",
+        "key": "rating_id",
+        "color": "#eab308",
+        "fields": {
+            "rating_id": ("评价ID", False),
+            "rating": ("星级", False),
+            "comment": ("评价内容", False),
+            "reply": ("打手回复", False),
+            "is_complaint": ("是否投诉", False),
+            "review_status": ("复查状态", False),
+            "created_at": ("评价时间", False),
+        },
+    },
+    LABEL_TIP: {
+        "name": "打赏",
+        "key": "tip_id",
+        "color": "#f43f5e",
+        "fields": {
+            "tip_id": ("打赏ID", False),
+            "amount": ("打赏金额(分)", True),
+            "created_at": ("打赏时间", False),
+        },
+    },
+    LABEL_WITHDRAWAL: {
+        "name": "提现",
+        "key": "wd_id",
+        "color": "#06b6d4",
+        "fields": {
+            "wd_id": ("提现ID", False),
+            "amount": ("提现金额(分)", True),
+            "status": ("提现状态", False),
+            "note": ("审核备注", False),
+            "created_at": ("申请时间", False),
+            "processed_at": ("审核时间", False),
+        },
+    },
+    LABEL_PUNISHMENT: {
+        "name": "处罚通告",
+        "key": "punish_key",
+        "color": "#dc2626",
+        "fields": {
+            "punish_key": ("通告主键", False),
+            "level": ("处罚等级", False),
+            "desc": ("处罚说明", False),
+            "date": ("公示日期", False),
+            "target": ("涉及账号", False),
+        },
+    },
 }
 
 # ——————————————————————————————————————————————
@@ -116,6 +172,14 @@ REL_SERVED = "SERVED"
 REL_FOR_GAME = "FOR_GAME"
 REL_HAS_TAG = "HAS_TAG"
 REL_HIRED = "HIRED"
+REL_RATED = "RATED"
+REL_ABOUT = "ABOUT"
+REL_FOR_ORDER = "FOR_ORDER"
+REL_COMPLAINED = "COMPLAINED"
+REL_TIPPED = "TIPPED"
+REL_TO = "TO"
+REL_WITHDREW = "WITHDREW"
+REL_PUNISHED = "PUNISHED"
 
 # 关系定义：(起点标签, 关系名, 终点标签) → {name: 中文名, color: 前端配色}
 REL_TYPES = {
@@ -139,6 +203,43 @@ REL_TYPES = {
         "start": LABEL_BOSS, "rel": REL_HIRED, "end": LABEL_PLAYER,
         "name": "雇佣过", "color": "#f97316",
     },
+    # —— V4.11.0 新增：订单之后发生的事 ——
+    "(Boss)-[RATED]->(Rating)": {
+        "start": LABEL_BOSS, "rel": REL_RATED, "end": LABEL_RATING,
+        "name": "评价", "color": "#eab308",
+    },
+    "(Rating)-[ABOUT]->(Player)": {
+        "start": LABEL_RATING, "rel": REL_ABOUT, "end": LABEL_PLAYER,
+        "name": "评价对象", "color": "#a3e635",
+    },
+    "(Rating)-[FOR_ORDER]->(Order)": {
+        "start": LABEL_RATING, "rel": REL_FOR_ORDER, "end": LABEL_ORDER,
+        "name": "评价订单", "color": "#facc15",
+    },
+    "(Boss)-[COMPLAINED]->(Player)": {
+        "start": LABEL_BOSS, "rel": REL_COMPLAINED, "end": LABEL_PLAYER,
+        "name": "投诉过", "color": "#ef4444",
+    },
+    "(Boss)-[TIPPED]->(Tip)": {
+        "start": LABEL_BOSS, "rel": REL_TIPPED, "end": LABEL_TIP,
+        "name": "打赏", "color": "#f43f5e",
+    },
+    "(Tip)-[TO]->(Player)": {
+        "start": LABEL_TIP, "rel": REL_TO, "end": LABEL_PLAYER,
+        "name": "打赏对象", "color": "#fb7185",
+    },
+    "(Player)-[WITHDREW]->(Withdrawal)": {
+        "start": LABEL_PLAYER, "rel": REL_WITHDREW, "end": LABEL_WITHDRAWAL,
+        "name": "提现", "color": "#06b6d4",
+    },
+    "(Boss)-[PUNISHED]->(Punishment)": {
+        "start": LABEL_BOSS, "rel": REL_PUNISHED, "end": LABEL_PUNISHMENT,
+        "name": "被处罚", "color": "#dc2626",
+    },
+    "(Player)-[PUNISHED]->(Punishment)": {
+        "start": LABEL_PLAYER, "rel": REL_PUNISHED, "end": LABEL_PUNISHMENT,
+        "name": "被处罚", "color": "#b91c1c",
+    },
 }
 
 # 订单状态的中文显示（与 order_api.py 的状态流转保持一致）
@@ -152,6 +253,28 @@ ORDER_STATUS_TEXT = {
     "rejected": "已拒单",
     "cancelled": "已取消",
 }
+
+# 评价复查状态中文（rating_api 的 review_status）
+REVIEW_STATUS_TEXT = {
+    "normal": "正常展示",
+    "reviewing": "复查中",
+    "removed": "已删除",
+}
+
+# 提现状态中文
+WITHDRAW_STATUS_TEXT = {
+    "pending": "待审核",
+    "approved": "已通过",
+    "rejected": "已驳回",
+}
+
+
+def rel_name(rel: str) -> str:
+    """关系名的中文显示。同名的多条定义（如 PUNISHED 有老板/打手两种起点）取第一处。"""
+    for meta in REL_TYPES.values():
+        if meta["rel"] == rel:
+            return meta["name"]
+    return rel
 
 
 def node_meta(label: str) -> dict:

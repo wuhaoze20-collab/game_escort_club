@@ -11,6 +11,22 @@ import ops_alerts
 
 router = APIRouter(prefix="/api/withdraw", tags=["提现管理"])
 
+
+# 把一条提现记录同步进知识图谱（申请 / 审核结果都走这里）
+def _kg_sync_withdrawal(db: Session, wd: WithdrawalRecord) -> None:
+    """旁路操作：图谱写失败绝不能影响提现主流程，所以整段包在 try 里。
+
+    审核通过或驳回后再调一次，图谱上的 status 会刷新成最新结果——
+    「这个打手提过几次现、批了没有」靠它回答。
+    """
+    try:
+        from kg import sync as kg_sync
+        kg_sync.sync_withdrawal(db, wd)
+    except Exception as e:
+        print(f"[kg] 提现入图失败（提现 {getattr(wd, 'id', '?')}）："
+              f"{type(e).__name__}: {e}")
+
+
 # 提现冷却期取自 system_config（默认 30 天）：入账金额需满该天数才可提现
 def calc_available_amount(db: Session, player_username: str) -> int:
     """计算打手可提现金额。
@@ -130,6 +146,7 @@ def create_withdraw(
     db.add(withdraw)
     db.commit()
     db.refresh(withdraw)
+    _kg_sync_withdrawal(db, withdraw)   # 提现申请入知识图谱
     return withdraw
 
 # 打手查看自己的提现记录
@@ -176,6 +193,7 @@ def approve_withdraw(
     withdraw.processed_at = datetime.now()
     db.commit()
     db.refresh(withdraw)
+    _kg_sync_withdrawal(db, withdraw)   # 审核结果刷新图谱
     return withdraw
 
 # 管理员/客服拒绝提现
@@ -197,4 +215,5 @@ def reject_withdraw(
     withdraw.processed_at = datetime.now()
     db.commit()
     db.refresh(withdraw)
+    _kg_sync_withdrawal(db, withdraw)   # 审核结果刷新图谱
     return withdraw

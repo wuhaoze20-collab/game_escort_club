@@ -34,7 +34,8 @@ import re
 
 # 与 kg/schema.py 保持一致（这里不直接 import，避免 rag 包对 kg 包产生硬依赖：
 # 图谱没装驱动时，rag 仍然要能正常 import）
-_SENSITIVE_FIELDS = {"balance", "consume_amount", "backend_amount", "total_amount"}
+_SENSITIVE_FIELDS = {"balance", "consume_amount", "backend_amount", "total_amount",
+                     "amount", "tip_amount"}
 # 字段中文名（复用 kg.schema 的登记表；取不到时回退英文字段名）
 _FIELD_CN = {
     "username": "账户名", "nickname": "昵称", "order_count": "点单次数",
@@ -42,8 +43,22 @@ _FIELD_CN = {
     "complaint_count": "投诉次数", "good_rate": "好评率",
     "backend_amount": "后台金额", "level_type": "等级类型", "tech_level": "技术等级",
     "order_no": "订单号", "game_type": "游戏", "duration_min": "服务时长(分钟)",
-    "total_amount": "订单金额", "status": "状态", "created_at": "下单时间",
+    "total_amount": "订单金额", "status": "状态",
+    # created_at 在各表里含义不同（下单时间/评价时间/打赏时间/提现时间），
+    # 用中性的"时间"才不会把打赏时间渲染成"下单时间"
+    "created_at": "时间",
     "name": "游戏名", "tag_key": "标签",
+    # V4.11.0：订单之后发生的事（评价/打赏/提现/处罚）
+    "rating": "星级", "comment": "评价内容", "reply": "打手回复",
+    "is_complaint": "是否投诉", "review_status": "复查状态",
+    "amount": "金额", "tip_amount": "累计收赏",
+    "note": "审核备注", "processed_at": "审核时间", "status_text": "状态",
+    "level": "处罚等级", "desc": "处罚说明", "date": "公示日期",
+    "target": "涉及账号", "count": "次数",
+    # 单据上的对手方：打赏/评价是老板→打手，提现只有打手。
+    # 展示成"打手 dashou_09"才看得出这条打赏是给谁的——否则
+    # 「laoban 给谁打赏过」只能答出金额，答不出对象。
+    "player_username": "打手", "boss_username": "老板",
 }
 
 # 每个标签用来当"名字"的字段。渲染时这个名字已经出现在标题/边上了，
@@ -51,6 +66,9 @@ _FIELD_CN = {
 _NAME_FIELD = {
     "Boss": "nickname", "Player": "nickname", "Order": "order_no",
     "Game": "name", "Tag": "tag_key",
+    # 评价/打赏/提现/处罚没有"名字"字段：标题里会用业务含义代替
+    #（如「老板 小达 的一条 5 星评价」），所以这里留空。
+    "Rating": "", "Tip": "", "Withdrawal": "", "Punishment": "",
 }
 
 # 每个标签只展示这几个字段。其余（blacklisted / updated_at / avatar /
@@ -63,6 +81,18 @@ _KEY_FIELDS = {
     "Order": ["game_type", "status", "duration_min"],
     "Game": ["order_count"],
     "Tag": [],
+    # 评价要带上正文和回复——"这个打手被投诉了什么"的答案就在 comment 里；
+    # 打赏/提现要带金额（敏感字段，只有管理员或本人可见）；
+    # 处罚要带上说明与等级。
+    # Rating / Tip 还要带上对手方（player_username），否则站在老板视角
+    # 只答得出"打赏了 16 元"，答不出"打赏给了谁"。
+    "Rating": ["rating", "is_complaint", "comment", "reply",
+               "review_status", "player_username", "created_at"],
+    "Tip": ["amount", "player_username", "created_at"],
+    "Withdrawal": ["amount", "status_text", "note", "created_at"],
+    # 等级和日期已经拼在处罚节点的显示名里（"封禁账号（2026-09-01）"），
+    # 这里只留说明正文，避免同一句话出现两遍
+    "Punishment": ["desc"],
 }
 
 # 一类关系最多列几条边。像"某个老手下过 20 单"，20 条订单号铺出来
@@ -77,15 +107,47 @@ _MAX_LINES = 14
 # 把本人的订单列表塞进完全不相关的上下文里。
 _SELF_REF_RE = re.compile(r"我|自己|本人|咱|自家")
 
+# 标签关键词兜底：实体链接一个种子都匹配不到时，按问题里的词直接取该类节点。
+#
+# 为什么需要：处罚通告这类节点**没有任何账号名可匹配**——"平台上有哪些处罚通告"
+# 里不含 username / order_no / 游戏名 / 标签，实体链接必然空手而归，
+# 图谱这一路就算库里躺着一堆通告也召回不了。
+# 顺序有讲究：越具体的标签排前面，避免"投诉"被更宽泛的词抢走。
+_LABEL_KEYWORD_HINTS = (
+    (r"处罚|通告|封禁|违规|拉黑", "Punishment"),
+    (r"打赏|赏金", "Tip"),
+    (r"提现|提款", "Withdrawal"),
+    (r"评价|好评|差评|投诉|星级", "Rating"),
+)
+
 # 节点标签 → 中文名
 _LABEL_CN = {
     "Boss": "老板", "Player": "打手", "Order": "订单", "Game": "游戏", "Tag": "标签",
+    "Rating": "评价", "Tip": "打赏记录", "Withdrawal": "提现记录",
+    "Punishment": "处罚通告",
 }
 
 # 关系类型 → 中文名
 _REL_CN = {
     "PLACED": "下单", "SERVED": "接单", "FOR_GAME": "所属游戏",
     "HAS_TAG": "持有标签", "HIRED": "雇佣过",
+    # V4.11.0
+    "RATED": "评价了", "ABOUT": "评价对象", "FOR_ORDER": "对应订单",
+    "COMPLAINED": "投诉过", "TIPPED": "打赏了", "TO": "打赏给",
+    "WITHDREW": "提现", "PUNISHED": "被处罚",
+}
+
+# 渲染时的关系展示优先级（数字越小越先渲染）。
+#
+# 为什么需要：每条事实有 _MAX_LINES 行预算，而一个老打手名下有几十条订单，
+# 「接单」一列就吃掉 4 行。实测把提现、打赏这些"信息密度高但条数少"的关系
+# 排在订单类关系后面时，它们会被行数预算整段截掉——图谱召回了却看不见，
+# 问「这个打手提过几次现」永远答不出。
+# 所以把事后单据类关系提到前面，订单类排到最后（订单量大、单条信息量低）。
+_REL_PRIORITY = {
+    "COMPLAINED": 0, "PUNISHED": 1, "RATED": 2, "TIPPED": 3,
+    "WITHDREW": 4, "ABOUT": 5, "TO": 6, "HIRED": 7,
+    "HAS_TAG": 8, "PLACED": 9, "SERVED": 9, "FOR_GAME": 9, "FOR_ORDER": 9,
 }
 
 # 订单状态 → 中文（与 kg/schema.py 的 ORDER_STATUS_TEXT 一致）
@@ -93,6 +155,11 @@ _ORDER_STATUS_CN = {
     "pending": "待派单", "pending_accept": "待打手确认", "assigned": "已接单",
     "processing": "服务中", "pending_settlement": "待确认结单",
     "completed": "已完成", "rejected": "已拒单", "cancelled": "已取消",
+}
+
+# 评价复查状态 → 中文（与 kg/schema.py 的 REVIEW_STATUS_TEXT 一致）
+_REVIEW_STATUS_CN = {
+    "normal": "正常展示", "reviewing": "复查中", "removed": "已删除",
 }
 
 
@@ -286,6 +353,36 @@ class GraphRetriever:
                     "match_score": 0.6, "match_field": "self",
                 })
 
+        # 标签关键词兜底：问题里没有具体账号/订单号可匹配，但确实在问
+        # 某类单据时（"平台上有哪些处罚通告""最近有哪些打赏"），
+        # 实体链接一个种子都找不到，图谱这一路就白开了。
+        # 这里按标签关键词取最近的几条该类节点当种子。
+        if not seeds and not blocked:
+            want = None
+            for pat, lb in _LABEL_KEYWORD_HINTS:
+                if re.search(pat, question or ""):
+                    want = lb
+                    break
+            if want:
+                try:
+                    rows = store.run(
+                        "MATCH (n:" + want + ") "
+                        "RETURN elementId(n) AS eid, properties(n) AS props "
+                        "ORDER BY coalesce(n.updated_at, '') DESC LIMIT 3",
+                        {}, mode="r",
+                    ) or []
+                except Exception:
+                    rows = []
+                for r in rows:
+                    props = r.get("props") or {}
+                    if not self._visible(role, want, props, username):
+                        continue
+                    seeds.append({
+                        "node_id": r.get("eid"), "label": want, "key": "",
+                        "node_name": self._display(want, props),
+                        "match_score": 0.5, "match_field": "label_hint",
+                    })
+
         seeds.sort(key=lambda s: -s["match_score"])
         return seeds[:5]
 
@@ -374,8 +471,10 @@ class GraphRetriever:
                     "peer_name": self._display(peer_label, r.get("peer_props") or {}),
                     "peer_props": r.get("peer_props") or {},
                 })
-            if not edges:
-                continue
+            # 没有边的节点以前直接跳过，但处罚通告就是这么一种节点：
+            # 它是"一条平台规则/一次处罚"本身，正文就在属性里，没有邻居。
+            # 跳过它等于「问有哪些处罚通告」永远召回不到东西——
+            # 所以改成保留，由 _render 判断"没边但属性非空"时照样输出。
             facts.append({
                 "node_id": s["node_id"], "label": s["label"], "key": s["key"],
                 "node_name": s["node_name"], "match_score": s["match_score"],
@@ -435,12 +534,17 @@ class GraphRetriever:
             head += "（" + "，".join(own) + "）"
         lines.append(head)
 
-        # 按关系类型分组，组内限量
+        # 按关系类型分组，组内限量。
+        # 组间顺序不是随机的——按 _REL_PRIORITY 排，保证提现/打赏/投诉这些
+        # 条数少、信息密度高的关系先占住行数预算，订单类排到最后被截。
         groups = {}
         for e in fact["edges"]:
             groups.setdefault(e["rel"], []).append(e)
+        ordered_rels = sorted(groups.keys(),
+                              key=lambda r: (_REL_PRIORITY.get(r, 99), r))
 
-        for rel, edges in groups.items():
+        for rel in ordered_rels:
+            edges = groups[rel]
             rel_cn = _REL_CN.get(rel, rel)
             shown = edges[:_MAX_EDGES_PER_REL]
             for e in shown:
@@ -461,9 +565,12 @@ class GraphRetriever:
             if len(lines) >= _MAX_LINES:
                 break
 
-        # 只有表头、没有任何一条边，这条事实没有信息量，丢掉
+        # 只有表头、没有任何一条边，这条事实没有信息量，丢掉。
+        # 例外：种子节点自身属性非空时，表头本身就是答案——
+        # 一条处罚通告（「处罚通告 封禁账号（2026-09-01）」+ 处罚说明）
+        # 通常没有边可走，但它的说明正文正是要回答的内容，不能丢。
         if len(lines) <= 1:
-            return []
+            return lines if own else []
         return lines
 
     def _render_props(self, label: str, props: dict, is_admin: bool,
@@ -508,7 +615,8 @@ class GraphRetriever:
         其余情况库里存的**已经是百分数**（100 表示 100%、66.7 表示 66.7%），
         不要再乘 100，否则会渲染成 10000% 这种离谱数字。
         """
-        if field in ("consume_amount", "backend_amount", "total_amount"):
+        if field in ("consume_amount", "backend_amount", "total_amount",
+                     "amount", "tip_amount"):
             try:
                 return f"{float(val) / 100:.2f} 元"
             except Exception:
@@ -524,21 +632,57 @@ class GraphRetriever:
                 return str(val)
         if field == "status":
             return _ORDER_STATUS_CN.get(str(val), str(val))
+        if field == "review_status":
+            return _REVIEW_STATUS_CN.get(str(val), str(val))
+        if field == "is_complaint":
+            return "是" if val else "否"
         text = str(val)
         # 游戏名这类可能很长（"王者荣耀-钻石-王者"），截一下避免边行过长
         return text if len(text) <= 24 else text[:23] + "…"
 
     @staticmethod
     def _display(label: str, props: dict) -> str:
-        """节点的显示名：有昵称优先用昵称，否则用主键。"""
+        """节点的显示名：有昵称优先用昵称，否则用主键。
+
+        评价 / 打赏 / 提现 / 处罚这四类单据没有"名字"字段，主键
+        （rating:3、tip:7 这种内部 id）对回答毫无意义，所以按业务含义
+        拼一个展示名——大模型看到「¥16.00」比看到「tip:7」有用得多。
+
+        注意这里**不要**再重复标签中文名：标签名已经由调用处拼在边上或
+        表头里（如「—打赏了→ 打赏记录 ¥16.00」），这里只给核心事实本身。
+        """
         nickname = str(props.get("nickname") or "").strip()
         if nickname:
             return nickname
+
+        if label == "Rating":
+            star = int(props.get("rating") or 0)
+            tag = "（投诉）" if props.get("is_complaint") else ""
+            return f"{star} 星{tag}" if star else f"评价{tag}"
+        if label == "Tip":
+            return GraphRetriever._yuan(props.get("amount"))
+        if label == "Withdrawal":
+            st = str(props.get("status_text") or "").strip()
+            amt = GraphRetriever._yuan(props.get("amount"))
+            return f"{amt}（{st}）" if st else amt
+        if label == "Punishment":
+            lv = str(props.get("level") or "").strip()
+            dt = str(props.get("date") or "").strip()
+            return (lv or "处罚") + (f"（{dt}）" if dt else "")
+
         for k in ("username", "order_no", "name", "tag_key"):
             v = props.get(k)
             if v:
                 return str(v)
         return "（未命名）"
+
+    @staticmethod
+    def _yuan(val) -> str:
+        """分 → 元的显示串（金额字段库里存的是分，与业务表口径一致）。"""
+        try:
+            return f"¥{int(val or 0) / 100:.2f}"
+        except (TypeError, ValueError):
+            return "¥0.00"
 
     # ------------------------------------------------------------------ #
     # 配置

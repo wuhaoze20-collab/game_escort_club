@@ -74,6 +74,12 @@ def create_tip(
     
     db.commit()
     db.refresh(tip)
+    # 打赏入知识图谱：让「谁给谁打赏过」这类问题能走图谱这一路
+    try:
+        from kg import sync as kg_sync
+        kg_sync.sync_tip(db, tip)
+    except Exception as e:
+        print(f"[kg] 打赏入图失败（打赏 {tip.id}）：{type(e).__name__}: {e}")
     return tip
 
 # 打手查看自己的打赏记录

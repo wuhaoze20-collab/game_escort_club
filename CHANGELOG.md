@@ -1,5 +1,97 @@
 # 更新日志 CHANGELOG
 
+## [V4.11.0] 2026-10-12
+
+### 🧩 知识图谱扩容：评价 / 打赏 / 提现 / 投诉 / 处罚五类业务入图
+
+V4.9.0 建图时只有五类节点（老板 / 打手 / 订单 / 游戏 / 标签），
+能回答"谁雇过谁""这单什么状态"，但回答不了"谁给谁打赏过""这个打手被投诉几次"
+"平台有哪些处罚通告"。本次把这些**事后发生的业务单据**也接进图谱。
+
+#### 图谱规模
+
+| 指标 | V4.9.0 基线 | V4.11.0 |
+|---|---|---|
+| 节点 | 74 | **123** |
+| 关系 | 146 | **271** |
+
+新增节点：评价 30、打赏 9、提现 7、处罚通告 3。
+
+#### 存储层 `kg/schema.py`
+
+新增四类节点（`Rating` / `Tip` / `Withdrawal` / `Punishment`）与九条关系
+（`RATED` / `ABOUT` / `FOR_ORDER` / `COMPLAINED` / `TIPPED` / `TO` / `WITHDREW` / `PUNISHED` …），
+并补两类状态字典 `REVIEW_STATUS_TEXT`（正常展示 / 复查中 / 已删除）、
+`WITHDRAW_STATUS_TEXT`（待审核 / 已通过 / 已驳回），以及 `rel_name()` 工具函数。
+
+#### 同步层 `kg/sync.py`
+
+新增 7 个同步函数，`sync_all` 从 6 步扩到 **10 步**：
+
+- `_order_no_of` —— 由 `orders.id` 反查订单号，查不到时只连人不连单
+- `_is_complaint` —— 投诉判定口径与 `rating_api` **完全一致**（comment 以
+  `【老板投诉】` 开头且 `rating=1`），避免两处口径漂移
+- `_refresh_complained` —— `COMPLAINED` 边**按当前有效投诉数重算**而非累加，
+  这样打手申诉成功、差评被撤销时，图上那条投诉也跟着消失
+- `sync_rating` / `sync_tip` / `sync_withdrawal` / `sync_punishments`
+
+处罚通告从 `content_config` 表的 `punishment` 键读取（JSON 数组），
+用说明文本哈希做主键，`_PUNISH_TARGET_RE` 从「」里提取被处罚账号建 `PUNISHED` 边。
+
+另新增打手属性 `tip_amount`（累计收到打赏，单位分）。
+
+#### 业务接口挂钩
+
+| 文件 | 挂钩点 |
+|---|---|
+| `api/rating_api.py` | `complaint_order` / `create_rating` / `reply_rating` / `review_decision` 共 4 处 |
+| `api/tip_api.py` | 打赏创建 1 处 |
+| `api/withdraw_api.py` | `create` / `approve_withdraw` / `reject_withdraw` 共 3 处 |
+| `api/user_info_api.py` | `_apply_ban`（拉黑会追加处罚通告）1 处 |
+
+全部包在 try 里——**图谱写失败绝不影响主流程**，只打印一行 `[kg] ... 入图失败`。
+
+#### 召回渲染 `rag/graph_retriever.py`：6 个"召回了却用不上"的缺陷
+
+| # | 问题 | 修法 |
+|---|---|---|
+| ① | `created_at` 被统一渲染成"下单时间"，打赏/提现的时间显示成下单时间 | 改为中性词「时间」 |
+| ② | 打赏看不到对象（"打赏了→ 打赏 打赏 ¥16.00"，还重复） | 新增 `player_username`/`boss_username` 字段并进 `_KEY_FIELDS`；`_display` 不再重复拼标签名；新增 `_yuan` 做分→元换算 |
+| ③ | 提现/打赏被订单类关系挤掉行数预算 | 新增 `_REL_PRIORITY`，把事后单据类关系提到前面，订单类排最后 |
+| ④ | 处罚通告永远召回不到 | `_link_entities` 新增**标签关键词兜底** `_LABEL_KEYWORD_HINTS`；`_collect_facts` 不再丢弃无环节点；`_render` 允许"只有表头但有属性"的事实输出 |
+| ⑤ | `_REVIEW_STATUS_CN` 缺失，复查状态显示英文 | 补字典；`_fmt` 增加 `review_status` / `is_complaint` 分支；`_SENSITIVE_FIELDS` 追加 `amount` / `tip_amount` |
+| ⑥ | AI 拿到了图谱事实却答不出 | 见下节 |
+
+#### AI 端到端答不出：两处根因（都不在召回层）
+
+图谱事实明明进了系统提示词，AI 仍然回答"你是店长，不是老板""建议联系人工客服"。
+
+1. **回答规则没有覆盖检索结果** —— 规则 1 写的是「业务问题**只能依据【平台资料】回答**」，
+   而图谱事实放在 **【知识库检索结果】** 里。模型据此认定它"不在允许依据的范围内"，
+   于是按规则 2 回了一句"不太确定"。规则 12 的例外同样只提【平台资料】，
+   导致管理员查他人记录被当成隐私拒答。两处都已改成并列覆盖两个来源，
+   并明确"管理员/客服问具体账号的打赏、提现、投诉记录属于职责范围，直接答"。
+2. **检索结果排在平台资料后面被淹没** —— 平台资料有八九十行固定配置，
+   检索结果（尤其图谱事实这种一句一条的）排在其后时经常被忽略。
+   已在 `build_system_prompt` 中把检索结果**提到平台资料之前**。
+
+> 排查提示：本轮端到端复测一度全部失败，真因是 **PowerShell 5.1 的
+> `Invoke-RestMethod` 用 Latin-1 编码发送 body**，中文提问到后端全变乱码，
+> 被 Self-RAG 判成"乱码/无意义"直接跳过检索。用
+> `[System.Text.Encoding]::UTF8.GetBytes($json)` 转字节后发送即正常。
+> 结论：**测中文接口不要用 PowerShell 直接传字符串 body。**
+
+### ✅ 验收结果
+
+- 图谱重建后与 MySQL **逐项对账一致**：订单 36 / 评价 30 / 有效投诉 1（另有 1 条已撤销）/
+  打赏 9 / 提现 7 / 处罚通告 3
+- 探针验证五类新节点**全部能召回**
+- AI 端到端四连问全部答对：
+  - `laoban` 给哪些打手打赏过 → 列出 dashou_05 ¥16.00 / dashou_08 ¥5.68 / dashou_11 ¥6.40 / dashou_09 ¥10.95
+  - `dashou_10` 提现几次什么状态 → ¥51.54 已通过、¥12.16 待审核
+  - 平台有哪些处罚通告 → 警告 / 停单 3 天 / 封禁账号（含说明）
+  - `laoban` 投诉过谁 → 打手 小杰（dashou_09）
+
 ## [V4.10.1] 2026-10-12
 
 ### 🐞 图谱召回的 8 个真 bug：为什么"开了图谱却像没开"
