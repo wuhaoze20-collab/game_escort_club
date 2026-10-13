@@ -256,16 +256,20 @@ CONFIG_META: dict[str, dict] = {
     "rag_vector_backend": {
         "default": "chroma", "type": "select", "group": "向量存储", "label": "向量检索后端",
         "options": [
-            {"value": "chroma", "label": "Chroma 向量库（HNSW 索引，推荐）"},
+            {"value": "chroma", "label": "Chroma 向量库（HNSW 索引，默认）"},
+            {"value": "qdrant", "label": "Qdrant 向量库（HNSW 索引）"},
             {"value": "mysql", "label": "MySQL 全表扫描（纯 Python 余弦，兜底）"},
         ],
-        "desc": "chroma：向量写入本地 Chroma 集合，用 HNSW 近似最近邻索引召回，片段多时更快；"
+        "desc": "chroma / qdrant：向量分别写入本地集合，两者都用 HNSW 近似最近邻索引召回，"
+                "片段多时更快；两个向量库平级并存，可在这里一键切换做对比"
+                "（同一个 embedding 模型下召回结果应高度一致，差异主要来自索引近似误差）。"
                 "mysql：读 ai_vectors 全表逐条算余弦，无索引但零依赖。"
-                "chromadb 未安装时，即使选 chroma 也会自动降级为 mysql",
+                "所选向量库的客户端未安装时，会自动降级为 mysql",
     },
     "rag_chroma_candidates": {
-        "default": 50, "type": "int", "group": "向量存储", "label": "Chroma 召回候选数",
-        "desc": "Chroma 每次检索先取回多少条候选，再按角色/通道过滤。调大召回更全但回表更多，"
+        "default": 50, "type": "int", "group": "向量存储",
+        "label": "向量库召回候选数（Chroma / Qdrant 共用）",
+        "desc": "向量库每次检索先取回多少条候选，再按角色/通道过滤。调大召回更全但回表更多，"
                 "调小更快但可能漏掉结果。建议设为最终 top_k 的 5~10 倍",
     },
 

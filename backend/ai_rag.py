@@ -124,32 +124,44 @@ def _automerge_ratio(db) -> float:
     return min(1.0, max(0.0, v))
 
 def _vector_backend(db) -> str:
-    """向量检索后端：chroma（HNSW 索引召回，默认）或 mysql（全表扫描兜底）。
+    """向量检索后端：chroma / qdrant（均为 HNSW 索引召回）或 mysql（全表扫描兜底）。
 
-    配置选了 chroma 但 chromadb 实际不可导入时自动降级为 mysql，
+    选中的向量库实际不可用时自动降级为 mysql，
     避免因为一个可选依赖缺失就让整个问答流程失败。
     """
     try:
         v = str(config_service.get_config("rag_vector_backend", db) or "").strip().lower()
     except Exception:
         v = ""
-    if v not in ("chroma", "mysql"):
+    if v not in ("chroma", "qdrant", "mysql"):
         v = "chroma"
-    if v == "chroma":
+    if v in ("chroma", "qdrant"):
         try:
-            from rag import chroma_store as cs
-            if not cs.available():
+            if v == "chroma":
+                from rag import chroma_store as cs
+                ok = cs.available()
+            else:
+                from rag import qdrant_store as qs
+                ok = qs.available()
+            if not ok:
                 return "mysql"
         except Exception:
             return "mysql"
     return v
 
-def _chroma_candidates(db) -> int:
-    """Chroma 单次召回的候选条数（后续还会按角色/通道/阈值过滤）。"""
+def _vector_candidates(db) -> int:
+    """向量库单次召回的候选条数（Chroma / Qdrant 共用这一项配置）。
+
+    后续还会按角色 / 通道 / min_score 阈值过滤，所以要多取一些留出被筛掉的余量。
+    """
     try:
         return max(5, int(config_service.get_config("rag_chroma_candidates", db)))
     except Exception:
         return CHROMA_FETCH_LIMIT
+
+# 兼容旧函数名。两个后端共用同一项配置，键名仍为 rag_chroma_candidates，
+# 这样前端读写逻辑和库里已有的值都不用动。
+_chroma_candidates = _vector_candidates
 
 def _to_bool(v) -> bool:
     """把配置值宽松地转成布尔（兼容 True/1/'1'/'true'/'on' 等写法）。"""
@@ -748,6 +760,8 @@ def rebuild_index(db, force: bool = False) -> dict:
     result["vector_backend"] = backend
     if backend == "chroma":
         result["chroma"] = sync_chroma(db, force=force)
+    elif backend == "qdrant":
+        result["qdrant"] = sync_qdrant(db, force=force)
     return result
 
 
@@ -828,6 +842,80 @@ def sync_chroma(db, force: bool = False) -> dict:
                 "written": 0, "removed": 0, "total": 0}
 
 
+def sync_qdrant(db, force: bool = False) -> dict:
+    """把 MySQL 里的向量全量同步到 Qdrant 向量库。
+
+    与 sync_chroma 完全同构：**不调 embedding 接口**，直接读 ai_vectors 里的现成向量，
+    所以从 Chroma 切到 Qdrant 后点一次「重建索引」就能灌完，不额外消耗 API 额度。
+    幂等：已有的按 id 覆盖，MySQL 里已不存在的从 Qdrant 删除。
+
+    参数：
+        db: 数据库会话
+        force: True 时先清空集合再全量写入（换模型/维度、或索引疑似损坏时用）
+
+    返回：
+        dict{ok, error, written, removed, total}
+    """
+    from models import AiChunk, AiVector
+    from rag import qdrant_store as qs
+
+    if not qs.available():
+        return {"ok": False, "error": "qdrant-client 未安装，已跳过同步",
+                "written": 0, "removed": 0, "total": 0}
+
+    try:
+        if force:
+            qs.clear()
+
+        # 只同步「已启用」的片段；父块本来就没有向量，不会出现在 ai_vectors 里
+        rows = (db.query(AiVector, AiChunk)
+                .join(AiChunk, AiVector.chunk_id == AiChunk.id)
+                .all())
+
+        ids, embs, metas = [], [], []
+        wanted = set()
+        for v, c in rows:
+            if int(c.enabled or 0) != 1:
+                continue
+            try:
+                vec = json.loads(v.embedding or "null")
+            except Exception:
+                continue
+            # 维度与当前模型不一致的旧向量跳过（等重新向量化）
+            if not isinstance(vec, list) or len(vec) != EMBED_DIM:
+                continue
+            cid = int(c.id)
+            wanted.add(str(cid))
+            ids.append(str(cid))
+            embs.append(vec)
+            metas.append({
+                "chunk_id": cid,
+                "source_type": c.source_type or "",
+                "source_key": c.source_key or "",
+                "chunk_index": int(c.chunk_index or 0),
+                "parent_id": int(c.parent_id or 0),
+                "role": c.role or "",
+                "enabled": 1,
+            })
+
+        written = qs.upsert_rows(ids, embs, metas) if ids else 0
+
+        # 清理 Qdrant 中已失效的 id（源文档被删、片段被切分替换等）
+        removed = 0
+        try:
+            stale = [x for x in qs.all_ids() if x not in wanted]
+            if stale:
+                removed = qs.delete_ids(stale)
+        except Exception:
+            removed = 0
+
+        return {"ok": True, "error": "", "written": written,
+                "removed": removed, "total": qs.count()}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}",
+                "written": 0, "removed": 0, "total": 0}
+
+
 def stats(db) -> dict:
     """索引概况：总片段数、父/子块数、已向量化数、模型/维度、最后更新时间。"""
     from models import AiChunk, AiVector
@@ -856,6 +944,14 @@ def stats(db) -> dict:
         chroma_info = {"available": False, "ready": False, "count": -1,
                        "path": "", "size_mb": 0.0, "collection": "", "error": str(e)}
 
+    qdrant_info = {}
+    try:
+        from rag import qdrant_store as qs
+        qdrant_info = qs.stats()
+    except Exception as e:
+        qdrant_info = {"available": False, "ready": False, "count": -1,
+                       "path": "", "size_mb": 0.0, "collection": "", "error": str(e)}
+
     return {
         "total_chunks": len(rows), "parent_chunks": parent_count, "child_chunks": child_count,
         "ready_chunks": ready_count, "missing_chunks": len(rows) - ready_count,
@@ -864,6 +960,7 @@ def stats(db) -> dict:
         "last_built": max((v.updated_at for v in vec_rows if v.updated_at), default=None),
         "vector_backend": backend,
         "chroma": chroma_info,
+        "qdrant": qdrant_info,
     }
 
 
@@ -882,12 +979,18 @@ def drop_source(db, source_type: str, source_key: str) -> int:
          .filter(AiChunk.source_key == str(source_key))
          .delete(synchronize_session=False))
 
-    # 同步清掉 Chroma 里的对应向量，否则 AI 仍能检索到已删除的内容。
+    # 同步清掉向量库里的对应向量，否则 AI 仍能检索到已删除的内容。
     # 失败不阻断主流程（重建索引时会做一次全量对齐）。
-    if chunk_ids and _vector_backend(db) == "chroma":
+    if chunk_ids:
+        be = _vector_backend(db)
+        ids = [str(i) for i in chunk_ids]
         try:
-            from rag import chroma_store as cs
-            cs.delete_ids([str(i) for i in chunk_ids])
+            if be == "chroma":
+                from rag import chroma_store as cs
+                cs.delete_ids(ids)
+            elif be == "qdrant":
+                from rag import qdrant_store as qs
+                qs.delete_ids(ids)
         except Exception:
             pass
     return int(n or 0)

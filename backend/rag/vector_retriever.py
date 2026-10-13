@@ -1,11 +1,13 @@
 """
 模块2：向量检索（Vector Retrieval）。
 
-基于千问 embedding（text-embedding-v3，1024维）做语义召回，支持两种向量后端：
+基于千问 embedding（text-embedding-v3，1024维）做语义召回，支持三种向量后端：
     · chroma —— 向量存在本地 Chroma 集合，走 HNSW 近似最近邻索引（默认）
+    · qdrant —— 向量存在本地 Qdrant 集合，同样走 HNSW 索引；与 Chroma 平级并存，
+                可在系统参数里一键切换，用于对比召回一致性与写入/查询/占用等工程指标
     · mysql  —— 向量存在 ai_vectors 表，全表逐条算纯 Python 余弦（兜底）
 
-两种后端产出完全相同的候选集（chunk_id + 相似度），
+三种后端产出完全相同的候选集（chunk_id + 相似度），
 因此下游的父子分块 + AutoMerging 逻辑对后端无感。
 在 RAG 流程中的位置：推理问答阶段的核心检索步骤，语义相似度召回。
 """
@@ -21,8 +23,9 @@ class VectorRetriever:
         ① 问题向量化：embed_texts([question]) → 1024维查询向量
         ② 候选召回：按配置的向量后端取回一批候选
            · chroma：带 metadata 过滤条件查 HNSW 索引，拿回 (chunk_id, 相似度)
+           · qdrant：同样带过滤查 HNSW 索引，口径与 chroma 完全一致
            · mysql ：读 ai_vectors 全表，逐条算余弦相似度
-           候选数由系统参数 rag_chroma_candidates 控制（默认 50），
+           候选数由系统参数 rag_chroma_candidates 控制（默认 50，两个向量库共用），
            多取一些是为了给角色过滤、通道过滤、min_score 阈值留出被筛掉的余量
         ③ 角色过滤：按用户角色（admin/service/boss/player）过滤受限文档
         ④ AutoMerging：同一父块（整章）下命中的子块超过 50% 时，
@@ -78,16 +81,20 @@ class VectorRetriever:
         qv = embed_texts([question], _embed_model(self.db))[0]
 
         # ② 候选召回：按配置的向量后端取回 [(相似度, chunk), ...]
-        #    chroma —— HNSW 近似最近邻索引召回（默认）
-        #    mysql  —— 全表扫描 + 纯 Python 余弦（可回退的兜底路径）
+        #    chroma / qdrant —— HNSW 近似最近邻索引召回
+        #    mysql           —— 全表扫描 + 纯 Python 余弦（可回退的兜底路径）
         backend = _vector_backend(self.db)
-        if backend == "chroma":
+        if backend in ("chroma", "qdrant"):
             try:
-                hits = self._hits_from_chroma(qv, allowed_types, role, min_score)
+                if backend == "chroma":
+                    hits = self._hits_from_chroma(qv, allowed_types, role, min_score)
+                else:
+                    hits = self._hits_from_qdrant(qv, allowed_types, role, min_score)
             except Exception as e:
-                # Chroma 异常不阻断问答流程，自动退回 MySQL 全表扫描
+                # 向量库异常不阻断问答流程，自动退回 MySQL 全表扫描
+                self.backend_error = (f"{backend} 召回失败，已回退 MySQL："
+                                      f"{type(e).__name__}: {e}")
                 backend = "mysql"
-                self.backend_error = f"Chroma 召回失败，已回退 MySQL：{type(e).__name__}: {e}"
                 hits = self._hits_from_mysql(qv, allowed_types, role, min_score)
         else:
             hits = self._hits_from_mysql(qv, allowed_types, role, min_score)
@@ -168,7 +175,7 @@ class VectorRetriever:
         return results[:max(1, int(top_k))]
 
     # ————————————————————————————————————————————————
-    # 候选召回：两种后端实现，输出口径一致（[(相似度, chunk), ...]）
+    # 候选召回：三种后端实现，输出口径一致（[(相似度, chunk), ...]）
     # ————————————————————————————————————————————————
 
     def _hits_from_chroma(self, qv, allowed_types, role, min_score):
@@ -181,7 +188,7 @@ class VectorRetriever:
         from ai_rag import _chroma_candidates
         from . import chroma_store as cs
 
-        where = self._chroma_where(allowed_types, role)
+        where = self._vector_where(allowed_types, role)
         pairs = cs.query(qv, _chroma_candidates(self.db), where=where)
         if not pairs:
             return []
@@ -195,6 +202,45 @@ class VectorRetriever:
         for cid, score in pairs:
             chunk = chunks.get(int(cid))
             # 索引里的元数据可能滞后于数据库，这里以数据库为准再校验一次
+            if chunk is None or int(chunk.enabled or 0) != 1:
+                continue
+            if allowed_types and (chunk.source_type or "") not in allowed_types:
+                continue
+            if (chunk.role or "") not in ("", role or ""):
+                continue
+            if score < min_score:
+                continue
+            hits.append((round(score, 4), chunk))
+        return hits
+
+    def _hits_from_qdrant(self, qv, allowed_types, role, min_score):
+        """Qdrant 后端：HNSW 索引召回 → 回表取元数据 → 二次校验。
+
+        与 _hits_from_chroma 同构：Qdrant 只负责「向量 → chunk_id + 相似度」，
+        标题、角色、父子关系一律以 MySQL 的 ai_chunks 为准，
+        所以 AutoMerging / 角色过滤 / 通道过滤等既有逻辑完全复用。
+
+        口径：集合用 COSINE 距离，Qdrant 返回的 score 本身就是余弦相似度
+        （与 Chroma 的 1-distance 一致），所以 min_score 阈值两个后端通用。
+        """
+        from models import AiChunk
+        from ai_rag import _vector_candidates
+        from . import qdrant_store as qs
+
+        where = self._vector_where(allowed_types, role)
+        pairs = qs.query(qv, _vector_candidates(self.db), where=where)
+        if not pairs:
+            return []
+
+        chunks = {}
+        for c in self.db.query(AiChunk).filter(
+                AiChunk.id.in_([cid for cid, _ in pairs])).all():
+            chunks[int(c.id)] = c
+
+        hits = []
+        for cid, score in pairs:
+            chunk = chunks.get(int(cid))
+            # 索引里的 payload 可能滞后于数据库，这里以数据库为准再校验一次
             if chunk is None or int(chunk.enabled or 0) != 1:
                 continue
             if allowed_types and (chunk.source_type or "") not in allowed_types:
@@ -246,8 +292,11 @@ class VectorRetriever:
         return hits
 
     @staticmethod
-    def _chroma_where(allowed_types, role):
-        """构造 Chroma 的 metadata 过滤条件，把硬过滤下推到索引层减少回表。
+    def _vector_where(allowed_types, role):
+        """构造向量库的 metadata 过滤条件，把硬过滤下推到索引层减少回表。
+
+        Chroma 与 Qdrant 共用这份条件（Qdrant 侧的 dict→Filter 转换在
+        qdrant_store._build_filter 里完成），保证两个后端的筛选语义完全一致。
 
         role 为空串表示「全角色可见」，所以按角色过滤时要同时匹配 "" 与当前角色。
         """

@@ -2826,16 +2826,24 @@
                 const pend = s.pending_total || 0;
                 // 向量存在哪里：Chroma 集合（HNSW 索引）还是 MySQL 全表扫描
                 const ch = s.chroma || {};
+                const qd = s.qdrant || {};
                 let vstore;
                 if (s.vector_backend === 'chroma' && ch.available) {
                     vstore = '<span class="text-green-600">Chroma 向量库</span>（集合 '
                         + escapeHtml(ch.collection || '-')
                         + '，' + (ch.count || 0) + ' 条向量'
                         + (ch.size_mb ? '，' + ch.size_mb + ' MB' : '') + '）';
+                } else if (s.vector_backend === 'qdrant' && qd.available) {
+                    vstore = '<span class="text-green-600">Qdrant 向量库</span>（集合 '
+                        + escapeHtml(qd.collection || '-')
+                        + '，' + (qd.count || 0) + ' 条向量'
+                        + (qd.size_mb ? '，' + qd.size_mb + ' MB' : '') + '）';
+                } else if (s.vector_backend === 'qdrant') {
+                    vstore = '<span class="text-amber-600">Qdrant 不可用，已自动降级为 MySQL 全表扫描</span>';
                 } else if (s.vector_backend === 'chroma') {
                     vstore = '<span class="text-amber-600">Chroma 不可用，已自动降级为 MySQL 全表扫描</span>';
                 } else {
-                    vstore = 'MySQL 全表扫描（未启用 Chroma）';
+                    vstore = 'MySQL 全表扫描（未启用外部向量库）';
                 }
                 box.innerHTML = '已向量化 <b>' + (s.ready_chunks || 0) + '</b> / ' + (s.total_chunks || 0) + ' 段'
                     + '（' + (s.enabled ? '向量检索已开启' : '向量检索已关闭')

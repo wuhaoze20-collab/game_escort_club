@@ -1,5 +1,86 @@
 # 更新日志 CHANGELOG
 
+## [V4.14.0] 2026-10-13
+
+### 🧩 接入 Qdrant 作为第三个向量后端，与 Chroma 平级并存、可随时切换对比
+
+目标是把 Qdrant 接进 RAG 流程和 Chroma 做对比，**Chroma 与 `backend/chroma_db` 原样保留、不替换**。
+
+#### 安装：本机没有 Docker，走官方客户端的本地嵌入式模式
+
+没起 Qdrant 服务端，直接用 `QdrantClient(path=...)`——数据落磁盘、不需要额外进程。
+装在 conda 环境 `D:\conda_envs\game_escort_club`：
+
+```
+qdrant-client 1.19.1
+  ├── h2 4.4.1
+  ├── hpack 4.2.0
+  ├── hyperframe 6.1.0
+  ├── portalocker 3.2.0
+  └── pywin32 312
+```
+
+#### 顺带澄清：Qdrant 不能拿来存头像
+
+一条 Qdrant 记录只有 **vector（定长浮点数组）+ payload（小 JSON）**，没有放文件本体的地方。
+base64 塞进 payload 会让 100KB 的图膨胀到约 133KB、召回时整块被拉回，而且不能直接给
+`<img src>` 用；只存路径又退化成一张普通表。项目现有的三层做法是对的，继续沿用：
+
+```
+touxiangku/ 放文件本体   →   DB 只存文件名（User.avatar）   →   main.py StaticFiles 对外提供
+```
+
+#### 改动清单
+
+| 文件 | 改动 |
+|---|---|
+| `backend/rag/qdrant_store.py` | **新建**。照 `chroma_store.py` 同名同参的封装层：集合名同为 `ai_chunks`、距离同为 cosine、写入批 200；`_build_filter` 把 Chroma 风格 dict 转成 Qdrant `Filter`（`$in`→`MatchAny`、`$eq`/裸值→`MatchValue`、`$and`→递归摊平进 `must`） |
+| `backend/ai_rag.py` | `_vector_backend()` 合法值扩为 `chroma`/`qdrant`/`mysql`，不可用时降级 mysql；**新增 `sync_qdrant()`**（与 `sync_chroma` 同构，直接读 `ai_vectors` 现成向量、不重复调 embedding 接口，幂等）；`rebuild_index()` / `stats()` / `drop_source()` 三处按后端分流 |
+| `backend/rag/vector_retriever.py` | 新增 `_hits_from_qdrant()`；`retrieve()` 加 qdrant 分流，异常时统一降级 mysql 并记 `self.backend_error`；`_chroma_where()` 更名 `_vector_where()`（两个后端共用一份过滤条件） |
+| `backend/config_service.py` | `rag_vector_backend` 增加 Qdrant 选项；`rag_chroma_candidates` 的 label/desc 改为「Chroma / Qdrant 共用」 |
+| `backend/api/ai_rag_api.py` | `/api/ai/kb/stats` 响应增加 `qdrant` 分段 |
+| `frontend/index.html` | `loadKbIndexStatus()` 增加 qdrant 可用 / qdrant 降级 / chroma 降级 / mysql 四路显示 |
+| `.gitignore` | 补 `backend/qdrant_db/`；临时脚本规则从 `_check_*.py` 放宽为 `_*.py` |
+
+#### 踩到的三个坑
+
+1. **建集合必须固定向量维度**——`VectorParams(size=1024, distance=Distance.COSINE)`。维度不符时
+   直接抛错，而不是静默重建，这是好事。
+2. **本地嵌入式模式对持久化目录加进程级文件锁**——同一目录不能被两个进程同时打开，
+   旧后端没退干净就再起一个会报 already accessed（所以 `qdrant_store` 内部用进程内单例）。
+3. **解释器退出时 `QdrantClient.__del__` 会往 stderr 抛噪音**——用
+   `atexit.register(_close_client)` 提前关掉客户端解决。
+
+#### 实测：两库结果几乎逐位相同
+
+| 指标 | Chroma | Qdrant |
+|---|---|---|
+| 向量条数 | 141 | 141 |
+| 磁盘占用 | 1.30 MB | 1.39 MB |
+| 查询延迟（limit=50，各 20 次） | 1.32 ms/次 | 1.63 ms/次 |
+
+- **Top-20 召回重合度 100%**：两库返回的 chunk id 序列完全相同
+  `[98,101,106,42,104,99,102,105,103,96,117,97,118,91,100,74,203,87,160,88]`
+- **同一 chunk 分数最大差异 5.3e-07**（0.748585 vs 0.748585，浮点误差级）
+- **带过滤召回顺序完全一致**（`enabled=1` + `source_type $in` + `role $in`），
+  说明 Qdrant 侧能完整复刻 Chroma 那套过滤语义，AutoMerging / 角色过滤 / 通道过滤都不用动
+- **端到端**：把 `rag_vector_backend` 切到 qdrant 后，`VectorRetriever` 的
+  `last_backend=qdrant`、`backend_error` 为空，返回的 4 条片段与分数和 Chroma 一模一样
+- **前端**：刷新后知识库状态正确显示「向量存储：Qdrant 向量库（集合 ai_chunks，141 条向量，1.39 MB）」
+
+同一 embedding 模型 + cosine 距离下两边本就应该高度一致，真正值得看的是**召回一致性**与
+**工程指标**（写入耗时 / 查询延迟 / 磁盘占用），上面这些数字就是为对比准备的。
+
+#### 校验
+
+| 脚本 | 结果 |
+|---|---|
+| `compileall` / `pyflakes`（6 个改动文件） | 零输出、零错误 |
+| `check_schema.py --strict` | 25 张表、列完全一致，通过 |
+| `check_consistency.py --strict` | 通过 26 · 警告 0 · 错误 0 |
+| `check_ai_tools.py` | 通过 15 · 失败 0 |
+| `check_api.py` | 188 次请求，500 错误 0、非预期状态码 0 |
+
 ## [V4.13.1] 2026-10-13
 
 ### 📌 顶栏常驻屏幕顶端，滚动时不再跟着滑走
