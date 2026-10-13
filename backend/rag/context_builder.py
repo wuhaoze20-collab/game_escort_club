@@ -75,6 +75,12 @@ class ContextBuilder:
                 # 文档格式：· 【标题】\n  内容
                 text = (f"· 【{chunk.title or '知识库'}】\n  "
                         + ai_service.render_placeholders(chunk.content, self.db))
+                # 图片源（多模态 RAG）：正文是图注文字，这里再补一行图片地址。
+                # 这行是给前端和调试页看的（回填缩略图、确认"命中的是哪张图"），
+                # 大模型读到的实质内容仍然是上面的图注正文。
+                if (getattr(chunk, "source_type", "") or "") == "image" \
+                        and (getattr(chunk, "asset_path", "") or ""):
+                    text += "\n  [图片] /kbimg/" + chunk.asset_path
             elif graph_doc is not None:
                 # 图谱格式：GraphRetriever 已经渲染好"主谓宾"列表了，直接用。
                 # 这里不再做占位符替换——图谱内容是库里的真实字段值，

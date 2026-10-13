@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Advanced RAG 完整流水线 — 大狗嚼电竞</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#ffffff; color:#1f2937;
+         font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .page { width:1240px; margin:0 auto; padding:44px 40px 56px; background:#ffffff; }
+  .h1 { font-size:30px; font-weight:800; color:#7f1d1d; letter-spacing:.5px; }
+  .sub { font-size:15px; color:#6b7280; margin-top:8px; }
+  .sub code { background:#f3f4f6; padding:1px 6px; border-radius:4px; color:#374151; font-size:14px; }
+  .legend { margin-top:18px; display:flex; flex-wrap:wrap; gap:10px; }
+  .legend span { border:1px solid #d1d5db; border-radius:6px; padding:5px 11px; font-size:13.5px; background:#f9fafb; color:#374151; }
+  .legend .k { border-color:#b91c1c; color:#991b1b; background:#fef2f2; font-weight:700; }
+
+  .node { border:2px solid #d1d5db; border-radius:12px; padding:15px 18px; margin-top:14px; background:#fff; }
+  .node .head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .badge { display:inline-flex; align-items:center; justify-content:center; min-width:34px; height:34px;
+           border-radius:9px; color:#fff; font-weight:800; font-size:16px; padding:0 8px; }
+  .n1 .badge{background:#b45309;} .n1{border-color:#b45309;background:#fffbeb;}
+  .n2 .badge{background:#0369a1;} .n2{border-color:#0369a1;background:#f0f9ff;}
+  .n3 .badge{background:#047857;} .n3{border-color:#047857;background:#ecfdf5;}
+  .n4 .badge{background:#be123c;} .n4{border-color:#be123c;background:#fff1f2;}
+  .n5 .badge{background:#7c3aed;} .n5{border-color:#7c3aed;background:#f5f3ff;}
+  .n6 .badge{background:#475569;} .n6{border-color:#475569;background:#f8fafc;}
+  .n7 .badge{background:#991b1b;} .n7{border-color:#b91c1c;background:#fef2f2;}
+  .n0 .badge{background:#334155;} .n0{border-color:#334155;background:#f1f5f9;}
+
+  .t { font-size:18px; font-weight:800; color:#111827; }
+  .f { font-size:13.5px; color:#6b7280; font-family:Consolas,"Courier New",monospace; }
+  .body { margin-top:11px; font-size:15px; line-height:1.72; color:#374151; }
+  .body b { color:#111827; }
+  .grid { display:grid; gap:10px; }
+  .g2 { grid-template-columns:1fr 1fr; }
+  .g3 { grid-template-columns:1fr 1fr 1fr; }
+  .g4 { grid-template-columns:repeat(4,1fr); }
+  .card { border:1px solid #d1d5db; border-radius:9px; padding:10px 13px; background:#fff; font-size:14.5px; }
+  .card .ct { font-weight:700; color:#111827; margin-bottom:4px; }
+  .card .cd { color:#4b5563; font-size:13.5px; line-height:1.6; }
+  .sw { display:inline-block; border:1px solid #d1d5db; border-radius:6px; padding:3px 9px;
+        background:#fff; font-size:13.5px; margin:4px 6px 0 0; color:#374151; }
+  .sw.on { border-color:#047857; background:#ecfdf5; color:#065f46; font-weight:600; }
+  .arrow { text-align:center; font-size:22px; color:#9ca3af; line-height:1; margin:8px 0 2px; }
+  .note { margin-top:11px; border-left:4px solid #b91c1c; background:#fef2f2; padding:9px 13px;
+          border-radius:0 8px 8px 0; font-size:14px; color:#991b1b; line-height:1.65; }
+  .note.ok { border-color:#047857; background:#ecfdf5; color:#065f46; }
+  .note.p { border-color:#7c3aed; background:#f5f3ff; color:#5b21b6; }
+  .foot { margin-top:26px; border:2px dashed #9ca3af; border-radius:12px; padding:15px 18px; background:#f9fafb; }
+  .foot .ft { font-size:17px; font-weight:800; color:#374151; margin-bottom:9px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:9px; }
+  th,td { border:1px solid #e5e7eb; padding:7px 10px; text-align:left; }
+  th { background:#f3f4f6; color:#374151; font-weight:700; }
+  td code { font-family:Consolas,monospace; font-size:13px; color:#9f1239; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="h1">Advanced RAG 完整流水线</div>
+  <div class="sub">大狗嚼电竞 · <code>backend/rag/pipeline.py</code> · <code>ModularRAG.query()</code> —— 七个环节，每项均可独立开关</div>
+  <div class="legend">
+    <span class="k">实线流程 = 默认执行</span>
+    <span>虚线/可选 = 需开关打开</span>
+    <span>旁注 = 参数名与阈值</span>
+  </div>
+
+  <!-- 入口 -->
+  <div class="node n0">
+    <div class="head"><span class="badge">0</span><span class="t">入口链路</span></div>
+    <div class="body">
+      前端 <b>POST /api/ai/chat</b>（body 字段是 <code>message</code>） → 取出对话历史 →
+      <b>ai_service.build_system_prompt()</b> 组装提示词 → 内部按系统参数 <code>ai_rag_enabled</code> 分流：
+      <div class="grid g2" style="margin-top:9px;">
+        <div class="card"><div class="ct">ai_rag_enabled = 开</div><div class="cd">走 ai_rag.build_rag_context() → ModularRAG.query()，即本图全流程</div></div>
+        <div class="card"><div class="ct">ai_rag_enabled = 关</div><div class="cd">退回 build_faq_context()：只做 FAQ 关键词匹配，无向量、无图谱</div></div>
+      </div>
+      <div class="note ok">Self-RAG 判定「本轮不需要查库」时 <code>skip_rag=True</code>，整条检索链路直接跳过，省一次 embedding 调用。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 1 查询增强 -->
+  <div class="node n1">
+    <div class="head"><span class="badge">1</span><span class="t">查询增强</span><span class="f">query_optimizer.py · 由 QueryRewriter 封装调用</span></div>
+    <div class="body">
+      把用户口语化提问改写成更适合检索的多个查询变体。五种技术可任意组合，<b>出厂默认全部关闭</b>（避免额外 API 调用与费用）。
+      <div class="grid g3" style="margin-top:10px;">
+        <div class="card"><div class="ct">查询重写</div><div class="cd">改写成更标准、更易检索的说法<br><code>ai_query_rewrite_enabled</code></div></div>
+        <div class="card"><div class="ct">子查询分解</div><div class="cd">复杂问题拆成多个子问题分别检索<br><code>ai_query_decompose_enabled</code></div></div>
+        <div class="card"><div class="ct">后退提示</div><div class="cd">先问更抽象的背景问题，拿到背景再答原问题<br><code>ai_query_stepback_enabled</code></div></div>
+        <div class="card"><div class="ct">查询扩展</div><div class="cd">补充同义词与相关关键词，扩大召回面<br><code>ai_query_expand_enabled</code></div></div>
+        <div class="card"><div class="ct">HyDE</div><div class="cd">先让模型编一段假设答案，用答案措辞去检索，弥合「问—答」表述鸿沟<br><code>ai_query_hyde_enabled</code></div></div>
+        <div class="card"><div class="ct">拆题上限</div><div class="cd">子查询最多拆几路<br><code>ai_query_max_sub</code> 取值 1~5，默认 3</div></div>
+      </div>
+      <div class="note">失败降级：底层 <code>_llm_rewrite()</code> 失败一律返回空字符串，回退到原问题 —— 查询增强坏了不能连累检索本身。</div>
+      <div class="body" style="margin-top:8px;"><b>输出：</b>N 个查询变体，每个为 <code>{"query", "type", "channels"}</code>。type 取值 original / rewrite / decompose / stepback / expand / hyde。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼ 产出 N 个查询变体</div>
+
+  <!-- 2 多路召回 -->
+  <div class="node n2">
+    <div class="head"><span class="badge">2</span><span class="t">多路召回</span><span class="f">三路 · 四个通道</span></div>
+    <div class="body">
+      每个查询变体分别跑一遍「关键词 + 向量（拆成文档、FAQ 两条独立通道）」，图谱通道只跑一次。
+      <div class="grid g4" style="margin-top:10px;">
+        <div class="card"><div class="ct">关键词通道</div><div class="cd">FAQ 库 BM25 打分<br>keyword_retriever.py<br>对每个变体跑<br>条数 <code>rag_keyword_limit</code></div></div>
+        <div class="card"><div class="ct">向量通道 · 长文档</div><div class="cd">source_types=["document"]<br>vector_retriever.py<br>对每个变体跑</div></div>
+        <div class="card"><div class="ct">向量通道 · FAQ</div><div class="cd">source_types=["faq"]<br>与文档通道各自独立召回，便于分别调权</div></div>
+        <div class="card" style="border-color:#7c3aed;background:#f5f3ff;"><div class="ct" style="color:#5b21b6;">图谱通道</div><div class="cd">graph_retriever.py<br><b>只用原始问题跑一次</b> —— 变体里往往已不含账户名、订单号这些字面标识，拿去匹配只会白跑几趟 Neo4j<br>条数 <code>rag_graph_limit</code> 默认 3</div></div>
+      </div>
+
+      <div class="body" style="margin-top:12px;"><b>向量检索内部五步（VectorRetriever.retrieve）</b></div>
+      <div class="grid g3" style="margin-top:8px;">
+        <div class="card"><div class="ct">① 问题向量化</div><div class="cd">embed_texts([question]) → 1024 维</div></div>
+        <div class="card"><div class="ct">② 候选召回</div><div class="cd">候选数 <code>rag_chroma_candidates</code> 默认 50 —— 多取是为了给角色过滤、通道过滤、阈值筛掉留余量</div></div>
+        <div class="card"><div class="ct">③ 角色过滤</div><div class="cd">按 admin / service / boss / player 过滤受限文档</div></div>
+        <div class="card"><div class="ct">④ AutoMerging</div><div class="cd">同一父块下命中的子块占比 &gt; 50% 时，把子块替换为整章父块</div></div>
+        <div class="card"><div class="ct">⑤ 排序截断</div><div class="cd">按相似度降序取 Top-K（<code>rag_top_k</code> 默认 4），丢弃低于 <code>rag_min_score</code>（默认 0.35）</div></div>
+        <div class="card" style="border-color:#0369a1;"><div class="ct">向量后端三选一</div><div class="cd"><code>rag_vector_backend</code> = chroma（默认）/ qdrant / mysql<br>向量库异常自动回退 MySQL 全表余弦</div></div>
+      </div>
+
+      <div class="note ok">三路都为空 → 直接返回空上下文，后续环节全部跳过。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 3 融合 -->
+  <div class="node n3">
+    <div class="head"><span class="badge">3</span><span class="t">加权 RRF 融合</span><span class="f">fusion.py</span></div>
+    <div class="body">
+      <b>score(d) = Σ 1 / (rrf_k + rank) × 通道权重</b>，rrf_k 默认 60。
+      <div class="grid g2" style="margin-top:10px;">
+        <div class="card"><div class="ct">通道权重 <code>rag_channel_weights</code></div><div class="cd">图谱 <b>1.3</b> · FAQ <b>1.2</b> · 长文档 <b>1.0</b><br>FAQ 高是因为人工维护更权威；图谱高是因为它只在问题提到具体实体时才有输出，一命中含金量最高</div></div>
+        <div class="card"><div class="ct">关闭融合时的兜底 <code>_simple_merge</code></div><div class="cd">图谱 → 向量 → 关键词顺序直接拼接，不做 RRF 排序；关键词分 ×0.01 缩放到 0~1 区间</div></div>
+      </div>
+      <div class="body" style="margin-top:10px;"><b>为什么用 RRF 而不直接加分数：</b>向量分是 0~1 的余弦相似度，关键词分是 BM25 整数，量纲根本不同；RRF 只用排名，天然统一量纲，且高排名贡献大、低排名趋近于 0，鲁棒性好。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 4 重排序 -->
+  <div class="node n4">
+    <div class="head"><span class="badge">4</span><span class="t">重排序（二次排序）</span><span class="f">reranker.py / cross_encoder_reranker.py</span></div>
+    <div class="body">模式由 <code>rag_rerank_mode</code> 决定，三选一：
+      <div class="grid g3" style="margin-top:10px;">
+        <div class="card"><div class="ct">规则级（零成本）</div><div class="cd">RRF 分归一化 ×0.4<br>+ 向量最高相似度 ×0.3<br>+ 关键词最高分归一化 ×0.15<br>+ 来源类型加成 ×0.1<br>+ 标题匹配加分 ×0.05</div></div>
+        <div class="card" style="border-color:#be123c;"><div class="ct">语意级 Cross-Encoder</div><div class="cd">取候选前 <code>rag_rerank_candidate_limit</code>（默认 10）条，构造「问题 + 编号候选」，让大模型输出每条的 0~1 相关性分再重排。<br>更准，但每次检索多一次大模型调用</div></div>
+        <div class="card"><div class="ct">off</div><div class="cd">不做二次排序，直接采用融合结果</div></div>
+      </div>
+      <div class="note">为什么需要重排序：RRF 只用排名、丢掉了分数的绝对值 —— 两条都是第 1 名，一个相似度 0.9、一个 0.4，RRF 给的贡献却一样。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 5 Self-RAG -->
+  <div class="node n5">
+    <div class="head"><span class="badge">5</span><span class="t">Self-RAG 相关性过滤（可选）</span><span class="f">ai_service.self_rag_filter_relevance()</span></div>
+    <div class="body">
+      前 <code>top_k × 2</code> 条候选送大模型逐条打 <b>1~5 分</b>，丢弃 ≤ 阈值（<code>ai_self_rag_relevance_threshold</code>，默认 3）的片段，按新分重排。
+      <div class="body" style="margin-top:8px;"><b>三路来源的文本载体不同，都要认出来：</b></div>
+      <div class="grid g3" style="margin-top:8px;">
+        <div class="card"><div class="cd">FAQ → <code>问：… 答：…</code></div></div>
+        <div class="card"><div class="cd">文档 → <code>chunk.content</code></div></div>
+        <div class="card"><div class="cd">图谱 → <code>graph_doc.content</code></div></div>
+      </div>
+      <div class="note">漏认任何一路，该路候选会被当成「空文本」跳过打分，随后被过滤后的集合排除 —— 图谱事实就是这样被无声丢掉的。</div>
+      <div class="body" style="margin-top:9px;"><b>Self-RAG 另有两个反思点：</b>检索前 <code>self_rag_should_retrieve()</code> 判断「这问题需要查库吗」；生成后 <code>self_rag_verify_answer()</code> 核验答案是否被上下文支撑。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 6 上下文构建 -->
+  <div class="node n6">
+    <div class="head"><span class="badge">6</span><span class="t">上下文构建</span><span class="f">context_builder.py</span></div>
+    <div class="body">
+      渲染成模型能读的引用块：
+      <div class="grid g3" style="margin-top:9px;">
+        <div class="card"><div class="ct">FAQ 格式</div><div class="cd">· 问：xxx<br>&nbsp;&nbsp;答：xxx</div></div>
+        <div class="card"><div class="ct">文档格式</div><div class="cd">· 【标题】<br>&nbsp;&nbsp;正文…</div></div>
+        <div class="card"><div class="ct">图谱格式</div><div class="cd">GraphRetriever 已渲染好主谓宾，直接透传，不再做占位符替换</div></div>
+      </div>
+      <div class="body" style="margin-top:10px;"><b>双重限制：</b>条数 <code>rag_top_k</code>（默认 4）+ 总字符 <code>rag_max_chars</code>；<b>第一条不受字符限制</b>，保证至少注入一条，不会出现空上下文。</div>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <!-- 7 生成 -->
+  <div class="node n7">
+    <div class="head"><span class="badge">7</span><span class="t">生成</span><span class="f">ai_service.chat() → 千问</span></div>
+    <div class="body">
+      上下文文本回到 <code>build_system_prompt()</code>，<b>排在【平台资料】之前</b>注入系统提示词，连同历史对话一起发给大模型。
+      <div class="note ok" style="margin-top:9px;">顺序刻意如此：平台资料有八九十行固定配置，检索结果排在它后面会被长文淹没、模型经常直接忽略 —— 而那一块才是本轮提问的答案，越靠前注意力越强。</div>
+      <div class="body" style="margin-top:9px;"><b>返回：</b><code>AiChatResponse(reply, conversation_id, remaining_today)</code></div>
+    </div>
+  </div>
+
+  <!-- 底部 -->
+  <div class="foot">
+    <div class="ft">配套 · 可观测与调试（前端「RAG 调试」页）</div>
+    <div class="body">每次提问都会回填一份调试快照，用于定位「到底哪一环没召回」：</div>
+    <table>
+      <tr><th style="width:230px;">字段</th><th>含义</th></tr>
+      <tr><td><code>module_switches</code></td><td>本轮七个模块的开关快照（含重排序实际生效模式）</td></tr>
+      <tr><td><code>all_queries</code> / <code>per_query_results</code></td><td>查询变体清单，以及每个变体在关键词、向量两通道各自命中了什么、分数多少</td></tr>
+      <tr><td><code>graph_hits</code></td><td>图谱这一路单独列一段（它不对应任何查询变体）</td></tr>
+      <tr><td><code>fused_keys</code> / <code>reranked_keys</code></td><td>融合前后各取前 20 条，可逐条对比 RRF 分与重排序综合分</td></tr>
+      <tr><td><code>semantic_rerank_scores</code></td><td>语意级重排序时，每个候选的模型相关性分</td></tr>
+      <tr><td><code>self_rag_relevance_filtered</code></td><td>被相关性过滤丢掉了多少条</td></tr>
+      <tr><td><code>vector_error</code></td><td>向量通道异常文本（异常不中断问答，只记录）</td></tr>
+      <tr><td><code>injected_items</code> / <code>injected_chars</code></td><td>最终真正注入提示词的条数与字符数</td></tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

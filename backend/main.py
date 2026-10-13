@@ -10,6 +10,11 @@ PROJECT_ROOT = os.path.dirname(BASE_DIR)                     # 项目根目录
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 AVATARS_DIR = os.path.join(FRONTEND_DIR, "avatars")
 BIZHIKU_DIR = os.path.join(PROJECT_ROOT, "bizhiku")
+# 知识库图片目录（多模态 RAG 的图片来源）。
+# 与 touxiangku/、bizhiku/ 同一套路：图片文件放磁盘，数据库只存文件名，
+# 由 StaticFiles 对外提供访问，绝不把二进制塞进 MySQL。
+KB_IMAGES_DIR = os.path.join(PROJECT_ROOT, "kb_images")
+os.makedirs(KB_IMAGES_DIR, exist_ok=True)
 INDEX_HTML = os.path.join(FRONTEND_DIR, "index.html")
 
 # 保证任何工作目录下都能 import 到本项目模块
@@ -87,6 +92,12 @@ ADD_COLUMNS = (
      "ALTER TABLE ai_eval_history ADD COLUMN question_ids TEXT"),
     ("ai_eval_history", "fixed_set_version",
      "ALTER TABLE ai_eval_history ADD COLUMN fixed_set_version INTEGER DEFAULT 0"),
+    # ---- V4.15.0 多模态 RAG（路线 A）：图片源 ----
+    # 图片的图注文本存在 ai_chunks.content 里参与向量化；这一列额外记录
+    # 它对应哪张图片，供前端拼 /kbimg/<文件名> 显示缩略图。
+    # 文本类来源（document / faq）此列留空，因此对老库是纯增量、不影响既有数据。
+    ("ai_chunks", "asset_path",
+     "ALTER TABLE ai_chunks ADD COLUMN asset_path VARCHAR(200) DEFAULT ''"),
 )
 
 
@@ -295,6 +306,9 @@ app.mount("/avatars", StaticFiles(directory=AVATARS_DIR), name="avatars")
 
 # 挂载壁纸库静态文件
 app.mount("/bizhiku", StaticFiles(directory=BIZHIKU_DIR), name="bizhiku")
+
+# 挂载知识库图片静态文件（多模态 RAG 检索命中后，前端据此显示缩略图）
+app.mount("/kbimg", StaticFiles(directory=KB_IMAGES_DIR), name="kbimg")
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>知识图谱 RAG（Graph RAG）— 大狗嚼电竞</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:0; background:#ffffff; color:#1f2937;
+         font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  .page { width:1240px; margin:0 auto; padding:44px 40px 56px; background:#ffffff; }
+  .h1 { font-size:30px; font-weight:800; color:#5b21b6; letter-spacing:.5px; }
+  .sub { font-size:15px; color:#6b7280; margin-top:8px; }
+  .sub code { background:#f3f4f6; padding:1px 6px; border-radius:4px; color:#374151; font-size:14px; }
+  .lead { margin-top:18px; border-left:4px solid #7c3aed; background:#f5f3ff; padding:12px 16px;
+          border-radius:0 10px 10px 0; font-size:15px; line-height:1.75; color:#4c1d95; }
+  .sec { margin-top:26px; }
+  .sec .st { font-size:20px; font-weight:800; color:#111827; border-left:5px solid #7c3aed;
+             padding-left:11px; margin-bottom:12px; }
+  .sec .sd { font-size:14px; color:#6b7280; margin:-6px 0 12px 16px; }
+
+  .row { display:grid; gap:12px; }
+  .c2 { grid-template-columns:1fr 1fr; }
+  .c3 { grid-template-columns:1fr 1fr 1fr; }
+  .c4 { grid-template-columns:repeat(4,1fr); }
+  .card { border:1.5px solid #d1d5db; border-radius:10px; padding:12px 15px; background:#fff; font-size:14.5px; }
+  .card .ct { font-weight:800; color:#111827; margin-bottom:5px; font-size:15.5px; }
+  .card .cd { color:#4b5563; line-height:1.7; font-size:14px; }
+  .card.p { border-color:#7c3aed; background:#f5f3ff; }
+  .card.g { border-color:#047857; background:#ecfdf5; }
+  .card.b { border-color:#0369a1; background:#f0f9ff; }
+  .card.r { border-color:#be123c; background:#fff1f2; }
+  .card code { font-family:Consolas,monospace; font-size:13px; color:#9f1239; }
+
+  .flow { border:2px solid #7c3aed; border-radius:12px; padding:16px 18px; background:#faf5ff; }
+  .chain { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14.5px; }
+  .chip { border:1.5px solid #7c3aed; border-radius:8px; padding:6px 12px; background:#fff; font-weight:700; color:#5b21b6; }
+  .chip.o { border-color:#b45309; color:#92400e; background:#fffbeb; }
+  .chip.b { border-color:#0369a1; color:#075985; background:#f0f9ff; }
+  .chip.g { border-color:#047857; color:#065f46; background:#ecfdf5; }
+  .lab { font-size:13px; color:#7c3aed; font-weight:600; }
+  .arr { color:#9ca3af; font-size:18px; }
+
+  .step { border:1.5px solid #d1d5db; border-radius:10px; padding:12px 15px; background:#fff; margin-top:10px; }
+  .step .stt { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .badge { display:inline-flex; align-items:center; justify-content:center; min-width:30px; height:30px;
+           border-radius:8px; background:#5b21b6; color:#fff; font-weight:800; font-size:15px; padding:0 7px; }
+  .step .sname { font-weight:800; font-size:16.5px; color:#111827; }
+  .step .sfn { font-size:13.5px; color:#6b7280; font-family:Consolas,monospace; }
+  .step .sb { margin-top:8px; font-size:14.5px; color:#374151; line-height:1.72; }
+  .note { margin-top:10px; border-left:4px solid #b91c1c; background:#fef2f2; padding:9px 13px;
+          border-radius:0 8px 8px 0; font-size:14px; color:#991b1b; line-height:1.65; }
+  .note.ok { border-color:#047857; background:#ecfdf5; color:#065f46; }
+  .note.w { border-color:#b45309; background:#fffbeb; color:#92400e; }
+
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:10px; }
+  th,td { border:1px solid #e5e7eb; padding:7px 10px; text-align:left; }
+  th { background:#f5f3ff; color:#5b21b6; font-weight:700; }
+  td code { font-family:Consolas,monospace; font-size:13px; color:#9f1239; }
+  .foot { margin-top:26px; border:2px dashed #9ca3af; border-radius:12px; padding:15px 18px; background:#f9fafb; }
+  .foot .ft { font-size:17px; font-weight:800; color:#374151; margin-bottom:9px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="h1">知识图谱 RAG（Graph RAG）</div>
+  <div class="sub">大狗嚼电竞 · <code>backend/rag/graph_retriever.py</code> · <code>backend/kg/</code> · Neo4j —— 多路召回里的第三路</div>
+
+  <div class="lead">
+    <b>为什么单独开一路：</b>向量检索擅长语义相似，但对「这个老板找过哪几个打手」这类
+    <b>关系型问题</b>很吃力 —— 答案不在任何一段文字里，而在实体之间的边上。关键词检索更不行，
+    BM25 只看词频，算不出多跳关系。
+  </div>
+
+  <!-- A 建图侧 -->
+  <div class="sec">
+    <div class="st">A · 建图侧 —— 业务数据怎么变成图</div>
+    <div class="sd">kg/sync.py 全量同步 + 业务接口写库时顺带增量入图</div>
+
+    <div class="flow">
+      <div class="chain">
+        <span class="chip b">MySQL 业务表</span>
+        <span class="arr">→</span>
+        <span class="chip o">kg/sync.py 节点与关系映射</span>
+        <span class="arr">→</span>
+        <span class="chip">Neo4j 图谱</span>
+      </div>
+      <div style="margin-top:11px;font-size:14px;color:#5b21b6;">
+        数据源：用户 · 订单 · 评价 · 打赏 · 提现 · 处罚 · 游戏 · 标签
+      </div>
+      <div class="row c4" style="margin-top:13px;">
+        <div class="card p"><div class="ct">当前规模</div><div class="cd">123 节点 / 271 关系</div></div>
+        <div class="card p"><div class="ct">节点分布</div><div class="cd">订单 36 · 评价 30 · 标签 15 · 打手 12 · 打赏 9 · 游戏 8 · 提现 7 · 老板 3 · 处罚 3</div></div>
+        <div class="card p"><div class="ct">关系类型</div><div class="cd">PLACED 下单 · SERVED 承接 · FOR_ORDER 归属订单 · FOR_GAME 关联游戏 · RATED 评价 · ABOUT 指向被评价人 · HIRED 雇佣 · HAS_TAG 持有标签 · TIPPED 打赏 · TO 打赏对象 · WITHDREW 提现 · COMPLAINED 投诉</div></div>
+        <div class="card p"><div class="ct">入图时机</div><div class="cd">① 启动时自检连通性，图谱为空则自动全量同步一次<br>② 手动 <code>POST /api/kg/rebuild</code><br>③ 业务接口写库成功后增量入图</div></div>
+      </div>
+      <div class="note w" style="margin-top:12px;">Neo4j 属性不能存 <code>None</code>，未评价的好评率用哨兵值 <code>-1.0</code> 占位，前端见到 -1 显示为「-」。好评率字段已是百分数（66.7），不要再乘 100。</div>
+    </div>
+  </div>
+
+  <!-- B 查询侧 -->
+  <div class="sec">
+    <div class="st">B · 查询侧 —— 提问时这七步</div>
+    <div class="sd">入口 GraphRetriever.retrieve(question, role, username, limit)</div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">①</span><span class="sname">可用性三关</span><span class="sfn">kg.store.is_ready()</span></div>
+      <div class="sb">驱动装了没（neo4j 包）→ 密码配了没（<code>NEO4J_PASSWORD</code> 在 backend/.env）→ 连得上没。任一不过直接返回空列表。</div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">②</span><span class="sname">实体链接</span><span class="sfn">_link_entities()</span></div>
+      <div class="sb">
+        让 Neo4j 去判断「问题文本里是否包含某个节点的标识」，可匹配五类：
+        <span class="chip" style="font-size:13.5px;padding:3px 9px;">账户名</span>
+        <span class="chip" style="font-size:13.5px;padding:3px 9px;">昵称</span>
+        <span class="chip" style="font-size:13.5px;padding:3px 9px;">订单号</span>
+        <span class="chip" style="font-size:13.5px;padding:3px 9px;">游戏名</span>
+        <span class="chip" style="font-size:13.5px;padding:3px 9px;">标签名</span>
+        <div class="note" style="margin-top:9px;">账户名、订单号属于精确标识符，命中给强加成；昵称、游戏名、标签只是字面包含，可能碰巧撞上，只给弱加成。这个判定会一路带到重排序阶段。</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">③</span><span class="sname">本人兜底</span></div>
+      <div class="sb">老板和打手问「我的订单」时，问题里根本不会出现自己的账户名，实体链接必然一无所获。此时若角色是 boss / player 且没匹配到任何实体，<b>直接把「本人节点」当作默认命中</b> —— 这样「我的订单」也能走图谱。</div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">④</span><span class="sname">权限过滤</span><span class="sfn">_visible()</span></div>
+      <div class="sb">
+        与 <code>kg/api.py</code> 的可见性规则保持一致：
+        <div class="row c2" style="margin-top:9px;">
+          <div class="card g"><div class="cd"><b>管理员 / 客服</b> —— 看全量节点</div></div>
+          <div class="card r"><div class="cd"><b>老板 / 打手</b> —— 只能看自己（按传入的 username 收敛）</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">⑤</span><span class="sname">取一跳邻域</span><span class="sfn">_collect_facts(seeds, limit)</span></div>
+      <div class="sb">把这批实体的邻居和关系一次性捞出来，条数由系统参数 <code>rag_graph_limit</code> 控制（默认 3）。</div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">⑥</span><span class="sname">渲染成人话</span><span class="sfn">_render() / _render_props() / _fmt()</span></div>
+      <div class="sb">
+        输出形如「老板 laoban —下单→ 订单 ORD2026…」的主谓宾事实。
+        <div class="row c2" style="margin-top:10px;">
+          <div class="card"><div class="ct">字段中文名映射</div><div class="cd">如 <code>backend_amount</code> → 后台金额、<code>player_username</code> → 打手、<code>boss_username</code> → 老板。<br><code>created_at</code> 统一翻译为中性词「时间」—— 因为它在各表里含义不同（下单 / 评价 / 打赏 / 提现），否则会把打赏时间渲染成「下单时间」。</div></div>
+          <div class="card r"><div class="ct">敏感字段抹除</div><div class="cd">余额 · 累计消费 · 后台金额 · 订单金额 · 金额 · 打赏金额<br>对非管理员一律抹掉，只在管理员视角显示。</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="stt"><span class="badge">⑦</span><span class="sname">包装并并入融合</span><span class="sfn">Document(source_type="graph")</span></div>
+      <div class="sb">
+        每条事实包装成一个 Document，带 <code>node_id / label / key / node_name / match_field / match_score</code> 元数据，
+        进入加权 RRF 融合，通道权重 <b>1.3</b>（三路中最高）。
+        <div class="note ok" style="margin-top:9px;">事实只带渲染后的文本，不带原始属性字典 —— 因此不会绕过第 ④ 步的权限过滤。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- C 图谱结构示意 -->
+  <div class="sec">
+    <div class="st">C · 一跳邻域长什么样（以一条订单为中心）</div>
+    <div class="sd">示意结构，用于说明关系型问题为什么必须靠图</div>
+
+    <div class="flow">
+      <div class="chain" style="gap:10px;">
+        <span class="chip o">老板 laoban</span>
+        <span class="arr">—下单 PLACED→</span>
+        <span class="chip">订单 ORD2026…</span>
+        <span class="arr">—承接 SERVED→</span>
+        <span class="chip g">打手 dashou_09</span>
+      </div>
+      <div class="chain" style="margin-top:11px;gap:10px;padding-left:14px;">
+        <span class="arr">↳</span>
+        <span class="chip b">游戏 无畏契约</span>
+        <span class="chip b">评价 5 星</span>
+        <span class="chip b">打赏 8.00 元</span>
+      </div>
+      <div style="margin-top:12px;font-size:14px;color:#5b21b6;">
+        问「laoban 找过哪些打手」→ 从老板节点走一跳就能拿到全部订单与承接人；
+        这在向量库里没有任何一段文字能直接回答。
+      </div>
+    </div>
+  </div>
+
+  <!-- D 降级 -->
+  <div class="sec">
+    <div class="st">D · 失败降级 —— 这条通道绝不能拖垮问答</div>
+    <div class="row c4">
+      <div class="card r"><div class="ct">驱动没装</div><div class="cd">提示「pip install neo4j」，图谱功能关闭</div></div>
+      <div class="card r"><div class="ct">密码没配</div><div class="cd">提示看 backend/.env 的 NEO4J_PASSWORD</div></div>
+      <div class="card r"><div class="ct">连不上 Neo4j</div><div class="cd">本次跳过，只打印一行日志</div></div>
+      <div class="card r"><div class="ct">Cypher 报错</div><div class="cd">返回空列表，绝不抛异常</div></div>
+    </div>
+    <div class="note ok" style="margin-top:12px;">RAG 少了这一路照样能答，只是答不了关系型问题。所有异常都被吞掉并降级为空召回。</div>
+  </div>
+
+  <!-- E 相关接口 -->
+  <div class="sec">
+    <div class="st">E · 配套接口与前端</div>
+    <table>
+      <tr><th style="width:270px;">接口 / 位置</th><th>作用</th></tr>
+      <tr><td><code>GET /api/kg/stats</code></td><td>图谱规模统计（节点数、关系数）</td></tr>
+      <tr><td><code>GET /api/kg/graph</code></td><td>可视化取图，支持 <code>labels</code> 过滤与 <code>limit</code>（默认 300）</td></tr>
+      <tr><td><code>GET /api/kg/node/{label}/{key}</code></td><td>单节点详情</td></tr>
+      <tr><td><code>GET /api/kg/search?q=</code></td><td>按关键词搜节点</td></tr>
+      <tr><td><code>POST /api/kg/rebuild</code></td><td>手动全量重建图谱</td></tr>
+      <tr><td>前端 <code>#page-kg-graph</code></td><td>知识图谱可视化页：力导向布局、节点可拖动、按标签筛选、点击看节点明细</td></tr>
+      <tr><td>前端 <code>#page-rag-debug</code></td><td>调试页可看到本轮 <code>graph_hits</code> 单独一段及其 <code>match_field</code>（命中方式）</td></tr>
+    </table>
+  </div>
+
+  <!-- F 与其他两路的关系 -->
+  <div class="foot">
+    <div class="ft">F · 在整体 RAG 中的位置</div>
+    <div class="chain" style="gap:9px;">
+      <span class="chip">查询增强产出的 N 个变体</span>
+      <span class="arr">→</span>
+      <span class="chip b">关键词通道（每变体）</span>
+      <span class="chip b">向量通道（每变体）</span>
+      <span class="chip">✚ 图谱通道（仅原始问题一次）</span>
+      <span class="arr">→</span>
+      <span class="chip g">加权 RRF 融合（图谱权重 1.3）</span>
+      <span class="arr">→</span>
+      <span class="chip o">重排序 → Self-RAG 过滤 → 上下文构建 → 生成</span>
+    </div>
+    <div style="margin-top:12px;font-size:14px;color:#4b5563;line-height:1.7;">
+      图谱通道不跟着查询变体分裂，是因为实体链接依赖问题里的字面标识（账户名、订单号、游戏名）；
+      改写出来的变体（同义扩展、HyDE、子查询拆分）往往已经不含这些标识，拿去匹配只会白跑几趟 Neo4j。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -39,8 +39,12 @@ EMBED_BATCH = 10
 EMBED_TIMEOUT = 30
 RRF_K = 60  # RRF 平滑常数，原论文推荐值
 
-# 多路召回通道权重（PDF：FAQ 是人工维护的权威问答，权重高；长文档权重标准）
-CHANNEL_WEIGHT = {"document": 1.0, "faq": 1.2, "graph": 1.3}
+# 多路召回通道权重：
+# · FAQ 是人工维护的权威问答，权重最高一档；
+# · 图谱只在问题里真的出现具体实体时才产出，含金量高；
+# · 图片的 content 是它自己的图注（画面描述 + 图内文字 OCR），一旦命中就说明
+#   "提问里说的东西确实出现在某张图里"，比通用条款更贴合提问，故略高于文档。
+CHANNEL_WEIGHT = {"document": 1.0, "image": 1.1, "faq": 1.2, "graph": 1.3}
 
 # 父子分块
 _CHILD_INDEX_OFFSET = 100000  # 子块 chunk_index 偏移，避免与父块(0~99999)冲突
@@ -179,15 +183,20 @@ def _rrf_k(db) -> int:
         return RRF_K
 
 def _channel_weights(db) -> dict:
-    """多路召回的通道权重，形如 {"document": 1.0, "faq": 1.2, "graph": 1.3}。
+    """多路召回的通道权重，形如 {"document":1.0, "image":1.1, "faq":1.2, "graph":1.3}。
 
     图谱这一路权重略高于 FAQ，是因为它只在问题里真的出现具体实体时才产出，
     一旦出现就说明用户在问"某个具体的人/单"，这种事实比通用条款更贴合提问。
+    图片这一路略高于文档：图注命中意味着提问里的东西真的出现在某张图上。
     """
     try:
         doc_w = float(config_service.get_config("rag_weight_document", db))
     except Exception:
         doc_w = CHANNEL_WEIGHT["document"]
+    try:
+        img_w = float(config_service.get_config("rag_weight_image", db))
+    except Exception:
+        img_w = CHANNEL_WEIGHT.get("image", 1.1)
     try:
         faq_w = float(config_service.get_config("rag_weight_faq", db))
     except Exception:
@@ -196,7 +205,7 @@ def _channel_weights(db) -> dict:
         graph_w = float(config_service.get_config("rag_weight_graph", db))
     except Exception:
         graph_w = CHANNEL_WEIGHT.get("graph", 1.3)
-    return {"document": doc_w, "faq": faq_w, "graph": graph_w}
+    return {"document": doc_w, "image": img_w, "faq": faq_w, "graph": graph_w}
 
 def _graph_limit(db) -> int:
     """图谱通道每次最多注入几条事实。"""
@@ -422,9 +431,16 @@ _DOC_EXTENSIONS = (".docx", ".txt", ".html", ".htm", ".pdf", ".md", ".csv", ".js
 
 
 def collect_sources(db) -> list:
-    """收集所有待索引内容：文档目录下的所有支持格式文件 + FAQ 问答库。
+    """收集所有待索引内容：知识库文档 + 知识库图片 + FAQ 问答库。
 
-    返回 [{"source_type", "source_key", "title", "role", "content"}]
+    返回 [{"source_type", "source_key", "title", "role", "content"[, "asset_path"]}]
+
+    source_type 目前有三类：
+        document —— docs/agreements/ 下的多格式文档
+        image    —— kb_images/ 下的图片。多模态 RAG 的核心一步：图片本身无法被
+                    文本向量命中，先让千问 VL 把它转成图注文本（描述 + 图内文字 +
+                    标签），再作为普通文本源流进后面的分块 / 向量化 / 检索管线。
+        faq      —— ai_faqs 表里人工维护的问答
     """
     from models import AiFaq
     out = []
@@ -448,6 +464,34 @@ def collect_sources(db) -> list:
             })
     else:
         print(f"[rag] 协议文档目录不存在：{AGREEMENTS_DIR}")
+
+    # 知识库图片（多模态 RAG · 路线 A）
+    # 先让千问 VL 把图片"翻译"成结构化文本（概括 + 画面描述 + 图内文字 OCR +
+    # 检索标签），再当作一个普通文本源交给后面的管线 —— 检索侧一行都不用改。
+    # 图注带缓存（ai_image_captions，键 = 文件名 + 图片文件 MD5）：
+    # 图片内容没变就直接读缓存、一次接口都不调，所以「重建索引」点多少次都不花钱。
+    try:
+        from rag import image_captioner
+        for fname in image_captioner.list_image_files():
+            cap = image_captioner.get_caption(db, fname)
+            if not cap.get("ok") or not (cap.get("caption") or "").strip():
+                if cap.get("error"):
+                    print(f"[rag] 图片图注生成失败 {fname}：{cap['error']}")
+                continue
+            stem = os.path.splitext(fname)[0]
+            out.append({
+                "source_type": "image",
+                "source_key": stem,
+                "title": stem,
+                "role": "",
+                "content": cap["caption"],
+                # 前端据此拼 /kbimg/<文件名> 显示缩略图
+                "asset_path": fname,
+            })
+            if not cap.get("from_cache"):
+                print(f"[rag] 已生成图注：{fname}（模型 {cap.get('model') or '-'}）")
+    except Exception as e:
+        print(f"[rag] 收集知识库图片失败：{e}")
 
     # FAQ（问法+答法一起索引，问法措辞更接近用户提问）
     try:
@@ -659,7 +703,9 @@ def rebuild_index(db, force: bool = False) -> dict:
             plan.append({"key": (src["source_type"], src["source_key"], 0),
                          "parent_id": None, "title": src["title"], "role": src["role"],
                          "content": src["content"], "content_hash": md5_text(src["content"]),
-                         "is_parent": False})
+                         "is_parent": False,
+                         # 图片源才有这一项（指向 kb_images/ 下的文件名）；FAQ 等文本源为空
+                         "asset_path": src.get("asset_path", "")})
 
     existing = {(r.source_type, r.source_key, int(r.chunk_index or 0)): r
                 for r in db.query(AiChunk).all()}
@@ -691,6 +737,7 @@ def rebuild_index(db, force: bool = False) -> dict:
                 db.add(row)
             row.title = p["title"]; row.role = p["role"]; row.content = p["content"]
             row.content_hash = p["content_hash"]; row.parent_id = None
+            row.asset_path = p.get("asset_path", "") or ""
             row.enabled = 1
         db.flush()
         parent_id_map[key] = row.id
@@ -707,7 +754,8 @@ def rebuild_index(db, force: bool = False) -> dict:
         if row is None:
             row = AiChunk(source_type=key[0], source_key=key[1],
                           chunk_index=key[2], content=p["content"],
-                          content_hash=p["content_hash"])
+                          content_hash=p["content_hash"],
+                          asset_path=p.get("asset_path", "") or "")
             db.add(row); db.flush()
             existing[key] = row
         # 检查 ai_vectors 表是否已有有效向量
@@ -724,6 +772,7 @@ def rebuild_index(db, force: bool = False) -> dict:
             continue
         row.title = p["title"]; row.role = p["role"]; row.content = p["content"]
         row.content_hash = p["content_hash"]; row.parent_id = parent_id; row.enabled = 1
+        row.asset_path = p.get("asset_path", "") or ""
         pending.append((key, row, p, parent_id))
 
     # ⑤ 分批向量化，写入 ai_vectors 表（upsert）

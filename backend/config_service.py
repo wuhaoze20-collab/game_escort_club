@@ -189,6 +189,13 @@ CONFIG_META: dict[str, dict] = {
         "default": "text-embedding-v3", "type": "str", "group": "AI 知识库", "label": "向量化模型",
         "desc": "千问 Embedding 模型名。换模型后旧向量维度不同，必须点「重建索引」全量重算",
     },
+    "ai_vl_model": {
+        "default": "qwen3-vl-plus", "type": "str", "group": "AI 知识库", "label": "图片理解模型（多模态）",
+        "desc": "把知识库图片转成可检索文字用的视觉模型。默认 qwen3-vl-plus —— "
+                "这是当前 API Key 实测可用的型号；qwen-vl-plus / qwen-vl-max "
+                "会返回 404 Model not exist，qwen-vl-*-latest 与 qwen2.5-vl-* 返回 403 无权限。"
+                "换模型后已缓存的图注不会自动重算，需在「知识库管理」页对图片点「重新生成图注」",
+    },
     "ai_rag_chunk_size": {
         "default": 500, "type": "int", "group": "AI 知识库", "label": "文档分块字符数",
         "desc": "长篇文档按此长度切成片段再向量化。太小会丢上下文，太大会稀释相关性",
@@ -300,6 +307,11 @@ CONFIG_META: dict[str, dict] = {
     "rag_weight_document": {
         "default": 1.0, "type": "float", "group": "融合与召回", "label": "文档通道权重",
         "desc": "长文档（用户协议、员工手册等）在 RRF 融合时的权重。调高则更倾向引用长文档",
+    },
+    "rag_weight_image": {
+        "default": 1.1, "type": "float", "group": "融合与召回", "label": "图片通道权重",
+        "desc": "知识库图片的图注在 RRF 融合时的权重。图注命中意味着提问内容确实出现在某张图里，"
+                "可信度略高于通用文档，所以默认 1.1。调大则更倾向返回图片",
     },
     "rag_weight_faq": {
         "default": 1.2, "type": "float", "group": "融合与召回", "label": "FAQ 通道权重",

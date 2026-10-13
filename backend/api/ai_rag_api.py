@@ -426,6 +426,217 @@ async def upload_document(
 
 
 # ══════════════════════════════════════════════
+# 知识库图片管理（多模态 RAG · 仅管理员）
+# ══════════════════════════════════════════════
+# 图片本身无法被文本向量命中。这里的做法是：上传后用千问 VL 把它转成一段
+# 结构化文字（一句话概括 + 画面描述 + 图内文字 OCR + 检索标签），这段文字
+# 作为普通文本源进入向量索引 —— 于是"有没有钻石以上的打手"这种提问，
+# 能命中一张段位截图。检索侧一行都不用改。
+#
+# 与文档上传的一个关键差别：图片上传**不自动重建索引**。
+# 文档是纯文本、解析免费；而图片要先调一次 VL（按量计费）。一次上传 20 张图
+# 就自动重建，会一次性产生 20 次调用，且管理员还没机会确认图注质量。
+# 所以：上传时就把图注生成好（界面上立刻能看到它识出了什么），
+# 但把图注**写进向量索引**由管理员显式点「重建索引」触发。
+
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 单张图片上限 10MB
+
+
+def _image_captioner():
+    """延迟导入图注模块，避免模块级循环导入。"""
+    from rag import image_captioner
+    return image_captioner
+
+
+def _serialize_image(db, file_name: str) -> dict:
+    """把一张图片的"文件信息 + 图注状态 + 索引状态"拼成前端要的结构。"""
+    cap_mod = _image_captioner()
+    path = os.path.join(cap_mod.KB_IMAGES_DIR, file_name)
+    stem = os.path.splitext(file_name)[0]
+
+    size_kb = 0.0
+    try:
+        size_kb = round(os.path.getsize(path) / 1024.0, 1)
+    except OSError:
+        pass
+
+    out = {
+        "file_name": file_name,
+        "title": stem,
+        "size_kb": size_kb,
+        "url": "/kbimg/" + file_name,
+        "has_caption": False,
+        "caption": "",
+        "caption_model": "",
+        "caption_updated_at": "",
+        "indexed": False,
+        "chars": 0,
+    }
+
+    from models import AiImageCaption
+    row = db.query(AiImageCaption).filter(
+        AiImageCaption.file_name == file_name).first()
+    if row is not None and (row.caption or "").strip():
+        out["has_caption"] = True
+        out["caption"] = row.caption
+        out["caption_model"] = row.model or ""
+        out["caption_updated_at"] = (row.updated_at.strftime("%Y-%m-%d %H:%M")
+                                     if row.updated_at else "")
+
+    # 索引状态：ai_chunks 里有没有这个图片源、以及有没有配到向量
+    from models import AiVector
+    chunk = db.query(AiChunk).filter(
+        AiChunk.source_type == "image", AiChunk.source_key == stem).first()
+    if chunk is not None:
+        out["chars"] = len(chunk.content or "")
+        out["indexed"] = db.query(AiVector).filter(
+            AiVector.chunk_id == chunk.id).first() is not None
+    return out
+
+
+@router.get("/images")
+def list_images(
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """列出知识库图片（来源目录 kb_images/，与 collect_sources 保持一致）。"""
+    cap_mod = _image_captioner()
+    items = [_serialize_image(db, f) for f in cap_mod.list_image_files()]
+    return {
+        "total": len(items),
+        "capped": sum(1 for i in items if i["has_caption"]),
+        "indexed": sum(1 for i in items if i["indexed"]),
+        "vl_model": cap_mod.vl_model(db),
+        "items": items,
+    }
+
+
+@router.post("/images/upload")
+async def upload_images(
+    files: list[UploadFile] = File(...),
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """上传一张或多张图片到 kb_images/，并立即生成图注。
+
+    图注生成带缓存：同一张图（文件内容 MD5 相同）重复上传不会重复调用接口。
+    单张图失败不影响其它图 —— 每个文件各自报告结果。
+    """
+    cap_mod = _image_captioner()
+    cap_mod.ensure_dir()
+
+    results = []
+    for f in files:
+        raw_name = (f.filename or "").strip()
+        name = cap_mod._safe_name(raw_name)
+        if not name:
+            results.append({"file_name": raw_name, "ok": False,
+                            "message": "文件名无效"})
+            continue
+        if not cap_mod.is_image(name):
+            results.append({"file_name": name, "ok": False,
+                            "message": "不支持的图片格式，支持：" +
+                                       " / ".join(cap_mod.IMAGE_EXTENSIONS)})
+            continue
+
+        content = await f.read()
+        if not content:
+            results.append({"file_name": name, "ok": False, "message": "文件内容为空"})
+            continue
+        if len(content) > MAX_IMAGE_SIZE:
+            results.append({"file_name": name, "ok": False,
+                            "message": f"图片过大，单张最大 {MAX_IMAGE_SIZE // 1024 // 1024}MB"})
+            continue
+
+        # 同名文件直接覆盖（文件名即 source_key，改名等于换一张图）
+        save_path = os.path.join(cap_mod.KB_IMAGES_DIR, name)
+        try:
+            with open(save_path, "wb") as out:
+                out.write(content)
+        except OSError as e:
+            results.append({"file_name": name, "ok": False,
+                            "message": f"保存失败：{e}"})
+            continue
+
+        # 立刻生成图注，让管理员当场看到模型识出了什么
+        cap = cap_mod.get_caption(db, name)
+        item = {"file_name": name, "ok": bool(cap.get("ok")),
+                "message": "", "from_cache": bool(cap.get("from_cache")),
+                "caption": cap.get("caption") or ""}
+        if cap.get("ok"):
+            item["message"] = ("图注已生成（命中缓存，未重复调用接口）"
+                               if cap.get("from_cache")
+                               else f"图注已生成（模型 {cap.get('model') or '-'}）")
+        else:
+            item["message"] = f"图片已保存，但图注生成失败：{cap.get('error') or '未知原因'}"
+        results.append(item)
+
+    ok_count = sum(1 for r in results if r.get("ok"))
+    return {
+        "message": f"共处理 {len(results)} 张，成功 {ok_count} 张。"
+                   f"请到「重建索引」把图片写入向量索引后才会被 AI 检索到。",
+        "results": results,
+    }
+
+
+@router.post("/images/{file_name}/recaption")
+def recaption_image(
+    file_name: str,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """强制重新生成某张图片的图注（忽略缓存）。
+
+    什么时候需要：换了「图片理解模型」、或觉得上一次图注识得不准想重来。
+    重算后要重新点「重建索引」，新的图注才会进向量库。
+    """
+    cap_mod = _image_captioner()
+    name = cap_mod._safe_name(file_name)
+    if not name or name not in cap_mod.list_image_files():
+        raise HTTPException(status_code=404, detail=f"图片不存在：{file_name}")
+
+    cap = cap_mod.get_caption(db, name, force=True)
+    if not cap.get("ok"):
+        raise HTTPException(status_code=500,
+                            detail=f"图注生成失败：{cap.get('error') or '未知原因'}")
+    return {
+        "message": f"「{name}」图注已重新生成（{len(cap['caption'])} 字符）"
+                   f"，请点「重建索引」使其生效",
+        "file_name": name,
+        "caption": cap["caption"],
+        "model": cap.get("model") or "",
+    }
+
+
+@router.delete("/images/{file_name}")
+def delete_image(
+    file_name: str,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db),
+):
+    """删除一张知识库图片：文件 + 图注缓存 + 已建立的索引片段。
+
+    索引片段必须一起删，否则会留下指向不存在图片的孤儿片段 —— AI 还会引用它，
+    前端却显示不出缩略图。
+    """
+    cap_mod = _image_captioner()
+    name = cap_mod._safe_name(file_name)
+    if not name or name not in cap_mod.list_image_files():
+        raise HTTPException(status_code=404, detail=f"图片不存在：{file_name}")
+
+    stem = os.path.splitext(name)[0]
+    dropped = ai_rag.drop_source(db, "image", stem)  # 连带删除 ai_chunks + ai_vectors
+    cap_mod.drop_caption(db, name)
+    try:
+        os.remove(os.path.join(cap_mod.KB_IMAGES_DIR, name))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"文件删除失败：{e}")
+
+    return {"message": f"已删除「{name}」，同时清除 {dropped} 个索引片段",
+            "file_name": name, "dropped_chunks": dropped}
+
+
+# ══════════════════════════════════════════════
 # 索引管理（仅管理员）
 # ══════════════════════════════════════════════
 
@@ -516,6 +727,8 @@ def list_chunks(
         "chunk_index": int(r.chunk_index or 0),
         "title": r.title or "",
         "role": r.role or "",
+        # 图片源才有值：前端据此拼 /kbimg/<文件名> 显示缩略图
+        "asset_path": r.asset_path or "",
         "chars": len(r.content or ""),
         "content": r.content or "",
         "ready": vec_by_chunk.get(r.id) is not None,

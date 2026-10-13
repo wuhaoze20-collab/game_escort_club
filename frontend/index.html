@@ -1465,7 +1465,7 @@
                         <div class="flex items-center gap-2 mb-4">
                             <input type="file" id="kb-upload-input" accept=".pdf,.docx,.html,.htm,.txt,.md,.csv,.json" class="hidden" onchange="uploadKbDocument(this)">
                             <button onclick="document.getElementById('kb-upload-input').click()" class="px-4 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600 transition">上传文档</button>
-                            <button onclick="loadKbIndexStatus(); loadKbDocList();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                            <button onclick="loadKbIndexStatus(); loadKbDocList(); loadKbImageList();" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                         </div>
                         <div class="border border-gray-200 rounded-lg p-4 mb-4">
                             <div class="flex justify-between items-center mb-2">
@@ -1478,6 +1478,26 @@
                         <div class="border border-gray-200 rounded-lg p-4">
                             <div class="text-sm font-medium text-gray-800 mb-3">已索引文档</div>
                             <div id="kb-doc-list" class="text-xs text-gray-500">加载中...</div>
+                        </div>
+                        <!-- 多模态 RAG：知识库图片 -->
+                        <div class="border border-gray-200 rounded-lg p-4 mt-4">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1 min-w-0 pr-4">
+                                    <div class="text-sm font-medium text-gray-800">知识库图片（多模态 RAG）</div>
+                                    <div class="text-xs text-gray-400 mt-1">
+                                        上传的图片会先被转成一段可检索文字（画面描述 + 图内文字 + 标签），
+                                        老板/客服就能用文字提问找到它 —— 例如「有没有钻石段位的战绩图」。
+                                        支持 PNG / JPG / JPEG / WEBP / BMP / GIF，单张最大 10MB。
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <input type="file" id="kb-image-input" accept=".png,.jpg,.jpeg,.webp,.bmp,.gif" multiple class="hidden" onchange="uploadKbImages(this)">
+                                    <button onclick="document.getElementById('kb-image-input').click()" class="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition">上传图片</button>
+                                    <button onclick="loadKbImageList()" class="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                                </div>
+                            </div>
+                            <div id="kb-image-msg" class="text-xs text-gray-500 mb-2"></div>
+                            <div id="kb-image-list" class="text-xs text-gray-500">加载中...</div>
                         </div>
                     </div>
 
@@ -2954,6 +2974,131 @@
             }
         }
 
+        // ══════ 多模态 RAG：知识库图片 ══════
+        // 图片不能直接被文本向量命中，所以后端会先把它转成一段可检索文字
+        // （画面描述 + 图内文字 OCR + 标签）。完整流程是：
+        //   上传图片（顺带生成图注，当场能看到识别结果）
+        //   → 点「重建索引」把图注写进向量库
+        //   → AI 才能检索到它
+        // 所以上传完必须重建一次索引，页面上的提示语也在强调这一点。
+        async function uploadKbImages(input) {
+            const files = input.files ? Array.from(input.files) : [];
+            if (!files.length) return;
+            const msg = document.getElementById('kb-image-msg');
+            const btns = document.querySelectorAll('#rag-panel-kb button');
+            btns.forEach(b => { b.disabled = true; });
+            if (msg) msg.textContent = '正在上传 ' + files.length + ' 张图片并生成图注，请稍候（每张约 3~10 秒）...';
+            try {
+                const formData = new FormData();
+                files.forEach(f => formData.append('files', f));
+                const token = localStorage.getItem('token');
+                const resp = await fetch(API_BASE + '/api/ai/kb/images/upload', {
+                    method: 'POST',
+                    headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                    body: formData,
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || data.message || ('HTTP ' + resp.status));
+                const failed = (data.results || []).filter(r => !r.ok);
+                let text = data.message || '上传完成';
+                if (failed.length) {
+                    text += ' 失败：' + failed.map(r => r.file_name + '（' + r.message + '）').join('；');
+                }
+                if (msg) msg.textContent = text;
+            } catch (e) {
+                if (msg) msg.textContent = '上传失败：' + e.message;
+            } finally {
+                btns.forEach(b => { b.disabled = false; });
+                input.value = '';
+                loadKbImageList();
+            }
+        }
+
+        async function loadKbImageList() {
+            const box = document.getElementById('kb-image-list');
+            if (!box) return;
+            try {
+                const data = await apiRequest('/api/ai/kb/images');
+                const items = data.items || [];
+                const head = document.getElementById('kb-image-msg');
+                if (head) {
+                    head.textContent = '共 ' + (data.total || 0) + ' 张 · 已生成图注 '
+                        + (data.capped || 0) + ' 张 · 已进索引 ' + (data.indexed || 0)
+                        + ' 张 · 当前图片理解模型：' + (data.vl_model || '-');
+                }
+                if (!items.length) {
+                    box.innerHTML = '<div class="text-gray-400">暂无图片。上传后还需要点一次「重建索引」，AI 才能检索到它。</div>';
+                    return;
+                }
+                box.innerHTML = '<div class="space-y-3">' + items.map(img => `
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <img src="${API_BASE}${escapeHtml(img.url)}" alt="${escapeHtml(img.file_name)}"
+                                 class="w-20 h-20 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
+                                 onclick="window.open('${API_BASE}${escapeHtml(img.url)}', '_blank')"
+                                 title="点击查看大图">
+                            <div class="flex-1 min-w-0">
+                                <div class="text-sm font-medium text-gray-800 break-all">${escapeHtml(img.file_name)}</div>
+                                <div class="text-xs text-gray-400 mt-1">
+                                    ${img.size_kb || 0} KB ·
+                                    ${img.has_caption ? ('图注 ' + img.chars + ' 字符 · ' + escapeHtml(img.caption_model || '')) : '尚未生成图注'}
+                                    ·
+                                    <span class="${img.indexed ? 'text-green-500' : 'text-amber-500'}">
+                                        ${img.indexed ? '已进向量索引' : '未进索引'}
+                                    </span>
+                                </div>
+                                <div class="text-xs text-gray-500 whitespace-pre-wrap break-words max-h-32 overflow-y-auto bg-white rounded p-2 mt-2"
+                                     id="kb-img-cap-${escapeHtml(img.title)}"
+                                     style="display:none">${escapeHtml(img.caption || '（无图注）')}</div>
+                                <div class="flex items-center gap-3 mt-2">
+                                    <button onclick="toggleKbImageCaption('${escapeHtml(img.title)}')" class="text-xs text-blue-500 hover:underline">查看图注</button>
+                                    <button onclick="recaptionKbImage('${escapeHtml(img.file_name)}')" class="text-xs text-purple-500 hover:underline">重新生成图注</button>
+                                    <button onclick="deleteKbImage('${escapeHtml(img.file_name)}')" class="text-xs text-red-500 hover:underline">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            } catch (e) {
+                box.innerHTML = '<span class="text-red-500">加载失败：' + escapeHtml(e.message) + '</span>';
+            }
+        }
+
+        function toggleKbImageCaption(stem) {
+            const el = document.getElementById('kb-img-cap-' + stem);
+            if (!el) return;
+            el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+        }
+
+        async function recaptionKbImage(fileName) {
+            const msg = document.getElementById('kb-image-msg');
+            const btns = document.querySelectorAll('#rag-panel-kb button');
+            btns.forEach(b => { b.disabled = true; });
+            if (msg) msg.textContent = '正在重新识别「' + fileName + '」，请稍候...';
+            try {
+                const data = await apiRequest('/api/ai/kb/images/' + encodeURIComponent(fileName) + '/recaption', 'POST');
+                if (msg) msg.textContent = (data && data.message) || '图注已重新生成';
+            } catch (e) {
+                if (msg) msg.textContent = '重新生成失败：' + e.message;
+            } finally {
+                btns.forEach(b => { b.disabled = false; });
+                loadKbImageList();
+            }
+        }
+
+        async function deleteKbImage(fileName) {
+            if (!confirm('确定删除图片「' + fileName + '」？\n它的图注缓存和已建立的索引片段会一并删除。')) return;
+            const msg = document.getElementById('kb-image-msg');
+            try {
+                const data = await apiRequest('/api/ai/kb/images/' + encodeURIComponent(fileName), 'DELETE');
+                if (msg) msg.textContent = (data && data.message) || '已删除';
+            } catch (e) {
+                if (msg) msg.textContent = '删除失败：' + e.message;
+            } finally {
+                loadKbImageList();
+            }
+        }
+
         // RAG 相关的参数分组（这些移到「RAG 调试」页面，不在系统参数里显示）
         // 「API 接入」排最前：密钥是整个 RAG 链路的总开关，配错了后面全都跑不起来，
         // 所以它必须是进这个页面第一眼看到、也最先能改的一项。
@@ -3644,6 +3789,10 @@
             if (tab === 'fixed') {
                 loadFixedSet();
             }
+            // 切换到知识库管理时刷新图片列表（图片区也要跟着刷新按钮一起更新）
+            if (tab === 'kb') {
+                loadKbImageList();
+            }
         }
 
         async function loadRagDebugPage() {
@@ -3662,6 +3811,7 @@
             // 加载知识库状态
             loadKbIndexStatus();
             loadKbDocList();
+            loadKbImageList();
             // 加载评估历史
             loadRagEvalHistory();
         }

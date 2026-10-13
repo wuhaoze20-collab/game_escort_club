@@ -36,13 +36,14 @@ class FusionModule:
 
         参数：
             rrf_k: RRF 常数（默认 60，用于平滑，排名靠后的贡献衰减）
-            channel_weights: 各通道权重，默认带 document / faq / graph 三路
+            channel_weights: 各通道权重，默认带 document / image / faq / graph 四路
                             FAQ 权重更高，因为人工维护的问答库更权威；
-                            图谱权重居中，它只在问题提到具体实体时才有输出
+                            图谱权重居中，它只在问题提到具体实体时才有输出；
+                            图片略高于文档，命中即说明提问内容确实出现在某张图里
         """
         self.rrf_k = rrf_k
         self.channel_weights = channel_weights or {
-            "document": 1.0, "faq": 1.2, "graph": 1.3,
+            "document": 1.0, "image": 1.1, "faq": 1.2, "graph": 1.3,
         }
 
     def fuse(self, all_kw_hits: list, all_vec_hits: list,

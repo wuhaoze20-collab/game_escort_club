@@ -167,9 +167,14 @@ class ModularRAG:
                         q, role, limit=_keyword_limit(self.db))):
                     all_kw_hits.append((doc.score, doc.chunk, qi, rank))
 
-            # 向量通道 —— 文档通道与 FAQ 通道各自独立召回，模块关闭时跳过
+            # 向量通道 —— 文档 / 图片 / FAQ 三路各自独立召回，模块关闭时跳过。
+            # 图片必须单独占一路：它的 content 是图片图注（画面描述 + 图内文字），
+            # 语义分布与文档正文不同；混进文档通道会让两边的相似度分数不可比，
+            # 也会让"图片这一路到底有没有被召回到"在调试信息里看不出来。
             if use_vector and "vector" in use_ch:
-                for channel, stypes in (("document", ["document"]), ("faq", ["faq"])):
+                for channel, stypes in (("document", ["document"]),
+                                        ("image", ["image"]),
+                                        ("faq", ["faq"])):
                     try:
                         for rank, doc in enumerate(self.vector_retriever.retrieve(
                                 q, role, top_k=tk, min_score=ms,

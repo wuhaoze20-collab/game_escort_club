@@ -343,6 +343,9 @@ class AiChunk(Base):
     parent_id = Column(Integer, nullable=True)  # 父子分块：子块指向父块id；NULL=父块或普通块
     title = Column(String(100), default="")  # 片段所属文档标题（检索结果展示用）
     role = Column(String(20), default="")  # 冗余自来源，''=全角色；否则仅该角色可检索到
+    # 图片源专用：该片段对应的图片文件名（相对 kb_images/ 目录）。
+    # 前端据此拼 /kbimg/<文件名> 显示缩略图；文本类来源（document/faq）此列留空。
+    asset_path = Column(String(200), default="")
     content = Column(Text, nullable=False)  # 片段正文（注入提示词的就是它）
     content_hash = Column(String(32), nullable=False)  # md5(content)，用于跳过未变内容
     embedding = Column(Text)  # 向量 JSON 数组；NULL 表示尚未向量化（父块不向量化）
@@ -373,6 +376,31 @@ class AiVector(Base):
 
     __table_args__ = (
         UniqueConstraint("chunk_id", name="uk_ai_vector_chunk"),
+    )
+
+
+# 知识库图片的图注缓存表（多模态 RAG · 路线 A）
+#
+# 为什么不直接把图注存进 ai_chunks：
+#   图注文本确实会写进 ai_chunks.content 参与向量化与检索；
+#   但决定"要不要重新调用图片理解接口"的依据，是**图片文件本身有没有变**，
+#   而不是图注文本有没有变。所以缓存键必须是 文件名 + 文件二进制 MD5，
+#   这与 ai_chunks.content_hash（md5(正文)）是两回事，必须分开存放。
+#
+# 一次图片理解调用费用不高，但图库上百张、管理员又习惯反复点「重建索引」，
+# 没有这层缓存就会反复花钱。有它之后：图片没换 = 零 API 花费。
+class AiImageCaption(Base):
+    __tablename__ = "ai_image_captions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_name = Column(String(200), nullable=False)  # 图片文件名（kb_images/ 下）
+    file_hash = Column(String(32), nullable=False)  # md5(图片二进制)，变了才重算图注
+    caption = Column(Text, nullable=False)  # 图注正文（结构化描述 + 图内文字 + 标签）
+    model = Column(String(50), default="")  # 生成图注的模型名
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        UniqueConstraint("file_name", name="uk_ai_img_caption"),
     )
 
 
