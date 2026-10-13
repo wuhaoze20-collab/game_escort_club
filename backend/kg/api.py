@@ -257,6 +257,103 @@ def _relations_meta() -> list:
     ]
 
 
+def _order_flows(current_user, label: str, key: str) -> list:
+    """把与某个实体相关的订单，组装成"一条完整的订单流程"。
+
+    明细面板原来是一堆扁平的边：
+        下单 → ORD202609111452373B7F
+        接单 → 小杰
+        评价 → 技术一流，配合默契，下次还找…
+        打赏 → 打赏 ¥16.00
+    四条边彼此看不出归属——不知道这条评价属于哪一单，也不知道这单有没有被打赏。
+    按订单聚合之后，每一单就是一条链：
+
+        老板 —下单→ [ORD… · 已完成] —接单→ 打手 —评价→ [内容] —打赏→ [¥16.00]
+
+    只返回 key / display，不带 props，所以不会绕过 _mask_props 泄露敏感字段。
+    """
+    meta = schema.node_meta(label)
+    if label == schema.LABEL_ORDER:
+        order_keys = [key]
+    else:
+        rows = store.run(
+            f"MATCH (n:{label} {{{meta['key']}: $key}})--(o:Order) "
+            "RETURN DISTINCT o.order_no AS k LIMIT 40",
+            {"key": key}, mode="r")
+        order_keys = [str(r.get("k") or "") for r in rows or []]
+    order_keys = [k for k in order_keys if k]
+
+    def step(rel, node_label: str, props):
+        """组装链路上的一环：rel 是"从上一环走到这一环"的边名。"""
+        if not props:
+            return None
+        nkey = str(props.get(schema.node_meta(node_label)["key"]) or "")
+        if not nkey:
+            return None
+        return {
+            "rel": rel,
+            "rel_name": _rel_name(rel) if rel else "",
+            "label": node_label,
+            "label_name": schema.node_meta(node_label)["name"],
+            "key": nkey,
+            "display": _display(node_label, props),
+        }
+
+    flows = []
+    for ono in order_keys:
+        recs = store.run(
+            "MATCH (o:Order {order_no: $ono}) "
+            "OPTIONAL MATCH (b:Boss)-[:PLACED]->(o) "
+            "OPTIONAL MATCH (p:Player)-[:SERVED]->(o) "
+            "OPTIONAL MATCH (o)-[:FOR_GAME]->(g:Game) "
+            "OPTIONAL MATCH (rt:Rating)-[:FOR_ORDER]->(o) "
+            "OPTIONAL MATCH (tb:Boss)-[:TIPPED]->(tp:Tip)-[:FOR_ORDER]->(o) "
+            # collect(DISTINCT x) 会自动丢掉 null，所以某个订单没有评价/打赏时
+            # 拿到的是空列表而不是 [null]，前端不用再判空
+            "WITH o, b, p, g, collect(DISTINCT rt) AS rts, "
+            "     collect(DISTINCT tp) AS tps "
+            "RETURN o, b, p, g, rts, tps",
+            {"ono": ono}, mode="r")
+        if not recs:
+            continue
+        r = recs[0]
+        o, b, p = r.get("o") or {}, r.get("b"), r.get("p")
+
+        steps = []
+        s = step("", schema.LABEL_BOSS, b)
+        if s:                      # 起点：老板（没有入边）
+            steps.append(s)
+        s = step(schema.REL_PLACED, schema.LABEL_ORDER, o)
+        if s:
+            steps.append(s)
+        s = step(schema.REL_SERVED, schema.LABEL_PLAYER, p)
+        if s:
+            steps.append(s)
+        # 评价可能有多条（同一单被评过多次），都列出来
+        for rt in r.get("rts") or []:
+            s = step(schema.REL_RATED, schema.LABEL_RATING, rt)
+            if s:
+                steps.append(s)
+        for tp in r.get("tps") or []:
+            s = step(schema.REL_TIPPED, schema.LABEL_TIP, tp)
+            if s:
+                steps.append(s)
+
+        g = r.get("g") or {}
+        op = _clean(o)
+        flows.append({
+            "order_no": ono,
+            "status": schema.ORDER_STATUS_TEXT.get(str(op.get("status") or ""), ""),
+            # 金额在库里是分，这里就换算好，前端不必再判口径
+            "amount": _yuan(op.get("total_amount")),
+            "duration_min": op.get("duration_min"),
+            "game": str(g.get("name") or ""),
+            "created_at": str(op.get("created_at") or ""),
+            "steps": steps,
+        })
+    return flows
+
+
 @router.get("/node/{label}/{key}")
 def kg_node(
     label: str,
@@ -312,7 +409,8 @@ def kg_node(
             "props": _mask_props(current_user, m_label, _clean(m)),
         })
 
-    return {"node": node, "neighbors": neighbors}
+    return {"node": node, "neighbors": neighbors,
+            "order_flows": _order_flows(current_user, label, key)}
 
 
 @router.get("/search")

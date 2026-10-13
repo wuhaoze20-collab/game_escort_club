@@ -2928,7 +2928,9 @@
         }
 
         // RAG 相关的参数分组（这些移到「RAG 调试」页面，不在系统参数里显示）
-        const RAG_CONFIG_GROUPS = ['AI 知识库', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
+        // 「API 接入」排最前：密钥是整个 RAG 链路的总开关，配错了后面全都跑不起来，
+        // 所以它必须是进这个页面第一眼看到、也最先能改的一项。
+        const RAG_CONFIG_GROUPS = ['API 接入', 'AI 知识库', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
 
         function renderConfigTable() {
             renderConfigAlerts();
@@ -3472,13 +3474,65 @@
                 html += '</div>';
 
                 const nb = d.neighbors || [];
-                if (nb.length) {
-                    html += '<div class="text-xs mt-4 mb-2" style="color:var(--text-card-muted)">关联（'
-                         + nb.length + '）：</div>';
+                const flows = d.order_flows || [];
+
+                // —— 订单流程：每一单是一条连起来的链 ——
+                // 「老板 —下单→ [订单] —接单→ [打手] —评价→ [内容] —打赏→ [金额]」
+                // 在扁平列表里这四条边是散开的，看不出归属；串起来才读得出
+                // "这一单从头到尾发生了什么"。
+                if (flows.length) {
+                    html += '<div class="text-xs mt-4 mb-2" style="color:var(--text-card-muted)">'
+                         + '订单流程（' + flows.length + '）：</div>';
+                    html += '<div style="display:grid;gap:8px;max-height:340px;overflow:auto">';
+                    flows.forEach(function (fl) {
+                        let title = '<b>' + escapeHtml(fl.order_no) + '</b>';
+                        if (fl.status) title += ' · ' + escapeHtml(fl.status);
+                        if (fl.amount) title += ' · ' + escapeHtml(fl.amount) + ' 元';
+                        if (fl.game) title += ' · ' + escapeHtml(fl.game);
+                        if (fl.duration_min) title += ' · ' + escapeHtml(String(fl.duration_min)) + ' 分钟';
+                        html += '<div class="rounded-lg p-2" '
+                             + 'style="background-color:rgba(128,128,128,0.10)">'
+                             + '<div class="text-xs mb-1" style="color:var(--text-card)">'
+                             + title + '</div>'
+                             + '<div class="flex flex-wrap items-center gap-1">';
+                        (fl.steps || []).forEach(function (st, i) {
+                            // 第 0 环是起点，没有入边；其余各环前面标出"怎么走过来的"
+                            if (i > 0) {
+                                html += '<span class="text-xs" style="color:var(--text-card-muted)">'
+                                     + escapeHtml((st.rel_name || '关联') + ' →') + '</span>';
+                            }
+                            const c = kgColorOf(st.label);
+                            // 字色必须跟着主题走：写死深色的话暗色模式下这些标签会糊成一片
+                            html += '<span class="px-2 py-0.5 text-xs rounded" title="'
+                                 + escapeHtml((st.label_name || st.label) + ' · ' + st.key) + '" '
+                                 + 'style="background-color:' + c + '22;border-left:3px solid ' + c
+                                 + ';color:var(--text-card)">'
+                                 + escapeHtml(st.display || st.key) + '</span>';
+                        });
+                        html += '</div></div>';
+                    });
+                    html += '</div>';
+                }
+
+                // —— 其他关联：已经在订单链路里出现过的边不再重复列一遍 ——
+                const inFlow = {};
+                flows.forEach(function (fl) {
+                    (fl.steps || []).forEach(function (st) {
+                        inFlow[st.label + ':' + st.key] = 1;
+                    });
+                });
+                const rest = nb.filter(function (x) {
+                    return !inFlow[x.label + ':' + x.key];
+                });
+                if (rest.length) {
+                    html += '<div class="text-xs mt-4 mb-2" style="color:var(--text-card-muted)">'
+                         + (flows.length ? '其他关联（' : '关联（') + rest.length + '）：</div>';
                     html += '<div class="flex flex-wrap gap-2">';
-                    nb.forEach(function (x) {
-                        html += '<span class="px-2 py-1 text-xs rounded-lg" style="background-color:rgba(128,128,128,0.14)">'
-                             + escapeHtml((x.rel_name || kgRelName(x.rel)) + ' → ' + (x.display || x.key)) + '</span>';
+                    rest.forEach(function (x) {
+                        html += '<span class="px-2 py-1 text-xs rounded-lg" '
+                             + 'style="background-color:rgba(128,128,128,0.14)">'
+                             + escapeHtml((x.rel_name || kgRelName(x.rel)) + ' → '
+                                          + (x.display || x.key)) + '</span>';
                     });
                     html += '</div>';
                 }
@@ -3630,6 +3684,17 @@
                                 + '</label>';
                         }).join('');
                         controlHtml = '<div class="flex flex-wrap gap-2">' + opts + '</div>';
+                    } else if (c.config_key === 'ai_api_key') {
+                        // 密钥栏：默认遮起来（旁边给了"显示"按钮让你核对），
+                        // 输入框留空 = 不修改——后端把空值也理解成"保持原值"，
+                        // 所以误点保存不会把已经配好的密钥清掉。
+                        controlHtml = ''
+                            + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="password" '
+                            + 'placeholder="留空则不修改" autocomplete="new-password" spellcheck="false" '
+                            + 'class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
+                            + '<button onclick="toggleSecretVisible(\'cfg-' + escapeHtml(c.config_key) + '\', this)" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">显示</button>'
+                            + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
+                            + '<button onclick="testAiKey()" id="cfg-test-key-btn" class="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">测试连接</button>';
                     } else {
                         const inputType = isInt ? 'number' : 'text';
                         controlHtml = ''
@@ -3637,6 +3702,12 @@
                             + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
                             + '<button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>';
                     }
+                    // 密钥当前值只以脱敏形式露出来（后端也只给脱敏串），供核对头尾
+                    const secretHint = (c.config_key === 'ai_api_key')
+                        ? '<div class="text-xs text-gray-400 mt-0.5">当前：<code>'
+                          + escapeHtml(c.config_value || '（未配置，正在用 .env 里的值或完全没配）')
+                          + '</code><span id="cfg-test-key-msg" class="ml-2"></span></div>'
+                        : '';
                     return ''
                         + '<div class="border border-gray-200 rounded-lg p-4" id="cfg-card-' + escapeHtml(c.config_key) + '">'
                         + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
@@ -3644,6 +3715,7 @@
                         + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
                         + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
                         + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
+                        + secretHint
                         + '    </div>'
                         + '    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">'
                         + controlHtml
@@ -4673,9 +4745,41 @@
                 const res = await apiRequest('/api/config/' + key, 'PUT', { value: configValue });
                 alert(res.message);
                 await loadSystemConfig();
+                // RAG 调试页和系统参数页共用 configCache，但各渲染各的；
+                // 只刷新系统参数那张表的话，RAG 页上刚改的值还是旧的。
+                if (document.getElementById('rag-config-table')) renderRagConfigTable();
                 // 恢复滚动位置
                 window.scrollTo(0, scrollY);
             } catch (e) { alert(e.message); }
+        }
+
+        // 密钥输入框的"显示/隐藏"切换。默认遮起来，避免密钥在屏幕上一览无余。
+        function toggleSecretVisible(inputId, btn) {
+            const el = document.getElementById(inputId);
+            if (!el) return;
+            const show = el.type === 'password';
+            el.type = show ? 'text' : 'password';
+            if (btn) btn.textContent = show ? '隐藏' : '显示';
+        }
+
+        // 用当前生效的密钥真调一次模型，确认它能用。
+        // 光看"已配置"没用——key 过期、额度用尽、base_url 配错都只有实调才暴露。
+        async function testAiKey() {
+            const msg = document.getElementById('cfg-test-key-msg');
+            const btn = document.getElementById('cfg-test-key-btn');
+            if (msg) { msg.textContent = ' 测试中…'; msg.style.color = 'var(--text-card-muted)'; }
+            if (btn) btn.disabled = true;
+            try {
+                const r = await apiRequest('/api/config/test-ai', 'POST', {});
+                if (msg) {
+                    msg.textContent = ' ' + (r.message || (r.ok ? '连接正常' : '连接失败'));
+                    msg.style.color = r.ok ? '#16a34a' : '#dc2626';
+                }
+            } catch (e) {
+                if (msg) { msg.textContent = ' ' + e.message; msg.style.color = '#dc2626'; }
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         async function resetConfig(key) {

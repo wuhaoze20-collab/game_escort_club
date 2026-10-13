@@ -33,6 +33,17 @@ def clear_alerts(
     return {"message": "已清空异常提示"}
 
 
+# 试调一次模型，验证当前生效的密钥到底能不能用
+# （密钥只在管理员范围内可见，所以这里也限管理员）
+@router.post("/test-ai")
+def test_ai_key(
+    current_user: User = Depends(require_roles("admin")),
+):
+    import ai_service
+    ok, message = ai_service.ping()
+    return {"ok": ok, "message": message}
+
+
 # 修改单个参数
 @router.put("/{config_key}")
 def update_config(
@@ -41,10 +52,18 @@ def update_config(
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db),
 ):
+    # 密钥栏留空表示"我不想改"，不是"把密钥清掉"——
+    # 直接说清楚，免得管理员以为保存成功了实际没动
+    if config_key in config_service.SENSITIVE_KEYS and not str(request.value or "").strip():
+        return {"message": "输入框为空，已保持原密钥不变", "config_key": config_key,
+                "config_value": ""}
     try:
         stored = config_service.set_config(db, config_key, request.value)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if config_key in config_service.SENSITIVE_KEYS:
+        return {"message": "密钥已更新（立即生效，不用重启）",
+                "config_key": config_key, "config_value": config_service.mask_secret(stored)}
     return {"message": "参数已更新（立即生效）", "config_key": config_key, "config_value": stored}
 
 
@@ -59,6 +78,9 @@ def reset_config(
     if meta is None:
         raise HTTPException(status_code=404, detail="未知参数")
     default_text = config_service._dump(meta["default"], meta["type"])
-    config_service.set_config(db, config_key, default_text)
+    config_service.set_config(db, config_key, default_text, from_reset=True)
+    if config_key in config_service.SENSITIVE_KEYS:
+        return {"message": "已清空库里的密钥，之后会用 backend/.env 的 DASHSCOPE_API_KEY",
+                "config_key": config_key, "config_value": ""}
     return {"message": f"已恢复默认值 {default_text}", "config_key": config_key,
             "config_value": default_text}

@@ -48,6 +48,15 @@ DEFAULT_AI_EXTRA_INSTRUCTION = """【常见问答标准答法】（优先照这�
 # 参数元数据：默认值 + 类型 + 后台显示信息
 # 注意：这里的默认值是"出厂值"，运行时一律以数据库为准
 CONFIG_META: dict[str, dict] = {
+    # ——— API 接入 ———
+    # 放在最前：密钥没配好，后面所有 RAG 模块（向量化、重排序、Self-RAG）都用不起来，
+    # 所以它是这两个页面里最该先看见、最先能改的一项。
+    "ai_api_key": {
+        "default": "", "type": "str", "group": "API 接入", "label": "千问 API Key",
+        "desc": "阿里云百炼（DashScope）密钥。留空则回落到 backend/.env 的 DASHSCOPE_API_KEY；"
+                "填了就以此处为准。保存后立即生效，不用重启后端。"
+                "出于安全，读取时只回显头尾各 4 位，输入框留空表示不修改",
+    },
     # ——— 资金与抽成 ———
     "club_commission_rate": {
         "default": 0.3, "type": "float", "group": "资金与抽成", "label": "俱乐部抽成比例",
@@ -375,6 +384,27 @@ CONFIG_META: dict[str, dict] = {
 # 进程内缓存：{key: (值, 写入时间)}
 _cache: dict[str, tuple[object, float]] = {}
 
+# 敏感参数：不回显原文，且拒绝把脱敏串当成新值写回库里。
+# 没有这个拦截，前端一按保存就会把库里真正的密钥覆盖成 "sk-1********abcd"，
+# 而且从"AI 突然全都不work了"很难反查到这里。
+SENSITIVE_KEYS = {"ai_api_key"}
+
+
+def mask_secret(value) -> str:
+    """脱敏：只保留头尾各 4 位，中间用 * 顶替。"""
+    s = str(value or "")
+    if not s:
+        return ""
+    if len(s) <= 8:
+        return "*" * len(s)
+    return s[:4] + "*" * 8 + s[-4:]
+
+
+def looks_masked(text: str) -> bool:
+    """判断是不是本模块自己产出的脱敏串（头 4 尾 4、中间全是 *）。"""
+    s = str(text or "")
+    return len(s) > 8 and set(s[4:-4]) == {"*"} and "*" in s
+
 
 def invalidate_cache() -> None:
     """清空缓存（写入参数后调用）"""
@@ -451,6 +481,10 @@ def get_all_configs(db) -> list[dict]:
     for key, meta in CONFIG_META.items():
         row = rows.get(key)
         current = row.config_value if row else _dump(meta["default"], meta["type"])
+        if key in SENSITIVE_KEYS:
+            # 密钥不能原样回给浏览器（前端只用来"看个大概"，不是拿来用的），
+            # 所以只留头尾各 4 位；前端保存时留空即表示"不修改"。
+            current = mask_secret(current)
         result.append({
             "config_key": key,
             "config_value": current,
@@ -473,10 +507,12 @@ def _dump(value, value_type: str) -> str:
     return str(value)
 
 
-def set_config(db, key: str, raw_value) -> str:
+def set_config(db, key: str, raw_value, from_reset: bool = False) -> str:
     """写入参数（校验类型合法性），返回实际存入库的字符串。
 
     校验失败直接抛 ValueError，由接口层转为 400。
+    from_reset=True 表示这是"恢复默认"发起的调用，此时允许把敏感参数清空；
+    普通保存路径下，敏感参数留空一律理解为"保持原值"。
     """
     meta = CONFIG_META.get(key)
     if meta is None:
@@ -484,6 +520,15 @@ def set_config(db, key: str, raw_value) -> str:
 
     text = str(raw_value).strip()
     value_type = meta["type"]
+
+    if key in SENSITIVE_KEYS:
+        if looks_masked(text):
+            raise ValueError("提交的是脱敏后的密钥（中间带 *），无法作为真实密钥保存。"
+                             "要修改请粘贴完整密钥；不想改就把输入框留空")
+        if not text and not from_reset:
+            # 留空 = 不改（前端用空输入框表达"我保持原值"，而不是"清空密钥"）
+            row = db.query(SystemConfig).filter(SystemConfig.config_key == key).first()
+            return row.config_value if row else ""
 
     # 校验：转不过去就拒绝，避免把非法值写进库
     try:

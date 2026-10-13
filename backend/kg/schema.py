@@ -232,6 +232,13 @@ REL_TYPES = {
         "start": LABEL_TIP, "rel": REL_TO, "end": LABEL_PLAYER,
         "name": "给", "color": "#fb7185",
     },
+    # 打赏挂在具体订单上（tip_records.order_id 非空），
+    # 这条边是把打赏归位到"哪一单"的依据——没有它就没法在订单链路里
+    # 显示"这单后来被打赏了多少"。
+    "(Tip)-[FOR_ORDER]->(Order)": {
+        "start": LABEL_TIP, "rel": REL_FOR_ORDER, "end": LABEL_ORDER,
+        "name": "打赏订单", "color": "#fb7185",
+    },
     "(Player)-[WITHDREW]->(Withdrawal)": {
         "start": LABEL_PLAYER, "rel": REL_WITHDREW, "end": LABEL_WITHDRAWAL,
         "name": "提现", "color": "#06b6d4",

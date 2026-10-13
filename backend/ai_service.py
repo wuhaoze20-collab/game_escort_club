@@ -56,14 +56,66 @@ def _load_env():
 
 
 def get_api_key() -> str:
-    """取千问 API Key；未配置返回空串"""
+    """取千问 API Key。
+
+    优先级：后台「API 接入」里填的 → backend/.env 的 DASHSCOPE_API_KEY → 空串（视为未配置）。
+    放前面是为了能在线换 key：密钥过期或要换账号时，改后台即可，不用去动 .env 再重启。
+    读库失败（比如还没建表）时静默回落到 .env，不影响启动。
+    """
     _load_env()
+    try:
+        import config_service
+        db_value = config_service.get_config("ai_api_key")
+        if db_value and str(db_value).strip():
+            return str(db_value).strip()
+    except Exception:
+        pass
     return (os.getenv("DASHSCOPE_API_KEY") or "").strip()
 
 
 def is_configured() -> bool:
     """是否已配置密钥（未配置时前端只提示、不显示报错）"""
     return bool(get_api_key())
+
+
+def ping() -> tuple:
+    """用当前生效的密钥实调一次，返回 (是否可用, 给管理员看的一句话说明)。
+
+    「已配置」不等于「能用」：密钥过期、额度用尽、base_url 写错，
+    都只有真发一次请求才暴露。这里只要 1 个 token，够快也够便宜。
+    """
+    api_key = get_api_key()
+    if not api_key:
+        return False, ("还没有可用的密钥：在下方填入并保存，或写进 backend/.env 的 "
+                       "DASHSCOPE_API_KEY")
+    try:
+        resp = requests.post(
+            _base_url(),
+            headers={"Authorization": f"Bearer {api_key}",
+                     "Content-Type": "application/json"},
+            json={"model": "qwen-turbo", "max_tokens": 1,
+                  "messages": [{"role": "user", "content": "hi"}]},
+            timeout=min(_timeout(), 30),
+        )
+    except requests.exceptions.Timeout:
+        return False, "调用超时：网络到不了百炼，检查网络或代理"
+    except requests.exceptions.RequestException as e:
+        return False, f"连接失败（{type(e).__name__}）：检查网络或 base_url 配置"
+
+    if resp.status_code == 200:
+        return True, "连接正常，密钥可用"
+    detail = ""
+    try:
+        body = resp.json()
+        detail = ((body.get("error") or {}).get("message")
+                  or body.get("message") or "")
+    except Exception:
+        detail = (resp.text or "")[:150]
+    if resp.status_code in (401, 403):
+        return False, f"密钥无效或无权限（HTTP {resp.status_code}）：{detail}"
+    if resp.status_code == 429:
+        return False, f"触发限流或额度用尽（HTTP 429）：{detail}"
+    return False, f"调用失败（HTTP {resp.status_code}）：{detail}"
 
 
 def _base_url() -> str:
