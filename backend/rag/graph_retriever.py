@@ -107,6 +107,43 @@ _MAX_LINES = 14
 # 把本人的订单列表塞进完全不相关的上下文里。
 _SELF_REF_RE = re.compile(r"我|自己|本人|咱|自家")
 
+# 词字符：判定"独立词"时用来夹住命中位置。
+# 只用 ASCII 字母数字下划线（不用 \w），因为中文不该算词字符——
+# 「laoban这个老板」里 laoban 后面直接跟汉字，仍应算独立出现。
+_WORD_CHAR_RE = re.compile(r"[A-Za-z0-9_]")
+
+
+def _whole_word_hit(question: str, val: str) -> bool:
+    """val 是否作为**独立词**出现在 question 里（忽略大小写）。
+
+    为什么不能直接用 `val in question`：
+    账号名之间存在前缀包含关系——`dashou` 是 `dashou_10` 的前缀。
+    问「dashou_10 提现几次」时 `"dashou" in question` 同样成立，
+    于是 dashou **本人**的节点被连带命中，多召回一条与提问无关的事实
+    （实测会多出一条"dashou 的提现记录"，而这个账号其实没有提现）。
+
+    边界判定用 `[A-Za-z0-9_]`：`dashou_10` 里的 `_` 属于词字符，
+    所以 `dashou` 在这里匹配不上；而「laoban 这个老板」「dashou的订单」
+    两侧是空格或汉字，都能正常命中。
+    """
+    if not val:
+        return False
+    q = (question or "").lower()
+    v = str(val).lower()
+    if not v:
+        return False
+    start = 0
+    while True:
+        i = q.find(v, start)
+        if i < 0:
+            return False
+        before_ok = (i == 0) or (not _WORD_CHAR_RE.match(q[i - 1]))
+        j = i + len(v)
+        after_ok = (j >= len(q)) or (not _WORD_CHAR_RE.match(q[j]))
+        if before_ok and after_ok:
+            return True
+        start = i + 1
+
 # 标签关键词兜底：实体链接一个种子都匹配不到时，按问题里的词直接取该类节点。
 #
 # 为什么需要：处罚通告这类节点**没有任何账号名可匹配**——"平台上有哪些处罚通告"
@@ -127,13 +164,15 @@ _LABEL_CN = {
     "Punishment": "处罚通告",
 }
 
-# 关系类型 → 中文名
+# 关系类型 → 中文名（与 kg/schema.py 的 REL_TYPES.name 保持一致）
 _REL_CN = {
     "PLACED": "下单", "SERVED": "接单", "FOR_GAME": "所属游戏",
     "HAS_TAG": "持有标签", "HIRED": "雇佣过",
-    # V4.11.0
-    "RATED": "评价了", "ABOUT": "评价对象", "FOR_ORDER": "对应订单",
-    "COMPLAINED": "投诉过", "TIPPED": "打赏了", "TO": "打赏给",
+    # V4.11.0：评价与打赏都是「老板 → 中间节点 → 打手」的三段式，
+    # 中间那段统一叫「给」，读起来才是
+    #   laoban —评价了→ 评价（这个打手真强）—给→ 打手
+    "RATED": "评价了", "ABOUT": "给", "FOR_ORDER": "对应订单",
+    "COMPLAINED": "投诉过", "TIPPED": "打赏了", "TO": "给",
     "WITHDREW": "提现", "PUNISHED": "被处罚",
 }
 
@@ -397,7 +436,8 @@ class GraphRetriever:
             # 昵称/游戏名/标签要求至少 2 个字，否则"的""了"这类单字会满图乱撞
             if field in ("nickname", "name", "tag_key") and len(val) < 2:
                 continue
-            if val in question:
+            # 必须作为**独立词**命中，否则 dashou 会跟着 dashou_10 一起中招
+            if _whole_word_hit(question, val):
                 return field, self._MATCH_SCORE.get(field, 0.6)
         return None, 0.0
 

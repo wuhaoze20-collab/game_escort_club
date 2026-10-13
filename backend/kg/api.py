@@ -211,8 +211,12 @@ def kg_graph(
 def _types_meta() -> list:
     """所有节点类型的中文名、颜色与字段定义，供前端图例和明细面板使用。
 
-    fields 是 [{key, name, sensitive}]，前端按这个顺序和中文名展示属性，
-    免得把 consume_amount 这种库内字段名直接摆给用户看。
+    fields 是 [{key, name, sensitive, enum, unit}]：
+    · name   —— 中文名，免得把 consume_amount 这种库内字段名摆给用户看
+    · enum   —— 取值的英文→中文映射（pending → 待派单）。字典在后端，
+                 前端只查表，以后改状态名不用动前端
+    · unit   —— 数值口径（fen 分 / coin 大狗币 / percent 百分数），
+                 前端据此决定要不要换算、留几位小数
     """
     out = []
     for lb, meta in schema.NODE_TYPES.items():
@@ -224,10 +228,24 @@ def _types_meta() -> list:
                                "sensitive": bool(fmeta[1]) if len(fmeta) > 1 else False})
             else:
                 fields.append({"key": fkey, "name": str(fmeta), "sensitive": False})
+            fields[-1]["enum"] = _enum_for(lb, fkey)
+            fields[-1]["unit"] = schema.FIELD_UNITS.get(fkey, "")
         out.append({"label": lb, "name": meta.get("name") or lb,
                     "color": meta.get("color") or "", "key": meta.get("key") or "",
                     "fields": fields})
     return out
+
+
+def _enum_for(label: str, field: str) -> dict:
+    """取某字段的英文→中文映射；没有映射时返回空字典。
+
+    键统一转成小写字符串。这一步不能省：JSON 会把布尔键 True 序列化成 "true"，
+    而 Python 的 str(True) 是 "True"、JS 的 String(true) 是 "true"——
+    不归一化的话，前端拿 "true" 去查 "True" 就查不到。
+    库里的状态值（pending / normal）本来就是小写，lower() 对它们无影响。
+    """
+    m = schema.FIELD_ENUMS.get((label, field)) or {}
+    return {str(k).lower(): v for k, v in m.items()}
 
 
 def _relations_meta() -> list:
@@ -340,22 +358,70 @@ def kg_search(
 # ——————————————————————————————————————————————
 
 def _clean(props: dict) -> dict:
-    """去掉 Neo4j 返回的内部字段（元素 ID 之类），只留业务属性。"""
+    """去掉内部字段和"专供大模型看"的冗余中文字段。
+
+    `*_text`（status_text / review_status_text）是同步时额外写进图谱的中文副本，
+    只有 LLM 事实文本在用。前端已经有 FIELD_ENUMS 映射表，
+    两套都渲染会变成同一件事出现两次（"订单状态：已完成" + "status_text：已完成"）。
+    """
     return {k: v for k, v in (props or {}).items()
-            if not k.startswith("_") and k != "updated_at"}
+            if not k.startswith("_") and k != "updated_at" and not k.endswith("_text")}
+
+
+def _clip(text, n: int) -> str:
+    """截断长文本，超出部分用省略号；换行压成空格，避免撑坏图上的单行标签。"""
+    s = str(text or "").strip().replace("\n", " ").replace("\r", " ")
+    return (s[:n] + "…") if len(s) > n else s
+
+
+def _yuan(fen) -> str:
+    """分 → 元。库里所有金额字段都按分存，展示时统一在这里换算。"""
+    try:
+        return f"{int(fen) / 100:.2f}"
+    except (TypeError, ValueError):
+        return "0.00"
 
 
 def _display(label: str, props: dict) -> str:
-    """节点的展示名：昵称优先，其次业务主键。"""
+    """节点的展示名：挑"一眼能认出是哪条记录"的那个字段。
+
+    这件事直接决定图谱能不能被读懂。中间节点如果用主键当名字
+    （tip_id / rating_id / tag_key 都是内部编号），图上看过去就是
+    「老板 → 一堆数字 → 打手」，完全串不成业务链路；
+    换成金额和评价正文之后，才是「老板 → 打赏 ¥16.00 → 打手」。
+    """
     meta = schema.node_meta(label)
     nick = str(props.get("nickname") or "").strip()
     key = str(props.get(meta["key"]) or "")
     name = str(props.get("name") or "").strip()
-    if label == schema.LABEL_ORDER:
-        # 订单显示订单号尾部更易辨认
-        return key
+
     if label == schema.LABEL_GAME:
         return name or key
+    if label == schema.LABEL_TAG:
+        # 标签的"内容"才是业务含义，tag_key（打手名:标签名）只是主键
+        return name or key
+    if label == schema.LABEL_TIP:
+        return "打赏 ¥" + _yuan(props.get("amount"))
+    if label == schema.LABEL_WITHDRAWAL:
+        st = schema.WITHDRAW_STATUS_TEXT.get(str(props.get("status") or ""), "")
+        return "提现 ¥" + _yuan(props.get("amount")) + (f"（{st}）" if st else "")
+    if label == schema.LABEL_RATING:
+        text = _clip(props.get("comment"), 14)
+        if props.get("is_complaint"):
+            # 投诉型评价在图上要一眼看出来，别和普通好评长得一样
+            return ("投诉：" + text) if text else "投诉"
+        if text:
+            return text
+        star = props.get("rating")
+        return f"{star} 星评价" if star else "评价"
+    if label == schema.LABEL_PUNISHMENT:
+        lv = str(props.get("level") or "").strip()
+        dt = str(props.get("date") or "").strip()
+        if lv and dt:
+            return f"{lv}（{dt}）"
+        return lv or dt or key
+    if label == schema.LABEL_ORDER:
+        return key
     return nick or key
 
 

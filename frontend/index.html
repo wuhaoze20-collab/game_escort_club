@@ -1389,7 +1389,7 @@
                         <div>
                             <h2 class="text-lg font-semibold text-gray-800">知识图谱</h2>
                             <p class="text-sm text-gray-500 mt-1">老板、打手、订单、游戏、标签以实体和关系的形式存进 Neo4j。新产生的订单会自动入图。</p>
-                            <p class="text-xs text-gray-400 mt-1">滚轮缩放 · 拖住空白处平移 · 双击复位 · 点击节点看明细</p>
+                            <p class="text-xs text-gray-400 mt-1">滚轮缩放 · <b>拖住节点可自由摆放</b> · 拖住空白处平移 · 双击复位 · 点击节点看明细</p>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="loadKgGraph()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
@@ -3182,6 +3182,31 @@
             return t ? t.color : '#9ca3af';
         }
 
+        // 各类节点在图上的视觉规格。
+        //   r   圆点半径：老板/打手是"主角"，画大一点；订单数量最多，画小一点免得太挤
+        //   len 标签最多显示几个字：订单号是唯一标识，截断了就认不出是哪一单，
+        //       所以给它最长的预算；评价/打赏/提现是文字型中间节点，也要多留几格
+        var KG_NODE_STYLE = {
+            Boss: { r: 11, len: 10 },
+            Player: { r: 11, len: 10 },
+            Order: { r: 6, len: 26 },
+            Game: { r: 8, len: 10 },
+            Tag: { r: 7, len: 12 },
+            Rating: { r: 8, len: 16 },
+            Tip: { r: 8, len: 16 },
+            Withdrawal: { r: 8, len: 18 },
+            Punishment: { r: 8, len: 16 }
+        };
+
+        function kgNodeStyle(label) {
+            return KG_NODE_STYLE[label] || { r: 9, len: 10 };
+        }
+
+        function kgClipLabel(name, max) {
+            name = String(name || '');
+            return name.length > max ? name.slice(0, max - 1) + '…' : name;
+        }
+
         function kgNameOf(label) {
             const t = kgMeta.types.find(function (x) { return x.label === label; });
             return t ? t.name : label;
@@ -3230,15 +3255,16 @@
                 const p = pos[kgKey(nd)];
                 if (!p) return;
                 const color = nd.color || kgColorOf(nd.label);
-                const r = nd.label === 'Order' ? 7 : 10;
+                const st = kgNodeStyle(nd.label);
                 const name = nd.display || nd.key;
-                const short = name.length > 10 ? name.slice(0, 9) + '…' : name;
-                html += '<g class="kg-node" style="cursor:pointer" '
+                const short = kgClipLabel(name, st.len);
+                const k = kgKey(nd);
+                html += '<g class="kg-node" data-kg-key="' + escapeHtml(k) + '" style="cursor:move" '
                      + 'onclick="showKgNode(\'' + nd.label + '\',\'' + String(nd.key).replace(/'/g, "\\'") + '\')">'
                      + '<title>' + escapeHtml(kgNameOf(nd.label) + ' · ' + name) + '</title>'
-                     + '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + r
+                     + '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="' + st.r
                      + '" fill="' + color + '" stroke="#fff" stroke-width="1.5"></circle>'
-                     + '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + r + 11).toFixed(1)
+                     + '<text x="' + p.x.toFixed(1) + '" y="' + (p.y + st.r + 11).toFixed(1)
                      + '" font-size="10" fill="currentColor" text-anchor="middle" '
                      + 'style="pointer-events:none;opacity:0.85">' + escapeHtml(short) + '</text>'
                      + '</g>';
@@ -3290,15 +3316,58 @@
                 kgZoomAt(ev.deltaY < 0 ? 1.18 : 1 / 1.18, cx, cy);
             }, { passive: false });
 
-            // 拖拽平移（按在空白处才平移，按在节点上是点节点）
+            // 拖拽：按在节点上是"拖节点"，按在空白处是"平移画布"
             let panning = null;
+            let dragging = null;     // 正在拖的节点：{key, offX, offY}
+            let dragMoved = false;   // 这一轮拖动是否真的移动过（用来吞掉误触的 click）
+
+            // 屏幕坐标 → SVG 逻辑坐标。viewBox 等比缩放后在容器里居中，
+            // 所以先算实际渲染比例 scale，再补上居中的偏移。
+            function toSvgPoint(ev) {
+                const rect = svg.getBoundingClientRect();
+                const vb = svg.viewBox.baseVal;
+                const scale = Math.min(rect.width / vb.width, rect.height / vb.height) || 1;
+                return {
+                    x: vb.x + (ev.clientX - rect.left) / scale,
+                    y: vb.y + (ev.clientY - rect.top) / scale
+                };
+            }
+
             svg.addEventListener('mousedown', function (ev) {
-                if (ev.target.closest && ev.target.closest('.kg-node')) return;
+                const g = ev.target.closest && ev.target.closest('.kg-node');
+                if (g) {
+                    const key = g.dataset.kgKey;
+                    const p = key ? kgPos[key] : null;
+                    if (p) {
+                        // 记下"鼠标落点相对节点中心"的偏移，拖动时节点才不会被
+                        // 硬拽到光标正下方（否则一按下去节点就跳一下）
+                        const pt = toSvgPoint(ev);
+                        dragging = { key: key, offX: pt.x - p.x, offY: pt.y - p.y };
+                        dragMoved = false;
+                        svg.style.cursor = 'move';
+                        ev.preventDefault();   // 阻止拖动过程中选中页面文字
+                        return;
+                    }
+                }
                 panning = { x: ev.clientX, y: ev.clientY,
                             vx: svg.viewBox.baseVal.x, vy: svg.viewBox.baseVal.y };
                 svg.style.cursor = 'grabbing';
             });
+
             window.addEventListener('mousemove', function (ev) {
+                // —— 拖节点：只改坐标 + 重画，不重跑力导向 ——
+                // 力导向一跑就会把节点"吸"回原本的平衡位置，等于拖不动。
+                // 位置直接写进 kgPos，松手后保持不动，刷新才会重新布局。
+                if (dragging) {
+                    const p = kgPos[dragging.key];
+                    if (!p) return;
+                    const pt = toSvgPoint(ev);
+                    p.x = Math.max(18, Math.min(kgView.w - 18, pt.x - dragging.offX));
+                    p.y = Math.max(16, Math.min(kgView.h - 16, pt.y - dragging.offY));
+                    dragMoved = true;
+                    drawKg();
+                    return;
+                }
                 if (!panning) return;
                 const rect = svg.getBoundingClientRect();
                 const vb = svg.viewBox.baseVal;
@@ -3308,29 +3377,59 @@
                 svg.setAttribute('viewBox',
                     (panning.vx - dx) + ' ' + (panning.vy - dy) + ' ' + vb.width + ' ' + vb.height);
             });
+
             window.addEventListener('mouseup', function () {
+                if (dragging) {
+                    dragging = null;
+                    svg.style.cursor = 'grab';
+                    return;
+                }
                 if (!panning) return;
                 panning = null;
                 svg.style.cursor = 'grab';
             });
 
+            // 拖完节点松手时，浏览器还会补发一次 click，会把"拖动"误当成
+            // "点开看明细"。在捕获阶段把它拦掉——真的拖过才拦。
+            svg.addEventListener('click', function (ev) {
+                if (!dragMoved) return;
+                dragMoved = false;
+                ev.stopPropagation();
+                ev.preventDefault();
+            }, true);
+
             // 双击复位
             svg.addEventListener('dblclick', function () { kgResetView(); });
         }
 
-        // 图谱属性值的展示格式：金额换单位、布尔换中文、好评率空值换破折号。
-        // 单位口径以后端同步时写入的原值为准：consume_amount/total_amount/backend_amount 是「分」，
-        // balance 是「大狗币」（1 大狗币 = 1 元）。
-        function formatKgVal(v, key) {
-            if (v === '' || v == null) return '—';
-            if (key === 'good_rate') {
-                return (typeof v === 'number' && v < 0) ? '—' : (Number(v).toFixed(1) + '%');
+        // 图谱属性值的展示格式。
+        // 换算口径（金额单位、枚举中文）全部来自后端 types.fields 里的 unit / enum，
+        // 前端只查表不写死字典——否则后台把 order.status 的状态名改了，
+        // 图谱页还停在旧口径上。
+        function formatKgVal(v, f) {
+            f = f || {};
+            if (v === '' || v === null || v === undefined) return '—';
+
+            // ① 枚举：库内英文取值 → 中文（pending → 待派单、true → 是）
+            //    键统一转小写再比：JS 的 String(true) 是 "true"，
+            //    而后端可能把布尔序列化成 "True"，两边归一到小写才稳
+            if (f.enum) {
+                const ek = String(v).toLowerCase();
+                if (f.enum[ek] !== undefined) return f.enum[ek];
             }
-            if (key === 'blacklisted') return v ? '是' : '否';
-            if (key === 'consume_amount' || key === 'total_amount' || key === 'backend_amount') {
-                return (Number(v) / 100).toFixed(2) + ' 元';
+
+            // ② 数值口径
+            const unit = f.unit || '';
+            if (unit === 'fen') return (Number(v) / 100).toFixed(2) + ' 元';
+            if (unit === 'coin') return Number(v).toFixed(2) + ' 大狗币';
+            if (unit === 'percent') {
+                // 从未被评价过的打手，库里存 -1 当哨兵值（Neo4j 不能存 null），
+                // 表示"没有数据"，不能显示成 -100%
+                return (typeof v === 'number' && v < 0) ? '—' : Number(v).toFixed(1) + '%';
             }
-            if (key === 'balance') return Number(v).toFixed(2) + ' 大狗币';
+
+            // ③ 兜底：没登记口径的字段按原值显示；布尔翻成中文，免得看到 true / false
+            if (typeof v === 'boolean') return v ? '是' : '否';
             return String(v);
         }
 
@@ -3361,14 +3460,14 @@
                     shown[f.key] = 1;
                     html += '<div class="text-xs"><span style="color:var(--text-card-muted)">'
                          + escapeHtml(f.name || f.key) + '：</span><span class="text-gray-800">'
-                         + escapeHtml(formatKgVal(props[f.key], f.key))
+                         + escapeHtml(formatKgVal(props[f.key], f))
                          + '</span></div>';
                 });
                 Object.keys(props).forEach(function (k) {
                     if (shown[k]) return;
                     html += '<div class="text-xs"><span style="color:var(--text-card-muted)">'
                          + escapeHtml(k) + '：</span><span class="text-gray-800">'
-                         + escapeHtml(formatKgVal(props[k], k)) + '</span></div>';
+                         + escapeHtml(formatKgVal(props[k], { key: k })) + '</span></div>';
                 });
                 html += '</div>';
 

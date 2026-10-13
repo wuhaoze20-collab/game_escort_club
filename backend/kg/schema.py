@@ -208,9 +208,13 @@ REL_TYPES = {
         "start": LABEL_BOSS, "rel": REL_RATED, "end": LABEL_RATING,
         "name": "评价", "color": "#eab308",
     },
+    # 评价与打赏都是"三段式"：老板 → 中间节点（正文/金额）→ 打手。
+    # 中间那段用「给」，读起来才是
+    #   老板 —评价了→ [这个打手真强] —给→ 打手
+    #   老板 —打赏→ [打赏 ¥16.00] —给→ 打手
     "(Rating)-[ABOUT]->(Player)": {
         "start": LABEL_RATING, "rel": REL_ABOUT, "end": LABEL_PLAYER,
-        "name": "评价对象", "color": "#a3e635",
+        "name": "给", "color": "#a3e635",
     },
     "(Rating)-[FOR_ORDER]->(Order)": {
         "start": LABEL_RATING, "rel": REL_FOR_ORDER, "end": LABEL_ORDER,
@@ -226,7 +230,7 @@ REL_TYPES = {
     },
     "(Tip)-[TO]->(Player)": {
         "start": LABEL_TIP, "rel": REL_TO, "end": LABEL_PLAYER,
-        "name": "打赏对象", "color": "#fb7185",
+        "name": "给", "color": "#fb7185",
     },
     "(Player)-[WITHDREW]->(Withdrawal)": {
         "start": LABEL_PLAYER, "rel": REL_WITHDREW, "end": LABEL_WITHDRAWAL,
@@ -266,6 +270,51 @@ WITHDRAW_STATUS_TEXT = {
     "pending": "待审核",
     "approved": "已通过",
     "rejected": "已驳回",
+}
+
+# 打手标签的审核状态中文（PlayerTag.status）
+TAG_STATUS_TEXT = {
+    "pending": "待审核",
+    "approved": "已通过",
+    "rejected": "已驳回",
+}
+
+# 是否类字段的中文。
+# 键统一用小写：Python 的 str(True) 是 "True"，而 JS 的 String(true) 是 "true"，
+# 不下发同一套小写键的话前端查表会落空（api._enum_for 也会再兜一层小写）。
+BOOL_TEXT = {"true": "是", "false": "否"}
+
+
+# ——————————————————————————————————————————————
+# 字段口径：枚举、单位
+# ——————————————————————————————————————————————
+# 这两张表是给前端看的——库内取值（pending / normal / 1620）要翻成
+# 「待完成」「正常展示」「¥16.20」才能读。映射放在后端，前端只查表不写死字典，
+# 这样以后改了状态名或加了等级，图谱页不会和后端脱节。
+
+# (节点标签, 字段名) → 取值的中文映射
+FIELD_ENUMS = {
+    (LABEL_ORDER, "status"): ORDER_STATUS_TEXT,
+    (LABEL_RATING, "review_status"): REVIEW_STATUS_TEXT,
+    (LABEL_RATING, "is_complaint"): BOOL_TEXT,
+    (LABEL_WITHDRAWAL, "status"): WITHDRAW_STATUS_TEXT,
+    (LABEL_TAG, "status"): TAG_STATUS_TEXT,
+    (LABEL_BOSS, "blacklisted"): BOOL_TEXT,
+    (LABEL_PLAYER, "blacklisted"): BOOL_TEXT,
+}
+
+# 字段的数值口径：库里存原始值，展示时要换算
+#   fen     分 → 元（金额字段一律按分存）
+#   coin    大狗币（1 大狗币 = 1 元）
+#   percent 百分数，未评价时库里存 -1，展示成 "—"
+FIELD_UNITS = {
+    "consume_amount": "fen",
+    "total_amount": "fen",
+    "backend_amount": "fen",
+    "amount": "fen",
+    "tip_amount": "fen",
+    "balance": "coin",
+    "good_rate": "percent",
 }
 
 
