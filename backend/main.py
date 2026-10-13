@@ -172,7 +172,7 @@ def migrate_columns_to_text():
 migrate_columns_to_text()
 migrate_db()
 
-app = FastAPI(title="大狗嚼电竞管理系统", version="5.0.0")
+app = FastAPI(title="大狗嚼电竞管理系统", version="5.0.1")
 
 # CORS配置：默认放开跨域便于本地开发；生产环境请用环境变量 CORS_ORIGINS 指定域名列表（逗号分隔）
 # 例如：set CORS_ORIGINS=https://admin.example.com,https://www.example.com

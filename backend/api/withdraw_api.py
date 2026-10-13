@@ -144,6 +144,15 @@ def create_withdraw(
         status="pending"
     )
     db.add(withdraw)
+
+    # 通知管理员与客服有新的提现申请待审核（提现审核 admin、service 都有权限）
+    from api.notification_api import create_notification
+    who = current_user.nickname or current_user.username
+    for rv in db.query(User).filter(User.role.in_(["admin", "service"])).all():
+        create_notification(db, rv.id, "新的提现申请",
+                            f"打手「{who}」申请提现 ¥{request.amount / 100:.2f}，"
+                            f"请到「提现审核」处理", "warning", "withdraw-manage")
+
     db.commit()
     db.refresh(withdraw)
     _kg_sync_withdrawal(db, withdraw)   # 提现申请入知识图谱
@@ -191,6 +200,16 @@ def approve_withdraw(
     withdraw.status = "approved"
     withdraw.note = request.note
     withdraw.processed_at = datetime.now()
+
+    # 通知打手提现结果
+    from api.notification_api import create_notification
+    pw = db.query(User).filter(User.username == withdraw.player_username).first()
+    if pw:
+        create_notification(db, pw.id, "提现已通过",
+                            f"您的提现申请 ¥{withdraw.amount / 100:.2f} 已通过"
+                            f"{('（' + request.note + '）') if request.note else ''}",
+                            "success", "withdraw")
+
     db.commit()
     db.refresh(withdraw)
     _kg_sync_withdrawal(db, withdraw)   # 审核结果刷新图谱
@@ -213,6 +232,16 @@ def reject_withdraw(
     withdraw.status = "rejected"
     withdraw.note = request.note
     withdraw.processed_at = datetime.now()
+
+    # 通知打手提现结果
+    from api.notification_api import create_notification
+    pw = db.query(User).filter(User.username == withdraw.player_username).first()
+    if pw:
+        create_notification(db, pw.id, "提现被驳回",
+                            f"您的提现申请 ¥{withdraw.amount / 100:.2f} 未通过"
+                            f"{('：' + request.note) if request.note else ''}，金额仍在您的后台余额中",
+                            "warning", "withdraw")
+
     db.commit()
     db.refresh(withdraw)
     _kg_sync_withdrawal(db, withdraw)   # 审核结果刷新图谱

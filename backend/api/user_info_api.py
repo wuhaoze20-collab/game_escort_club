@@ -188,7 +188,15 @@ def update_my_profile(
             raise HTTPException(status_code=400, detail="新昵称与当前昵称相同")
     else:
         raise HTTPException(status_code=400, detail="没有需要修改的内容，请填写新昵称")
-    
+
+    # 通知管理员与客服有新的资料待审核（头像/昵称审核 admin、service 都有权限，故两者都通知）
+    who = current_user.nickname or current_user.username
+    for rv in db.query(User).filter(User.role.in_(["admin", "service"])).all():
+        create_notification(db, rv.id, "新的头像昵称待审核",
+                            f"{current_user.role_name or ''}「{who}」提交了昵称修改"
+                            f"（{current_user.nickname or current_user.username} → {current_user.pending_nickname}），"
+                            f"请到「头像昵称审核」处理", "warning", "profile-review")
+
     db.commit()
     return {
         "message": "已提交，等待管理员/客服审核",
@@ -265,7 +273,7 @@ def decide_profile(
         u.pending_avatar = ""
     
     # 通知用户审核结果
-    create_notification(db, u.id, "资料审核结果", msg, "success" if "通过" in msg else "warning", "/profile")
+    create_notification(db, u.id, "资料审核结果", msg, "success" if "通过" in msg else "warning", "profile")
     
     db.commit()
     return {"message": msg, "nickname": u.nickname, "avatar": u.avatar}
@@ -346,6 +354,14 @@ def add_my_tag(
         raise HTTPException(status_code=400, detail="该标签已存在")
     t = PlayerTag(username=current_user.username, tag=tag, status="pending")
     db.add(t)
+
+    # 通知管理员与客服有新的标签待审核（标签审核 admin、service 都有权限）
+    who = current_user.nickname or current_user.username
+    for rv in db.query(User).filter(User.role.in_(["admin", "service"])).all():
+        create_notification(db, rv.id, "新的标签待审核",
+                            f"打手「{who}」提交了标签「{tag}」，请到「标签审核」处理",
+                            "warning", "tag-review")
+
     db.commit()
     db.refresh(t)
     return t
@@ -401,9 +417,9 @@ def decide_tag(
     p_user = db.query(User).filter(User.username == t.username).first()
     if p_user:
         if t.status == "approved":
-            create_notification(db, p_user.id, "标签审核通过", f"您的标签「{t.tag}」已通过审核，将对外展示", "success", "/profile")
+            create_notification(db, p_user.id, "标签审核通过", f"您的标签「{t.tag}」已通过审核，将对外展示", "success", "profile")
         else:
-            create_notification(db, p_user.id, "标签被驳回", f"您的标签「{t.tag}」未通过审核（{request.note or '未说明原因'}）", "warning", "/profile")
+            create_notification(db, p_user.id, "标签被驳回", f"您的标签「{t.tag}」未通过审核（{request.note or '未说明原因'}）", "warning", "profile")
     db.commit()
     db.refresh(t)
     return {"message": "已通过" if t.status == "approved" else "已拒绝", "tag": t.tag, "status": t.status}
@@ -559,7 +575,7 @@ def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bo
     # 通知被拉黑用户
     from api.notification_api import create_notification
     create_notification(db, user.id, "账号被封禁",
-                        "您的账号已被拉黑注销，如有疑问请联系管理员", "warning", "/")
+                        "您的账号已被拉黑注销，如有疑问请联系管理员", "warning", "")
 
     # 处罚通告同步进知识图谱（「谁被处罚过、因为什么」靠它回答）。
     # 旁路操作：图谱写失败绝不能影响拉黑这条不可逆主流程，整段包在 try 里。
@@ -636,7 +652,7 @@ def create_ban_request(
         create_notification(db, admin.id, "新的拉黑申请",
                             f"客服 {current_user.username} 申请拉黑"
                             f"{'老板' if user.role == 'boss' else '打手'}「{user.nickname or username}」，"
-                            f"请到「拉黑审核」处理", "warning", "/ban-review")
+                            f"请到「拉黑审核」处理", "warning", "ban-review")
 
     db.commit()
     db.refresh(br)
@@ -699,7 +715,7 @@ def decide_ban_request(
         if requester:
             create_notification(db, requester.id, "拉黑申请被驳回",
                                 f"你申请的拉黑「{br.target_username}」已被驳回"
-                                f"{('：' + request.note) if request.note else ''}", "info", "/ban-review")
+                                f"{('：' + request.note) if request.note else ''}", "info", "ban-review")
         db.commit()
         return {"message": "已驳回该拉黑申请（未执行拉黑）"}
 
@@ -718,7 +734,7 @@ def decide_ban_request(
     requester = db.query(User).filter(User.username == br.requested_by).first()
     if requester:
         create_notification(db, requester.id, "拉黑申请已通过",
-                            f"你申请的拉黑「{br.target_username}」已由管理员审核通过并执行", "success", "/ban-review")
+                            f"你申请的拉黑「{br.target_username}」已由管理员审核通过并执行", "success", "ban-review")
     db.commit()
     return {"message": f"已通过并执行拉黑，¥{amount / 100:.2f} 已转入公司账户"}
 

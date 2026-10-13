@@ -138,9 +138,9 @@ def complaint_order(
     # 通知打手被投诉、管理员有投诉待处理
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        create_notification(db, p_user.id, "订单被投诉", f"老板 {current_user.nickname or current_user.username} 投诉了您的订单 {order.order_no if hasattr(order, 'order_no') else ''}，请及时申诉", "warning", "/order")
+        create_notification(db, p_user.id, "订单被投诉", f"老板 {current_user.nickname or current_user.username} 投诉了您的订单 {order.order_no if hasattr(order, 'order_no') else ''}，请及时申诉", "warning", "player-orders")
     for au in db.query(User).filter(User.role == "admin").all():
-        create_notification(db, au.id, "新投诉待处理", f"老板 {current_user.nickname or current_user.username} 投诉了订单（打手 {order.player_username}），请关注", "warning", "/rating/review-list")
+        create_notification(db, au.id, "新投诉待处理", f"老板 {current_user.nickname or current_user.username} 投诉了订单（打手 {order.player_username}），请关注", "warning", "review-manage")
     db.flush()
     recalc_good_rate(db, order.player_username)
     db.commit()
@@ -198,7 +198,7 @@ def create_rating(
     # 通知打手收到新评价
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        create_notification(db, p_user.id, "收到新评价", f"老板 {current_user.nickname or current_user.username} 给您的订单 {order.order_no} 打了 {request.rating} 星", "info", "/order")
+        create_notification(db, p_user.id, "收到新评价", f"老板 {current_user.nickname or current_user.username} 给您的订单 {order.order_no} 打了 {request.rating} 星", "info", "player-ratings")
     
     db.commit()
     db.refresh(rating)
@@ -306,7 +306,7 @@ def request_review(
     
     # 通知管理员有复查申请
     for au in db.query(User).filter(User.role == "admin").all():
-        create_notification(db, au.id, "新的复查申请", f"打手 {current_user.nickname or current_user.username} 对评价（订单 {rating.order_id}）提交了复查申请", "warning", "/rating/review-list")
+        create_notification(db, au.id, "新的复查申请", f"打手 {current_user.nickname or current_user.username} 对评价（订单 {rating.order_id}）提交了复查申请", "warning", "review-manage")
 
     db.commit()
     db.refresh(rating)
@@ -361,9 +361,9 @@ def review_decision(
     p_user = db.query(User).filter(User.username == rating.player_username).first()
     if p_user:
         if rating.review_status == "removed":
-            create_notification(db, p_user.id, "申诉成功", "您的复查申请已通过，该条评价已隐藏，不再计入好评率", "success", "/rating")
+            create_notification(db, p_user.id, "申诉成功", "您的复查申请已通过，该条评价已隐藏，不再计入好评率", "success", "player-ratings")
         else:
-            create_notification(db, p_user.id, "申诉驳回", "您的复查申请未通过，该条评价保留展示", "warning", "/rating")
+            create_notification(db, p_user.id, "申诉驳回", "您的复查申请未通过，该条评价保留展示", "warning", "player-ratings")
     
     db.commit()
     db.refresh(rating)

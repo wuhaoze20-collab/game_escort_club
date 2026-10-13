@@ -450,13 +450,13 @@ def main(reset: bool = False) -> None:
         recent = db.query(Order).order_by(Order.created_at.desc()).limit(6).all()
         for o in recent:
             notify(o.boss_username, "订单进度",
-                   f"您的订单 {o.order_no} 当前状态：{o.status}", "/order")
+                   f"您的订单 {o.order_no} 当前状态：{o.status}", "order")
             if o.player_username:
                 notify(o.player_username, "订单进度",
-                       f"订单 {o.order_no} 当前状态：{o.status}", "/my-orders")
+                       f"订单 {o.order_no} 当前状态：{o.status}", "player-orders")
         db.commit()
-        notify("kefu", "待派单提醒", "当前有订单等待人工派单，请及时处理", "/order")
-        notify("guanliyuan", "系统提示", "演示数据已重新生成，可在数据统计页查看", "/stats")
+        notify("kefu", "待派单提醒", "当前有订单等待人工派单，请及时处理", "order-manage")
+        notify("guanliyuan", "系统提示", "演示数据已重新生成，可在数据统计页查看", "profit")
         db.commit()
         print("  · 站内通知已生成")
 

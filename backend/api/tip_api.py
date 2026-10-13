@@ -70,7 +70,7 @@ def create_tip(
     # 通知打手收到打赏
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        create_notification(db, p_user.id, "收到打赏", f"老板 {current_user.nickname or current_user.username} 为您打赏 {request.amount // 100:.0f} 元，已计入后台金额", "success", "/tip")
+        create_notification(db, p_user.id, "收到打赏", f"老板 {current_user.nickname or current_user.username} 为您打赏 {request.amount // 100:.0f} 元，已计入后台金额", "success", "player-orders")
     
     db.commit()
     db.refresh(tip)

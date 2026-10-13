@@ -124,10 +124,10 @@ def create_order(
         if p_user:
             b_user = db.query(User).filter(User.username == order.boss_username).first()
             boss_name = b_user.nickname if b_user and b_user.nickname else order.boss_username
-            create_notification(db, p_user.id, "新订单", f"老板 {boss_name} 给您指派了新订单 {order.order_no}，请及时确认", "info", "/order")
+            create_notification(db, p_user.id, "新订单", f"老板 {boss_name} 给您指派了新订单 {order.order_no}，请及时确认", "info", "player-orders")
     else:
         for su in db.query(User).filter(User.role == "service").all():
-            create_notification(db, su.id, "新订单待派单", f"有新的待派单订单 {order.order_no}，请及时派单", "info", "/order")
+            create_notification(db, su.id, "新订单待派单", f"有新的待派单订单 {order.order_no}，请及时派单", "info", "order-manage")
     
     db.commit()
     db.refresh(order)
@@ -169,9 +169,9 @@ def assign_player(
     p_user = db.query(User).filter(User.username == order.player_username).first()
     player_name = p_user.nickname if p_user and p_user.nickname else order.player_username
     if b_user:
-        create_notification(db, b_user.id, "派单成功", f"客服已为您派单：打手 {player_name}，订单 {order.order_no}，等待开始服务", "success", "/order")
+        create_notification(db, b_user.id, "派单成功", f"客服已为您派单：打手 {player_name}，订单 {order.order_no}，等待开始服务", "success", "order")
     if p_user:
-        create_notification(db, p_user.id, "新订单", f"您有新的派单订单 {order.order_no}，请及时接单", "info", "/order")
+        create_notification(db, p_user.id, "新订单", f"您有新的派单订单 {order.order_no}，请及时接单", "info", "player-orders")
     
     db.commit()
     db.refresh(order)
@@ -209,7 +209,7 @@ def accept_order(
             title="接单成功",
             content=f"打手 {player_name} 已接受您的订单 {order.order_no}，即将开始服务",
             type="success",
-            link="/order"
+            link="order"
         )
     
     return order
@@ -242,7 +242,7 @@ def reject_order(
     p_user = db.query(User).filter(User.username == current_user.username).first()
     player_name = p_user.nickname if p_user and p_user.nickname else current_user.username
     if b_user:
-        create_notification(db, b_user.id, "打手拒单", f"打手 {player_name} 拒绝了订单 {order.order_no}，大狗币已退回您的余额", "warning", "/order")
+        create_notification(db, b_user.id, "打手拒单", f"打手 {player_name} 拒绝了订单 {order.order_no}，大狗币已退回您的余额", "warning", "order")
     
     db.commit()
     db.refresh(order)
@@ -274,7 +274,7 @@ def start_order(
     p_user = db.query(User).filter(User.username == order.player_username).first()
     player_name = p_user.nickname if p_user and p_user.nickname else order.player_username
     if b_user:
-        create_notification(db, b_user.id, "服务开始", f"打手 {player_name} 已开始为您服务，订单 {order.order_no}", "info", "/order")
+        create_notification(db, b_user.id, "服务开始", f"打手 {player_name} 已开始为您服务，订单 {order.order_no}", "info", "order")
     
     db.commit()
     db.refresh(order)
@@ -339,7 +339,7 @@ def submit_settlement(
     p_user = db.query(User).filter(User.username == current_user.username).first()
     player_name = p_user.nickname if p_user and p_user.nickname else current_user.username
     if b_user:
-        create_notification(db, b_user.id, "待确认结单", f"打手 {player_name} 已提交结单申请，订单 {order.order_no}，请确认结单", "warning", "/order")
+        create_notification(db, b_user.id, "待确认结单", f"打手 {player_name} 已提交结单申请，订单 {order.order_no}，请确认结单", "warning", "order")
     
     db.commit()
     db.refresh(order)
@@ -367,7 +367,7 @@ def confirm_settlement(
     # 通知打手订单完成、金额入账（金额直接复用结算结果，避免口径不一致）
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已确认结单，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "/order")
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已确认结单，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "player-orders")
     
     db.commit()
     db.refresh(order)
@@ -392,7 +392,7 @@ def complete_order(
     # 通知打手订单完成、金额入账（金额直接复用结算结果，避免口径不一致）
     p_user = db.query(User).filter(User.username == order.player_username).first()
     if p_user:
-        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已完成结算，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "/order")
+        create_notification(db, p_user.id, "订单完成", f"订单 {order.order_no} 已完成结算，本次收入 {salary.player_income / 100:.2f} 元已入账后台金额", "success", "player-orders")
     
     db.commit()
     db.refresh(order)
@@ -426,7 +426,7 @@ def cancel_order(
     # 通知打手订单已取消
     p_user = db.query(User).filter(User.username == order.player_username).first() if order.player_username else None
     if p_user:
-        create_notification(db, p_user.id, "订单已取消", f"订单 {order.order_no} 已取消，请知悉", "warning", "/order")
+        create_notification(db, p_user.id, "订单已取消", f"订单 {order.order_no} 已取消，请知悉", "warning", "player-orders")
     
     db.commit()
     db.refresh(order)

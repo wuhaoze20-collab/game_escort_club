@@ -2340,6 +2340,49 @@
 
         notificationBtn.addEventListener('click', openNotificationModal);
 
+        // 通知跳转目标解析：后端 link 既可能是菜单 key（如 profile-review），
+        // 也可能是历史遗留的斜杠路径（如 /register）。这里统一归一化，
+        // 并且必须落在当前角色真正拥有的菜单里，否则不跳转（避免跳到无权页面）。
+        const NOTIF_LINK_ALIAS = {
+            '/register': 'registration-review',
+            '/rating/review-list': 'review-manage',
+            '/rating': 'player-ratings',
+            '/my-orders': 'player-orders',
+            '/tip': 'player-orders',
+            '/stats': 'profit',
+            '/order': { boss: 'order', player: 'player-orders', admin: 'order-manage', service: 'order-manage' }
+        };
+        function resolveNotificationPage(link) {
+            if (!link) return '';
+            let key = String(link).trim();
+            if (NOTIF_LINK_ALIAS[key]) {
+                const m = NOTIF_LINK_ALIAS[key];
+                key = (typeof m === 'string') ? m : (m[currentUser.role] || '');
+            }
+            if (key.charAt(0) === '/') key = key.slice(1);
+            if (!key) return '';
+            const pages = (menuConfig[currentUser.role] || [])
+                .reduce((acc, g) => acc.concat(g.items.map(i => i.key)), []);
+            return pages.includes(key) ? key : '';
+        }
+
+        // 点击一条通知：先标已读，再按 link 跳到对应页面
+        async function openNotification(el) {
+            if (!el) return;
+            const id = el.dataset.nid;
+            const page = resolveNotificationPage(el.dataset.link);
+            try {
+                await apiRequest(`/api/notification/${id}/read`, 'POST');
+            } catch (e) { /* 标记已读失败不阻断跳转 */ }
+            if (page) {
+                closeNotificationModal();
+                switchPage(page);
+            } else {
+                await loadNotifications();
+            }
+            await refreshUnreadCount();
+        }
+
         // 加载通知列表
         async function loadNotifications() {
             try {
@@ -2349,16 +2392,22 @@
                     box.innerHTML = '<div class="p-4 text-center text-sm text-gray-400">暂无消息</div>';
                     return;
                 }
-                box.innerHTML = list.map(n => `
-                    <div class="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${n.is_read === 0 ? 'bg-blue-50' : ''}" onclick="markNotificationRead(${n.id})">
+                box.innerHTML = list.map(n => {
+                    const target = resolveNotificationPage(n.link);
+                    return `
+                    <div class="px-4 py-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${n.is_read === 0 ? 'bg-blue-50' : ''}" data-nid="${n.id}" data-link="${escapeHtml(n.link || '')}" onclick="openNotification(this)">
                         <div class="flex justify-between items-center mb-1">
                             <span class="text-sm font-medium ${n.is_read === 0 ? 'text-blue-600' : 'text-gray-600'}">${escapeHtml(n.title)}</span>
                             <span class="text-xs text-gray-400">${n.created_at}</span>
                         </div>
                         <p class="text-xs text-gray-500 mb-1">${escapeHtml(n.content)}</p>
-                        <span class="text-xs px-1.5 py-0.5 rounded ${n.type === 'success' ? 'bg-green-100 text-green-600' : n.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'}">${n.type === 'success' ? '成功' : n.type === 'warning' ? '提醒' : '信息'}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs px-1.5 py-0.5 rounded ${n.type === 'success' ? 'bg-green-100 text-green-600' : n.type === 'warning' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-500'}">${n.type === 'success' ? '成功' : n.type === 'warning' ? '提醒' : '信息'}</span>
+                            ${target ? '<span class="text-xs text-blue-500">点击前往处理 &rsaquo;</span>' : ''}
+                        </div>
                     </div>
-                `).join('');
+                `;
+                }).join('');
             } catch (e) {
                 document.getElementById('notification-list').innerHTML = `<div class="p-4 text-center text-sm text-gray-400">${escapeHtml(e.message)}</div>`;
             }
