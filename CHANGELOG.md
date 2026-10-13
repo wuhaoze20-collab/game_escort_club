@@ -1,5 +1,59 @@
 # 更新日志 CHANGELOG
 
+## [V4.13.1] 2026-10-13
+
+### 📌 顶栏常驻屏幕顶端，滚动时不再跟着滑走
+
+侧边栏一直是 `fixed`，但顶栏（面包屑 / 通知 / 主题 / 头像 / 退出登录）在普通文档流里，
+内容一长就把顶栏滚上去了，看通知和切主题都得先滚回顶部。改成常驻。
+
+#### 踩到的坑：项目用的是**预编译**的 tailwind.css
+
+一开始顺手写了 `fixed top-0 left-64 right-0 z-20`，结果只有前两个类生效：
+
+```
+position: fixed ✓   top: 0px ✓
+left: 0px ✗         right: 0px ✗        z-index: auto ✗
+```
+
+因为 `frontend/tailwind.css` 只有 **27KB**，是**预编译后只保留已用到类**的产物，
+`left-64` / `z-20` / `right-0` / `pt-16` 这些没被扫描到的类根本不在文件里。
+`left: 0` 的直接后果是顶栏横跨整个视口、盖住了侧边栏顶部。
+
+所以定位与让位间距改为写进页面自己的 `<style>`：
+
+```css
+#app-page > header {
+    position: fixed;
+    top: 0;
+    left: 16rem;        /* 让出侧边栏（aside 是 w-64 = 16rem） */
+    right: 0;
+    z-index: 20;        /* 侧边栏 10 < 顶栏 20 < 通知弹窗 50 */
+}
+#app-page > main {
+    padding-top: 4.5rem;    /* 顶栏 h-14 = 3.5rem + 1rem 呼吸 */
+}
+```
+
+顺带在注释里把「tailwind.css 是预编译的、新类不一定存在」这件事写清楚，
+免得后面再踩。
+
+#### 实测
+
+| 项目 | 结果 |
+|---|---|
+| `header` position / top / left / right / z-index | `fixed` / `0px` / `256px` / `0px` / `20` |
+| 侧边栏宽度 / 层级 / 定位 | `256px` / `10` / `fixed` |
+| 主内容区 padding-top / margin-left | `72px` / `256px` |
+| 滚动 404px 后顶栏位置 | `top` 仍为 `0px` ✓ |
+| 是否遮挡侧边栏 | 否（`left=256` 与侧边栏等宽）✓ |
+
+因为是挂在 `#app-page > header` 上的，四个角色、全部 28 个页面一起生效。
+
+#### 校验
+
+`check_consistency.py --strict` 通过 26（0 错 0 警）。
+
 ## [V4.13.0] 2026-10-13
 
 ### 🕸️ 图谱明细按订单聚合成完整流程 + 🔑 API Key 可在后台在线更换

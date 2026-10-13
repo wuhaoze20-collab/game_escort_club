@@ -501,6 +501,25 @@
             -webkit-backdrop-filter: blur(14px) saturate(160%);
         }
 
+        /* ==================== 固定顶栏（V4.13.1） ====================
+           顶栏常驻屏幕顶端，主内容区滚动时它不跟着滚走。
+           注意：项目用的是预编译的 tailwind.css（只含已用到的类），
+           left-64 / z-20 / pt-16 这些没被生成的类在 HTML 上不起作用，
+           所以定位与让位间距统一写成本文件的规则。
+           层叠顺序：侧边栏 z-10 < 顶栏 z-20 < 通知弹窗 z-50。 */
+        #app-page > header {
+            position: fixed;
+            top: 0;
+            left: 16rem;        /* 让出侧边栏（aside 是 w-64 = 16rem） */
+            right: 0;
+            z-index: 20;
+        }
+        /* 主内容区顶部留出顶栏高度（h-14 = 3.5rem）再加一点呼吸，
+           否则第一屏内容会被顶栏压住 */
+        #app-page > main {
+            padding-top: 4.5rem;
+        }
+
         /* ==================== V3.2.1 暗色文字继承 + 语义色提亮 ==================== */
         [data-theme="dark"] .page-section,
         [data-theme="dark"] [id$="-modal"],
@@ -797,8 +816,8 @@
             </nav>
         </aside>
 
-        <!-- 顶部栏 -->
-        <header class="ml-64 bg-white shadow-sm h-14 flex items-center justify-between px-8">
+        <!-- 顶部栏：固定在屏幕顶端，内容滚动时它不动（定位规则见 <style> 里的「固定顶栏」） -->
+        <header class="bg-white shadow-sm h-14 flex items-center justify-between px-8">
             <div id="page-title" class="text-gray-600 text-sm tracking-wider">欢迎使用管理系统</div>
             <div class="flex items-center gap-4">
                 <!-- 消息通知按钮 -->
@@ -822,7 +841,7 @@
             </div>
         </header>
 
-        <!-- 主内容区 -->
+        <!-- 主内容区：顶部间距由 <style> 里的「固定顶栏」规则给出，避开固定的顶栏 -->
         <main class="ml-64 p-8">
             <div class="max-w-5xl mx-auto space-y-8">
 
