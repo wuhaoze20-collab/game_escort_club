@@ -1,0 +1,457 @@
+<mxfile host="Electron" agent="drawio_kit" pages="3">
+  <diagram id="page1" name="00 模块化RAG编排总览（ModularRAG）">
+    <mxGraphModel dx="2620" dy="1505" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1640" pageHeight="1510" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="模块化 RAG 编排总览：ModularRAG 组装了哪些模块、query() 的执行顺序、模块开关与生成边界 —— 代码依据 backend/rag/pipeline.py" vertex="1">
+          <mxGeometry height="34" width="1140" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="n_in" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="用户提问 question + role + username" vertex="1">
+          <mxGeometry height="44" width="300" x="430" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="n_sw" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="读取 7 个模块开关&lt;br&gt;（ai_rag.py module_*_enabled，每次查询重新读取）" vertex="1">
+          <mxGeometry height="60" width="340" x="410" y="165" as="geometry" />
+        </mxCell>
+        <mxCell id="n_rw" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="① 查询改写 QueryRewriter.rewrite()&lt;br&gt;同义词扩展 / 分解 / 后退 / HyDE / 多查询" vertex="1">
+          <mxGeometry height="60" width="360" x="400" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="n_multi" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="② 多路召回 Multi-Retrieval&lt;br&gt;每个查询变体各跑一遍关键词 + 向量；图谱只用原始问题" vertex="1">
+          <mxGeometry height="60" width="360" x="400" y="375" as="geometry" />
+        </mxCell>
+        <mxCell id="k_kw" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="KeywordRetriever.retrieve()&lt;br&gt;FAQ BM25 关键词匹配&lt;br&gt;（开关 rag_module_keyword_retrieval）" vertex="1">
+          <mxGeometry height="81" width="290" x="40" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="k_vec" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="VectorRetriever.retrieve()&lt;br&gt;document / image / faq 三通道独立召回&lt;br&gt;（开关 rag_module_vector_retrieval）" vertex="1">
+          <mxGeometry height="81" width="340" x="350" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="k_graph" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="GraphRetriever.retrieve()&lt;br&gt;仅用原始问题（实体链接）&lt;br&gt;（开关 rag_module_graph_retrieval）" vertex="1">
+          <mxGeometry height="81" width="300" x="710" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="n_empty" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="三路结果全空？" vertex="1">
+          <mxGeometry height="110" width="260" x="430" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="n_ret_empty" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回空字符串（不注入参考资料）" vertex="1">
+          <mxGeometry height="44" width="280" x="820" y="653" as="geometry" />
+        </mxCell>
+        <mxCell id="n_fuse" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="③ 结果融合 FusionModule.fuse()&lt;br&gt;加权 RRF（rag_rrf_k）&lt;br&gt;（开关 rag_module_fusion）" vertex="1">
+          <mxGeometry height="81" width="360" x="400" y="770" as="geometry" />
+        </mxCell>
+        <mxCell id="n_rmode" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="④ 重排序模式&lt;br&gt;rag_rerank_mode = rule | semantic&lt;br&gt;（开关 rag_module_rerank）" vertex="1">
+          <mxGeometry height="110" width="280" x="440" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="r_rule" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="Reranker.rerank()（rule，默认）&lt;br&gt;RRF分 + 向量分 + 关键词分 + 来源加成" vertex="1">
+          <mxGeometry height="60" width="320" x="60" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="r_sem" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="CrossEncoderReranker.rerank()（semantic）&lt;br&gt;调大模型逐条打相关性分（多 1 次 API 调用）" vertex="1">
+          <mxGeometry height="60" width="340" x="730" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="n_selfrag" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="④.5 Self-RAG 相关性过滤？&lt;br&gt;ai_self_rag_enabled + ai_self_rag_relevance_filter" vertex="1">
+          <mxGeometry height="110" width="360" x="410" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="s_filter" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ai_service.self_rag_filter_relevance()&lt;br&gt;ISREL 打分 1~5，过滤 ≤ 阈值的片段" vertex="1">
+          <mxGeometry height="60" width="320" x="820" y="1050" as="geometry" />
+        </mxCell>
+        <mxCell id="n_debug" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="⑤ 填充调试信息 _fill_debug()&lt;br&gt;（前端「RAG 调试」页展示检索全过程）" vertex="1">
+          <mxGeometry height="60" width="360" x="400" y="1180" as="geometry" />
+        </mxCell>
+        <mxCell id="n_ctx" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="⑥ 上下文构建 ContextBuilder.build()&lt;br&gt;渲染引用块（受 top_k / max_chars 限制）" vertex="1">
+          <mxGeometry height="60" width="360" x="400" y="1290" as="geometry" />
+        </mxCell>
+        <mxCell id="n_ret" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回格式化上下文文本 str&lt;br&gt;（query() 只做「检索 + 增强」）" vertex="1">
+          <mxGeometry height="60" width="320" x="420" y="1400" as="geometry" />
+        </mxCell>
+        <mxCell id="n_gen" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="生成 Generate 不在本类&lt;br&gt;backend/ai_service.py chat()：&lt;br&gt;拼 Prompt → 千问大模型生成答案" vertex="1">
+          <mxGeometry height="81" width="320" x="820" y="1310" as="geometry" />
+        </mxCell>
+        <mxCell id="n_ans" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回答案给用户" vertex="1">
+          <mxGeometry height="44" width="320" x="1270" y="1328.5" as="geometry" />
+        </mxCell>
+        <mxCell id="note_mod" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ModularRAG.__init__ 组装的模块（pipeline.py）&lt;br&gt;· rewriter = QueryRewriter&lt;br&gt;· vector_retriever = VectorRetriever&lt;br&gt;· keyword_retriever = KeywordRetriever&lt;br&gt;· graph_retriever = GraphRetriever&lt;br&gt;· fusion = FusionModule(rrf_k, channel_weights)&lt;br&gt;· reranker = Reranker&lt;br&gt;· cross_encoder = CrossEncoderReranker&lt;br&gt;  （与 reranker 二选一）&lt;br&gt;· context_builder = ContextBuilder" vertex="1">
+          <mxGeometry height="228" width="420" x="1180" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="note_sw" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="模块开关（ai_rag.py 读取，可独立关闭）&lt;br&gt;· rag_module_query_rewrite&lt;br&gt;· rag_module_vector_retrieval&lt;br&gt;· rag_module_keyword_retrieval&lt;br&gt;· rag_module_graph_retrieval&lt;br&gt;· rag_module_fusion&lt;br&gt;· rag_module_rerank&lt;br&gt;· rag_module_automerge&lt;br&gt;关闭后果：&lt;br&gt;· fusion 降级 _simple_merge()&lt;br&gt;· rerank 降级直接用融合结果" vertex="1">
+          <mxGeometry height="249" width="420" x="1180" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="note_param" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="融合 / 重排相关参数&lt;br&gt;· rag_rrf_k —— RRF 平滑常数&lt;br&gt;· rag_weight_document / _image / _faq / _graph&lt;br&gt;· rag_rerank_mode = rule | semantic&lt;br&gt;· ai_self_rag_enabled / ai_self_rag_relevance_filter" vertex="1">
+          <mxGeometry height="123" width="420" x="1180" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="n_in" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_sw" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="n_sw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_rw" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="n_rw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_multi" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="n_multi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="k_kw" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="n_multi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="k_vec" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="n_multi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="k_graph" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="k_kw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_empty" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="k_vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_empty" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="k_graph" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_empty" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="n_empty" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_ret_empty" value="是（全空）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="n_empty" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_fuse" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="n_fuse" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_rmode" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="n_rmode" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r_rule" value="rule（默认）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="n_rmode" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r_sem" value="semantic">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="r_rule" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_selfrag" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="220" y="1085" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="r_sem" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_selfrag" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="n_selfrag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="s_filter" value="开启">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="n_selfrag" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_debug" value="关闭">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="s_filter" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_debug" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="980" y="1210.09" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="n_debug" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_ctx" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="n_ctx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_ret" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="n_ret" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" target="n_gen" value="context 拼进 Prompt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="n_gen" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="n_ans" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page2" name="01 backend-rag模块依赖与数据流">
+    <mxGraphModel dx="1695" dy="974" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1680" pageHeight="990" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="backend/rag/ 模块依赖与数据流：模块级 import 关系 · Document 数据载体 · chroma_store / qdrant_store 双后端 · 谁读 MySQL 谁读向量库 —— 依据 backend/rag/*.py" vertex="1">
+          <mxGeometry height="34" width="1080" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="lg" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" value="实线 = 模块级 import / 调用依赖；虚线 = 运行时延迟导入 / 旁路或说明性引用" vertex="1">
+          <mxGeometry height="30" width="520" x="1120" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="z1" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" value="① rag 包内部依赖：pipeline.py 是唯一编排者" vertex="1">
+          <mxGeometry height="30" width="900" x="40" y="282" as="geometry" />
+        </mxCell>
+        <mxCell id="z2" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" value="② 跨包 / 外部依赖与数据来源" vertex="1">
+          <mxGeometry height="30" width="900" x="40" y="572" as="geometry" />
+        </mxCell>
+        <mxCell id="z3" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" value="③ 底层库 / 无内部依赖的模块" vertex="1">
+          <mxGeometry height="30" width="900" x="340" y="852" as="geometry" />
+        </mxCell>
+        <mxCell id="ext" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="backend/ai_rag.py（兼容层 / ETL / 参数读取）&lt;br&gt;search() · build_rag_context() · sync_chroma() · sync_qdrant() · collect_sources()" vertex="1">
+          <mxGeometry height="81" width="460" x="300" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pipeline" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="rag/pipeline.py&lt;br&gt;ModularRAG（编排器）&lt;br&gt;组装各检索 / 融合 / 重排 / 构建模块&lt;br&gt;+ _simple_merge / _fill_debug" vertex="1">
+          <mxGeometry height="102" width="360" x="540" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="rw" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="query_rewriter.py&lt;br&gt;QueryRewriter.rewrite()&lt;br&gt;→ query_optimizer" vertex="1">
+          <mxGeometry height="81" width="220" x="40" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="vec" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="vector_retriever.py&lt;br&gt;VectorRetriever.retrieve()&lt;br&gt;chroma / qdrant / mysql 三后端" vertex="1">
+          <mxGeometry height="81" width="240" x="290" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="kw" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="keyword_retriever.py&lt;br&gt;KeywordRetriever.retrieve()&lt;br&gt;FAQ BM25（读 AiFaq）" vertex="1">
+          <mxGeometry height="81" width="220" x="540" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="graph" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="graph_retriever.py&lt;br&gt;GraphRetriever.retrieve()&lt;br&gt;Neo4j：实体链接 → 一跳邻域" vertex="1">
+          <mxGeometry height="81" width="220" x="790" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="fusion" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="fusion.py&lt;br&gt;FusionModule.fuse()&lt;br&gt;加权 RRF（无内部依赖）" vertex="1">
+          <mxGeometry height="81" width="220" x="40" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="rr" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="reranker.py&lt;br&gt;Reranker.rerank()（rule）&lt;br&gt;读 ai_rag._rerank_weights" vertex="1">
+          <mxGeometry height="81" width="220" x="290" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="cer" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="cross_encoder_reranker.py&lt;br&gt;CrossEncoderReranker.rerank()&lt;br&gt;调 ai_service 大模型打分" vertex="1">
+          <mxGeometry height="81" width="240" x="540" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="ctx" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="context_builder.py&lt;br&gt;ContextBuilder.build()&lt;br&gt;调 ai_service 渲染引用块" vertex="1">
+          <mxGeometry height="81" width="220" x="790" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="document" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="document.py&lt;br&gt;Document 数据结构&lt;br&gt;content / metadata / score /&lt;br&gt;source_type / chunk" vertex="1">
+          <mxGeometry height="102" width="260" x="1080" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="chroma" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="chroma_store.py&lt;br&gt;Chroma 客户端&lt;br&gt;query / upsert_rows /&lt;br&gt;all_ids / count" vertex="1">
+          <mxGeometry height="102" width="260" x="1080" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="qdrant" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="qdrant_store.py&lt;br&gt;Qdrant 客户端&lt;br&gt;query / upsert_rows /&lt;br&gt;all_ids / count" vertex="1">
+          <mxGeometry height="102" width="260" x="1370" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="caption" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="image_captioner.py&lt;br&gt;图片 → 图注文本&lt;br&gt;（千问 VL + MD5 缓存）" vertex="1">
+          <mxGeometry height="81" width="280" x="1080" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="kgstore" parent="1" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="Neo4j 图数据库&lt;br&gt;（kg.store 连接）&lt;br&gt;bolt://127.0.0.1:7687" vertex="1">
+          <mxGeometry height="81" width="240" x="40" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="aisvc" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="backend/ai_service.py&lt;br&gt;_faq_score · self_rag_filter_relevance&lt;br&gt;render_placeholders · chat()" vertex="1">
+          <mxGeometry height="81" width="300" x="340" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="qopt" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="query_optimizer.py&lt;br&gt;generate_queries()&lt;br&gt;同义扩展 / HyDE / 分解" vertex="1">
+          <mxGeometry height="81" width="240" x="660" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="mysql" parent="1" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="MySQL（models.py）&lt;br&gt;AiChunk / AiVector / AiFaq / AiImageCaption" vertex="1">
+          <mxGeometry height="60" width="340" x="40" y="780" as="geometry" />
+        </mxCell>
+        <mxCell id="note_req" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="外部依赖库：chromadb（Chroma）/ qdrant_client（Qdrant）/ neo4j（图库）/ requests / PIL / python-dotenv" vertex="1">
+          <mxGeometry height="60" width="480" x="340" y="890" as="geometry" />
+        </mxCell>
+        <mxCell id="note_std" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="仅依赖标准库：dataclasses / typing / json / re / hashlib / os / atexit（fusion.py、document.py 无内部依赖）" vertex="1">
+          <mxGeometry height="60" width="420" x="880" y="890" as="geometry" />
+        </mxCell>
+        <mxCell id="note_flow" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="Document 数据流（rag/document.py）&lt;br&gt;· 产出：VectorRetriever / GraphRetriever / KeywordRetriever 的 retrieve()&lt;br&gt;· 载体：content / metadata / score / source_type / chunk&lt;br&gt;· 消费：FusionModule.fuse() 的 pool、ContextBuilder.build() 的渲染" vertex="1">
+          <mxGeometry height="123" width="520" x="1080" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="ext" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="pipeline" value="build_rag_context() → ModularRAG.query()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="ext" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="vec" value="search() → VectorRetriever.retrieve()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="ext" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.7;entryY=0.0;entryDx=0;entryDy=0;" target="chroma" value="sync_chroma()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="ext" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="qdrant" value="sync_qdrant()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="ext" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.85;entryY=0.0;entryDx=0;entryDy=0;" target="caption" value="collect_sources()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="rw" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="vec" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="kw" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="graph" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.6;exitDx=0;exitDy=0;entryX=1.0;entryY=1.0;entryDx=0;entryDy=0;" target="fusion" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.35;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="rr" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.65;exitY=1.0;exitDx=0;exitDy=0;entryX=1.0;entryY=0.5;entryDx=0;entryDy=0;" target="cer" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="pipeline" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.35;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="ctx" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="kw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.0;entryY=0.8;entryDx=0;entryDy=0;" target="document" value="from .document">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.0;entryY=0.8;entryDx=0;entryDy=0;" target="document" value="from .document">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="graph" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.0;entryY=0.7;entryDx=0;entryDy=0;" target="document" value="from .document（延迟）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="chroma" value="from . import chroma_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" target="qdrant" value="from . import qdrant_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="graph" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.0;exitDx=0;exitDy=0;entryX=0.95;entryY=0.0;entryDx=0;entryDy=0;" target="kgstore" value="from kg import store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="rw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1.0;exitY=0.0;exitDx=0;exitDy=0;entryX=0.6;entryY=0.0;entryDx=0;entryDy=0;" target="qopt" value="import query_optimizer">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="qopt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="aisvc" value="import ai_service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="aisvc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.65;exitY=0.0;exitDx=0;exitDy=0;entryX=0.5;entryY=1.0;entryDx=0;entryDy=0;" target="ext" value="import ai_rag">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="aisvc" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="mysql" value="读 AiFaq / AiPrompt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="rr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.35;exitY=0.0;exitDx=0;exitDy=0;entryX=0.85;entryY=1.0;entryDx=0;entryDy=0;" target="ext" value="from ai_rag import _rerank_weights">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="kw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.6;entryY=0.0;entryDx=0;entryDy=0;" target="aisvc" value="_faq_score()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="cer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="aisvc" value="大模型打分">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" edge="1" parent="1" source="ctx" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="aisvc" value="render_placeholders()">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" edge="1" parent="1" source="caption" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.0;exitDx=0;exitDy=0;entryX=1.0;entryY=0.0;entryDx=0;entryDy=0;" target="aisvc" value="VL 调用">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e29" edge="1" parent="1" source="caption" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=1.0;entryY=0.5;entryDx=0;entryDy=0;" target="mysql" value="读写 AiImageCaption">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e30" edge="1" parent="1" source="vec" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.75;entryY=0.0;entryDx=0;entryDy=0;" target="mysql" value="按 chunk_id 回填 AiChunk">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e31" edge="1" parent="1" source="kw" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.75;entryY=0.0;entryDx=0;entryDy=0;" target="mysql" value="读 AiFaq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e32" edge="1" parent="1" source="chroma" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=1.0;entryY=0.5;entryDx=0;entryDy=0;" target="note_req" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e33" edge="1" parent="1" source="qdrant" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" target="note_req" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e34" edge="1" parent="1" source="caption" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" target="note_req" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e35" edge="1" parent="1" source="fusion" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.6;entryY=0.0;entryDx=0;entryDy=0;" target="note_std" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e36" edge="1" parent="1" source="document" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.45;entryY=0.0;entryDx=0;entryDy=0;" target="note_std" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page3" name="02 backend-kg模块与整体分层">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="950" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" value="backend/kg/ 模块与整体分层：包内依赖 · 图谱层与 RAG 层的单向依赖 · 存储分层（MySQL / 向量库 / Neo4j）—— 依据 backend/kg/*.py" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="1180" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="lg3" value="实线 = import / 调用依赖；虚线 = 说明性引用" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="34" width="420" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="z1" value="① backend/kg/ 包内依赖" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="205" width="700" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="z2" value="② 图谱层 ↔ RAG 层（rag 向下依赖 kg，反向不存在）" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="385" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="z3" value="③ 存储分层" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="20" y="555" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="caller_rebuild" value="POST /api/kg/rebuild（仅管理员）" style="shape=parallelogram;perimeter=parallelogramPerimeter;fixedSize=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="460" y="90" width="340" height="51" as="geometry" />
+        </mxCell>
+        <mxCell id="caller_incr" value="main.py 启动 init_knowledge_graph()&lt;br&gt;下单 / 评价 / 打赏 / 提现 等接口&lt;br&gt;→ sync.sync_order / sync_rating / sync_tip / ..." style="shape=parallelogram;perimeter=parallelogramPerimeter;fixedSize=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="860" y="90" width="400" height="93" as="geometry" />
+        </mxCell>
+        <mxCell id="kg_api" value="kg/api.py&lt;br&gt;FastAPI router，前缀 /api/kg&lt;br&gt;5 个端点：stats / graph / node / search / rebuild" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="360" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="kg_init" value="kg/__init__.py&lt;br&gt;from . import store, schema, sync" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="360" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="kg_sync" value="kg/sync.py&lt;br&gt;从 MySQL 业务表同步到图谱&lt;br&gt;sync_all / sync_order / sync_rating /&lt;br&gt;sync_tip / sync_withdrawal / sync_punishments" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="460" y="240" width="380" height="102" as="geometry" />
+        </mxCell>
+        <mxCell id="kg_schema" value="kg/schema.py&lt;br&gt;图谱字典：节点 / 关系 / 字段&lt;br&gt;敏感字段标注（fields 第二项）" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="900" y="240" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="rag_graph" value="rag/graph_retriever.py&lt;br&gt;RAG 的图谱召回通道（第三路）&lt;br&gt;实体链接 → 一跳邻域 → 渲染事实" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="kg_store" value="kg/store.py&lt;br&gt;Neo4j 连接封装&lt;br&gt;run() / run_safe() / stats()" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="420" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="note_nodep" value="kg/schema.py 模块级无 import&lt;br&gt;（纯常量定义，不依赖任何模块）" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="920" y="420" width="360" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="mysql" value="MySQL（业务真相源）&lt;br&gt;models.py：User / BossInfo / PlayerInfo /&lt;br&gt;Order / PlayerRating / TipRecord / ..." style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="590" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="neo4j" value="Neo4j 知识图谱&lt;br&gt;bolt://127.0.0.1:7687&lt;br&gt;（旁路：写失败只打日志）" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="590" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="vecdb" value="向量库（只服务 rag 检索）&lt;br&gt;Chroma（主用）/ Qdrant（对比）&lt;br&gt;kg 层不涉及向量库" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="920" y="590" width="380" height="81" as="geometry" />
+        </mxCell>
+        <mxCell id="note_store" value="分层约定&lt;br&gt;· MySQL —— 业务真相源；图谱与向量库都由它派生&lt;br&gt;· 向量库 —— 只被 rag 的 VectorRetriever 读取&lt;br&gt;· Neo4j —— 图谱旁路，所有写入走 store.run_safe()，失败不致命&lt;br&gt;· 依赖单向：rag/graph_retriever.py → kg.store；kg 层不 import rag" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="780" width="760" height="123" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="HTTP 请求" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="caller_rebuild" target="kg_api">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="增量同步" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="caller_incr" target="kg_sync">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="rebuild → sync_all()" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_api" target="kg_sync">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="stats / graph 查询" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_api" target="kg_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="字段中文名 / 敏感标注" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" edge="1" parent="1" source="kg_api" target="kg_schema">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="from . import store" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_init" target="kg_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="from . import schema" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1.0;exitY=0.0;exitDx=0;exitDy=0;entryX=0.5;entryY=0.0;entryDx=0;entryDy=0;" edge="1" parent="1" source="kg_init" target="kg_schema">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="from . import sync" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_init" target="kg_sync">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="store.run_safe()" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_sync" target="kg_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="schema.NODE_TYPES" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_sync" target="kg_schema">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="读业务表" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_sync" target="mysql">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="neo4j.GraphDatabase.driver" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="kg_store" target="neo4j">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" edge="1" parent="1" source="kg_schema" target="note_nodep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="from kg import store（单向依赖）" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="rag_graph" target="kg_store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1977,7 +1977,7 @@
         })();
 
         // 后端API地址
-        const API_BASE = 'http://localhost:8000';
+        const API_BASE = '';
         
         // 全局状态
         let currentUser = null;
@@ -5431,6 +5431,26 @@
             s = s.replace(/^[ \t]*[-*][ \t]+/gm, '· ');
             // 行内 `代码` 标记去掉
             s = s.replace(/`([^`\n]+?)`/g, '$1');
+            // 跳转链接：[[页面名称]] → 可点击按钮
+            // 支持格式：[[点单中心]]、[[充值中心]] 等，自动匹配当前角色菜单里的页面
+            s = s.replace(/\[([^\]\n]{1,20})\]/g, function(match, label) {
+                // 在当前角色菜单里找匹配的页面
+                const groups = (typeof menuConfig !== 'undefined' && currentUser && menuConfig[currentUser.role]) || [];
+                let foundKey = null;
+                for (const g of groups) {
+                    for (const item of g.items) {
+                        if (item.label === label || item.key === label) {
+                            foundKey = item.key;
+                            break;
+                        }
+                    }
+                    if (foundKey) break;
+                }
+                if (foundKey) {
+                    return '<a href="javascript:void(0)" onclick="switchPage(\'' + foundKey + '\'); closeAiChat();" style="color:#2563eb;text-decoration:underline;cursor:pointer;">' + label + '</a>';
+                }
+                return match; // 找不到就原样显示
+            });
             // 兜底：清掉残留的孤立 **
             s = s.replace(/\*\*/g, '');
             return s;

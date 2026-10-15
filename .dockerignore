@@ -1,0 +1,33 @@
+# Git
+.git
+.gitignore
+.idea
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+
+# 环境变量（安全：不把本地 .env 打进镜像）
+backend/.env
+
+# 本地数据库文件
+backend/game_club.db
+
+# 向量库数据（通过 volume 挂载，不打进镜像）
+backend/chroma_db/
+backend/qdrant_db/
+
+# 文档和临时文件
+*.md
+*.docx
+docs/
+backups/
+
+# Docker 自身
+Dockerfile
+docker-compose.yml
+.dockerignore

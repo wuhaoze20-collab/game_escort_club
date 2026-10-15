@@ -1,0 +1,274 @@
+<mxfile host="Electron" agent="drawio_kit" pages="3">
+  <diagram id="page1" name="00 多模态RAG核心链路（图片→图注→原文本管线）">
+    <mxGraphModel dx="1517" dy="872" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1310" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="多模态 RAG 核心链路：图片 → 视觉模型生成中文图注 → 作为 source_type=“image” 的普通文本源，流进【原有】分块 / 向量化 / 多路召回管线 —— 检索逻辑不变&lt;br&gt;依据 backend/rag/image_captioner.py · backend/ai_rag.py collect_sources() / rebuild_index() · backend/rag/pipeline.py" vertex="1">
+          <mxGeometry height="48" width="1200" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="gA" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#595959;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;dashed=1;" value="① 管理员上传图片 → 生成中文图注（依据 backend/rag/image_captioner.py）" vertex="1">
+          <mxGeometry height="200" width="1230" x="40" y="74" as="geometry" />
+        </mxCell>
+        <mxCell id="a1" parent="1" style="shape=parallelogram;perimeter=parallelogramPerimeter;fixedSize=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="管理员上传图片&lt;br&gt;POST /api/ai/kb/images/upload" vertex="1">
+          <mxGeometry height="72" width="270" x="70" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="a2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="文件名清洗 + 落盘&lt;br&gt;_safe_name() / ensure_dir()" vertex="1">
+          <mxGeometry height="60" width="250" x="380" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="a3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="图注生成 get_caption()&lt;br&gt;调视觉模型 · 带 MD5 缓存" vertex="1">
+          <mxGeometry height="60" width="250" x="670" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="a4" parent="1" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="图注缓存 ai_image_captions&lt;br&gt;键 = 文件名 + 图片文件 MD5" vertex="1">
+          <mxGeometry height="60" width="250" x="1000" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="a1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="a2" value="上传">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="a2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="a3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="a4" value="命中/写回">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="gB" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#595959;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;dashed=1;" value="② 图注作为 source_type=“image” 的普通文本源，流进【原有】文本管线 —— 检索逻辑一个字都没改（依据见页首）" vertex="1">
+          <mxGeometry height="300" width="1230" x="40" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="b1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="① collect_sources()&lt;br&gt;汇总三类来源&lt;br&gt;document / image / faq" vertex="1">
+          <mxGeometry height="81" width="215" x="70" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="② 分块 + 向量化&lt;br&gt;图注走 else 分支：&lt;br&gt;整段成为 1 个 chunk" vertex="1">
+          <mxGeometry height="81" width="215" x="305" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="b3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="③ 写入索引&lt;br&gt;ai_chunks / ai_vectors" vertex="1">
+          <mxGeometry height="60" width="215" x="548" y="415.5" as="geometry" />
+        </mxCell>
+        <mxCell id="b4" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="④ 多路召回&lt;br&gt;document / image / faq&lt;br&gt;三通道各自独立" vertex="1">
+          <mxGeometry height="81" width="215" x="775" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="b5" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="⑤ RRF 融合 → 重排 → 上下文构建&lt;br&gt;（与纯文本 RAG 同一套代码）" vertex="1">
+          <mxGeometry height="60" width="240" x="1015" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="b1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="b2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="b3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="b3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="b4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="b4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="b5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="b1" value="图注文本 cap[“caption”]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nt1" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="本页要点：图片没有自己的检索链路。&lt;br&gt;· 图注生成后就是一段普通中文文本，和文档走同一套：&lt;br&gt;  分块 → 向量化 → 多路召回 → RRF 融合 → 重排 → 上下文构建；&lt;br&gt;· 代码里没有任何“图片专用检索算法”，检索侧只多了一个 source_type 取值；&lt;br&gt;· 唯一的分叉在 rebuild_index() 里：只有 document 走父子分块，image / faq 走 else 分支。" vertex="1">
+          <mxGeometry height="150" width="860" x="40" y="670" as="geometry" />
+        </mxCell>
+        <mxCell id="nt2" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="② 里为什么只有 document 被分块&lt;br&gt;rebuild_index() 里：&lt;br&gt;  若 source_type == “document” → chunk_parent_child()&lt;br&gt;  否则 → 整段内容作为单个 chunk&lt;br&gt;（图片是一段图注，本身已经很短，再切没有意义）" vertex="1">
+          <mxGeometry height="185" width="320" x="920" y="670" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page2" name="01 图注生成与缓存（image_captioner）">
+    <mxGraphModel dx="2059" dy="1183" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1210" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="图注生成与缓存：目录扫描 → MD5 比对 → 图片转 data URI → 调视觉模型 → 写回 ai_image_captions&lt;br&gt;依据 backend/rag/image_captioner.py（get_caption 为主入口）· backend/models.py AiImageCaption · backend/api/ai_rag_api.py" vertex="1">
+          <mxGeometry height="48" width="1200" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="重建索引 / 上传图片时&lt;br&gt;逐张调用 get_caption(db, fname)" vertex="1">
+          <mxGeometry height="60" width="400" x="40" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="list_image_files()&lt;br&gt;扫描 kb_images/，is_image() 判定格式" vertex="1">
+          <mxGeometry height="60" width="360" x="60" y="185" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="file_md5(path)&lt;br&gt;图片文件二进制 MD5 —— 缓存键" vertex="1">
+          <mxGeometry height="60" width="360" x="60" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="缓存行存在 且 未传 force&lt;br&gt;且 file_hash == 当前 MD5&lt;br&gt;且 caption 非空？" vertex="1">
+          <mxGeometry height="120" width="320" x="80" y="375" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="命中：直接返回旧图注&lt;br&gt;from_cache=True，零 API 花费" vertex="1">
+          <mxGeometry height="60" width="380" x="480" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="_prepare_data_uri(path)&lt;br&gt;长边压到 1280 · JPEG 质量 85&lt;br&gt;透明通道铺白底 · GIF 取首帧" vertex="1">
+          <mxGeometry height="81" width="360" x="60" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="vl_model(db)&lt;br&gt;读系统参数 ai_vl_model，默认 qwen3-vl-plus" vertex="1">
+          <mxGeometry height="60" width="360" x="60" y="646" as="geometry" />
+        </mxCell>
+        <mxCell id="m8" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调千问 VL 生成图注&lt;br&gt;POST VL_URL · temperature 0.1 · max_tokens 1200" vertex="1">
+          <mxGeometry height="81" width="360" x="60" y="736" as="geometry" />
+        </mxCell>
+        <mxCell id="m9" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调用成功？" vertex="1">
+          <mxGeometry height="110" width="320" x="80" y="855" as="geometry" />
+        </mxCell>
+        <mxCell id="m10" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="该图本次跳过：有旧缓存则沿用旧图注&lt;br&gt;单张失败不中断整次重建索引" vertex="1">
+          <mxGeometry height="60" width="380" x="480" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="m11" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="写回 ai_image_captions（upsert）&lt;br&gt;file_name / file_hash / caption / model" vertex="1">
+          <mxGeometry height="60" width="360" x="60" y="1002" as="geometry" />
+        </mxCell>
+        <mxCell id="m12" parent="1" style="shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=12;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ai_image_captions&lt;br&gt;file_name / file_hash / caption / model" vertex="1">
+          <mxGeometry height="60" width="380" x="480" y="1002" as="geometry" />
+        </mxCell>
+        <mxCell id="m13" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回 {ok, caption, from_cache, model, error}&lt;br&gt;交回 collect_sources()" vertex="1">
+          <mxGeometry height="60" width="420" x="30" y="1110" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="m1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="m2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="m3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="m4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m5" value="命中">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="m4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m6" value="否（没算过 / 传了 force）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="m6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="m7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="m8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="m9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m10" value="失败">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="m9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m11" value="成功">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="m11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" target="m12" value="upsert">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="m11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="m13" value="返回">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n1" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="缓存键 = 文件名 + 图片文件二进制 MD5&lt;br&gt;&lt;br&gt;· 图片没换 → 一次接口都不调；&lt;br&gt;· 图片换了内容（MD5 变）→ 只重算这一张；&lt;br&gt;· 反复点「重建索引」，图库没动 = 零花费。&lt;br&gt;&lt;br&gt;与 ai_chunks.content_hash 是两回事：&lt;br&gt;判断“要不要重调接口”看的是图片文件变没变，&lt;br&gt;不是图注文本变没变。" vertex="1">
+          <mxGeometry height="260" width="360" x="900" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="n2" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="图注结构（CAPTION_PROMPT 要求四段）&lt;br&gt;&lt;br&gt;一、一句话概括&lt;br&gt;二、画面内容（只描述看得见的）&lt;br&gt;三、图中文字：逐条抄录，检索的关键&lt;br&gt;四、关键信息：可用于检索的标签词&lt;br&gt;&lt;br&gt;为什么描述 + OCR + 标签一次产出：&lt;br&gt;分三次调用 = 三倍费用、三倍失败点；&lt;br&gt;千问 VL 本来就能在一次回答里一起给出。" vertex="1">
+          <mxGeometry height="280" width="360" x="900" y="460" as="geometry" />
+        </mxCell>
+        <mxCell id="n3" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="删除与重算（backend/api/ai_rag_api.py）&lt;br&gt;接口前缀 /api/ai/kb&lt;br&gt;&lt;br&gt;· POST /images/{file_name}/recaption&lt;br&gt;  强制重算：get_caption(..., force=True)&lt;br&gt;· DELETE /images/{file_name}&lt;br&gt;  删文件 + drop_caption() + drop_source()&lt;br&gt;&lt;br&gt;索引片段必须一起删，否则留下孤儿片段：&lt;br&gt;AI 还会引用它，前端却显示不出缩略图。" vertex="1">
+          <mxGeometry height="250" width="360" x="900" y="780" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page3" name="02 检索侧：图片是独立的一路向量通道">
+    <mxGraphModel dx="1921" dy="1104" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1240" pageHeight="1120" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="检索侧：图片单独占一路向量通道 source_types=[“image”]，与 document 不混合；融合时 image 通道乘自己的权重&lt;br&gt;依据 backend/rag/pipeline.py · backend/rag/vector_retriever.py · backend/rag/fusion.py · backend/ai_rag.py CHANNEL_WEIGHT / _channel_weights() · backend/config_service.py rag_weight_image" vertex="1">
+          <mxGeometry height="48" width="1160" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="用户提问&lt;br&gt;ModularRAG.query()" vertex="1">
+          <mxGeometry height="60" width="320" x="50" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="② 多路召回：每个查询变体&lt;br&gt;对三个向量通道各跑一遍" vertex="1">
+          <mxGeometry height="60" width="420" x="500" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="channel = “document”&lt;br&gt;source_types = [“document”]" vertex="1">
+          <mxGeometry height="60" width="300" x="40" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="channel = “image”&lt;br&gt;source_types = [“image”]" vertex="1">
+          <mxGeometry height="60" width="300" x="380" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="channel = “faq”&lt;br&gt;source_types = [“faq”]" vertex="1">
+          <mxGeometry height="60" width="300" x="720" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="VectorRetriever.retrieve(q, role, top_k=tk, min_score=ms,&lt;br&gt;source_types=stypes, automerge=use_automerge)&lt;br&gt;每个通道各查一次：角色过滤 · 向量后端召回 · AutoMerging" vertex="1">
+          <mxGeometry height="81" width="620" x="40" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="r4" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="每个通道只返回自己那一类的候选，互不混合&lt;br&gt;all_vec_hits 里用 channel 字段标记这条来自哪一路" vertex="1">
+          <mxGeometry height="60" width="620" x="40" y="431" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="③ 加权 RRF 融合 FusionModule.fuse(all_kw_hits, all_vec_hits, all_graph_hits)" vertex="1">
+          <mxGeometry height="44" width="620" x="40" y="521" as="geometry" />
+        </mxCell>
+        <mxCell id="r6" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="contribution = 1/(rrf_k + rank + 1) × channel_weights[channel]&lt;br&gt;rrf_k = 60（系统参数 rag_rrf_k）· image 通道权重 = 1.1（rag_weight_image）" vertex="1">
+          <mxGeometry height="60" width="620" x="40" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="r7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="④ 重排 → ⑤ 上下文构建 → 交千问大模型生成答案" vertex="1">
+          <mxGeometry height="44" width="620" x="40" y="685" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="r1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="c1" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="710.07" y="160" />
+              <mxPoint x="190.07" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="c2" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="710.07" y="160" />
+              <mxPoint x="530.07" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="c3" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="710.07" y="160" />
+              <mxPoint x="870.07" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="c2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="c3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r3" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="870.07" y="290" />
+              <mxPoint x="350.07" y="290" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="r3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="r4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="r5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r6" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="r6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="n4" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="为什么 image 必须单独占一路&lt;br&gt;（pipeline.py 注释里的原话）&lt;br&gt;&lt;br&gt;· 图注的语义分布与文档正文不同；&lt;br&gt;· 混进 document 通道，两边的相似度分数不可比；&lt;br&gt;· 也会让「图片这一路到底有没有被召回到」&lt;br&gt;  在调试信息里看不出来。&lt;br&gt;&lt;br&gt;注意：这是复用原有 RAG 管线的第三个向量通道，&lt;br&gt;不是新建的检索链路 —— 检索算法一个都没加。" vertex="1">
+          <mxGeometry height="260" width="440" x="700" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="n5" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="image 通道的权重从哪来&lt;br&gt;&lt;br&gt;ai_rag.CHANNEL_WEIGHT =&lt;br&gt;  {“document”: 1.0, “image”: 1.1, “faq”: 1.2, “graph”: 1.3}&lt;br&gt;&lt;br&gt;运行时由 _channel_weights(db) 读系统参数覆盖，&lt;br&gt;图片这一路读的是 rag_weight_image&lt;br&gt;（config_service.py 里它的 default 同为 1.1）。&lt;br&gt;调大更倾向返回图片，调小图片就排到文档后面。" vertex="1">
+          <mxGeometry height="260" width="440" x="700" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="n6" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="命中图片之后&lt;br&gt;&lt;br&gt;image 通道命中的 chunk 带 asset_path&lt;br&gt;（指向 kb_images/ 下的文件名），&lt;br&gt;前端据此拼 /kbimg/{文件名} 显示缩略图；&lt;br&gt;图注文本本身随 chunk.content 一起进上下文。" vertex="1">
+          <mxGeometry height="180" width="440" x="700" y="900" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

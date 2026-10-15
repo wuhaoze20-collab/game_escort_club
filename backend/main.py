@@ -155,6 +155,7 @@ def migrate_columns_to_text():
         return  # SQLite 是动态类型，无需处理
     targets = [("system_config", "config_value"), ("content_config", "config_value")]
     with engine.connect() as conn:
+
         for table, column in targets:
             data_type = conn.execute(
                 text("SELECT DATA_TYPE FROM information_schema.columns "

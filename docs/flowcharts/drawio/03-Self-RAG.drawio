@@ -1,0 +1,546 @@
+<mxfile host="Electron" agent="drawio_kit" pages="4">
+  <diagram id="page1" name="00 Self-RAG三个反思点总览">
+    <mxGraphModel dx="1200" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1750" pageHeight="870" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t1" value="Self-RAG 三个反思点总览 —— 代码依据 backend/api/ai_api.py · backend/rag/pipeline.py · backend/ai_service.py" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="16" width="1200" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="用户提问&lt;br&gt;POST /api/ai/chat" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="78" width="150" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="反思点1 · 检索前判断&lt;br&gt;要不要查知识库？" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="230" y="74" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="检索&lt;br&gt;多路召回 → RRF 融合 → 重排序" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="74" width="250" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="反思点2 · ISREL&lt;br&gt;检索后相关性过滤" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="770" y="74" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m5" value="增强与生成&lt;br&gt;上下文构建 → 大模型生成" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="74" width="240" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" value="反思点3 · ISSUP&lt;br&gt;生成后验证回答" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1320" y="74" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" value="返回答案" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1580" y="78" width="130" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m1" target="m2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m2" target="m3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m3" target="m4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m4" target="m5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m5" target="m6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="m6" target="m7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="g1" value="反思点1 · 检索前判断（Retrieve）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#595959;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="460" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="g1a" value="开关链：ai_self_rag_enabled（默认 False）&lt;br&gt;→ ai_self_rag_retrieve_check（默认 True）" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="310" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g1b" value="调用 ai_service.self_rag_should_retrieve(question, model)" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="425" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g1c" value="判断「不需要检索」→ skip_rag=True&lt;br&gt;build_system_prompt 跳过检索，只保留平台资料" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="540" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g1d" value="调用点：backend/api/ai_api.py L128~139" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="60" y="640" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g2" value="反思点2 · 检索后相关性过滤（ISREL）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#595959;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="250" width="460" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="g2a" value="生效条件：ai_self_rag_enabled 且&lt;br&gt;ai_self_rag_relevance_filter（默认 True）" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="310" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g2b" value="阈值来源：ai_self_rag_relevance_threshold（默认 3）" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="425" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g2c" value="调用 ai_service.self_rag_filter_relevance(&lt;br&gt;question, contexts, threshold)" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="540" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g2d" value="调用点：backend/rag/pipeline.py 的 ④.5 段（L238~292）" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="560" y="640" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g3" value="反思点3 · 生成后验证（ISSUP）" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#B3B3B3;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#595959;align=left;verticalAlign=top;spacingLeft=10;spacingTop=6;fontStyle=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="250" width="460" height="470" as="geometry" />
+        </mxCell>
+        <mxCell id="g3a" value="开关：ai_self_rag_verify_answer（默认 False）" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="310" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g3b" value="调用 ai_service.self_rag_verify_answer(&lt;br&gt;question, answer, contexts, model)" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="425" width="420" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g3c" value="验证不通过只记录 issue 与日志，不阻断返回" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="540" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="g3d" value="调用点：backend/api/ai_api.py L206~227" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="640" width="420" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="展开见第 2 页" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m2" target="g1a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="展开见第 3 页" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m4" target="g2a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="展开见第 4 页" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="m6" target="g3a">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g1a" target="g1b">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g1b" target="g1c">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g2a" target="g2b">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g2b" target="g2c">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g3a" target="g3b">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" edge="1" parent="1" source="g3b" target="g3c">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="代码依据" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" edge="1" parent="1" source="g1c" target="g1d">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="代码依据" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" edge="1" parent="1" source="g2c" target="g2d">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" value="代码依据" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;" edge="1" parent="1" source="g3c" target="g3d">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nt1" value="说明：三个反思点互相独立，各由自己的系统参数控制。总开关 ai_self_rag_enabled 打开后，反思点2 才可能生效（还要再开 ai_self_rag_relevance_filter）；5 个参数的默认值见 backend/config_service.py L378~397。" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="770" width="1000" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page2" name="01 反思点1-检索前判断">
+    <mxGraphModel dx="4142" dy="1380" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1740" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="反思点1 · 检索前判断（要不要查知识库）—— 代码依据 backend/api/ai_api.py L128~139 + backend/ai_service.py self_rag_should_retrieve() L827~866" vertex="1">
+          <mxGeometry height="34" width="1400" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="用户提问：POST /api/ai/chat" vertex="1">
+          <mxGeometry height="56" width="340" x="460" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="读取开关 ai_self_rag_enabled&lt;br&gt;（ai_api.py L128 · 默认值见 config_service.py L379）" vertex="1">
+          <mxGeometry height="81" width="340" x="460" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ai_self_rag_enabled&lt;br&gt;为真？（L131）" vertex="1">
+          <mxGeometry height="110" width="300" x="480" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="读取开关 ai_self_rag_retrieve_check&lt;br&gt;（L131 · 默认值见 config_service.py L383）" vertex="1">
+          <mxGeometry height="60" width="340" x="460" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ai_self_rag_retrieve_check&lt;br&gt;为真？（L131）" vertex="1">
+          <mxGeometry height="110" width="300" x="480" y="590" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调用大模型判断：&lt;br&gt;ai_service.self_rag_should_retrieve(&lt;br&gt;text, model=model)（L133）" vertex="1">
+          <mxGeometry height="81" width="340" x="460" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回的 need_retrieve&lt;br&gt;为真？（L134）" vertex="1">
+          <mxGeometry height="110" width="300" x="480" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="skip_rag = True（L134）" vertex="1">
+          <mxGeometry height="44" width="340" x="460" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="build_system_prompt(skip_rag=True)：&lt;br&gt;ctx 置空，只保留平台资料（ai_service.py L697~699）" vertex="1">
+          <mxGeometry height="81" width="340" x="460" y="1140" as="geometry" />
+        </mxCell>
+        <mxCell id="pEnd2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="直接生成回答&lt;br&gt;（省 embedding 调用）" vertex="1">
+          <mxGeometry height="66" width="340" x="460" y="1290" as="geometry" />
+        </mxCell>
+        <mxCell id="nSkip" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="跳过本次检索前判断&lt;br&gt;skip_rag 保持 False（默认值）" vertex="1">
+          <mxGeometry height="60" width="340" x="900" y="337" as="geometry" />
+        </mxCell>
+        <mxCell id="p7" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="skip_rag = False&lt;br&gt;（need_retrieve 为真，照常检索）" vertex="1">
+          <mxGeometry height="60" width="340" x="880" y="905" as="geometry" />
+        </mxCell>
+        <mxCell id="p8" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="照常走知识库检索：&lt;br&gt;ModularRAG.query()（backend/rag/pipeline.py）" vertex="1">
+          <mxGeometry height="60" width="340" x="890" y="1130" as="geometry" />
+        </mxCell>
+        <mxCell id="p9" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="进入检索 → 生成&lt;br&gt;（见 01-基础RAG 的「推理问答」页）" vertex="1">
+          <mxGeometry height="66" width="340" x="890" y="1290" as="geometry" />
+        </mxCell>
+        <mxCell id="err1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调用抛异常 → 打印「检索前判断失败，正常检索」&lt;br&gt;（ai_api.py L138~139）skip_rag 保持 False" vertex="1">
+          <mxGeometry height="60" width="380" x="-60" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="nt1" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="判断链路全部内联在 backend/api/ai_api.py L128~139 里，&lt;br&gt;没有独立模块；判断器实现见 backend/ai_service.py&lt;br&gt;的 self_rag_should_retrieve()（L827~866）。" vertex="1">
+          <mxGeometry height="102" width="360" x="1340" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="nt2" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="判断器内部兜底（backend/ai_service.py）：&lt;br&gt;· 大模型调用失败 → need_retrieve=True（L852~853）&lt;br&gt;· 返回结果 JSON 解析失败 → need_retrieve=True（L863~866）&lt;br&gt;判不准时一律回退「照常检索」，宁可多查也不漏查。" vertex="1">
+          <mxGeometry height="123" width="360" x="1340" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="p1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="p2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nSkip" value="否（默认关闭）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p3" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="p3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="nSkip" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p4" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="p4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="p4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="err1" value="调用抛异常">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="p4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nt2" value="内部兜底">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="err1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="nSkip" value="回退为照常检索">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="p7" value="是：需要检索">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p5" value="否：不需要检索">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="p5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p6" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="p6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="pEnd2" value="不注入知识库资料">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="p7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1050" y="1130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="nSkip" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="p8" value="照常检索">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="p8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="p9" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="p1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nt1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page3" name="02 反思点2-检索后相关性过滤">
+    <mxGraphModel dx="4117" dy="2366" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1880" pageHeight="2320" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="反思点2 · 检索后相关性过滤（ISREL）—— 代码依据 backend/rag/pipeline.py 的 ④.5 段（L238~292）+ backend/ai_service.py self_rag_filter_relevance() L869~927" vertex="1">
+          <mxGeometry height="34" width="1500" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="r0" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="④ 重排序完成&lt;br&gt;final_ordered 就绪（pipeline.py L215~236）" vertex="1">
+          <mxGeometry height="56" width="380" x="420" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="r1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="进入 ④.5 Self-RAG 相关性过滤（ISREL）&lt;br&gt;（pipeline.py L238）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="r2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="读取开关 ai_self_rag_enabled（L241）&lt;br&gt;默认值见 config_service.py L379（False）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="ai_self_rag_enabled 且&lt;br&gt;ai_self_rag_relevance_filter&lt;br&gt;都为真？（L242~244）" vertex="1">
+          <mxGeometry height="150" width="440" x="440" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="eSkip" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="跳过 ISREL&lt;br&gt;沿用重排序结果" vertex="1">
+          <mxGeometry height="66" width="340" x="900" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="r3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="遍历候选：final_ordered[:tk*2]，逐个处理（L252）&lt;br&gt;final_ordered 为空则整段跳过（L244）&lt;br&gt;（tk = 配置的 top_k，见 L156）" vertex="1">
+          <mxGeometry height="81" width="380" x="420" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="该候选的文本载体是哪一种？（L255~263）" vertex="1">
+          <mxGeometry height="130" width="340" x="440" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="nFaq" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="FAQ 行 → 文本「问：… 答：…」（L257~258）" vertex="1">
+          <mxGeometry height="44" width="320" x="40" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="nChunk" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="chunk 正文 → chunk.content（L259~260）" vertex="1">
+          <mxGeometry height="44" width="320" x="390" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="nGraph" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="图谱事实 → graph_doc 的 content（L261~262）" vertex="1">
+          <mxGeometry height="44" width="320" x="740" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="nOther" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="三种都不是 → continue&lt;br&gt;跳过该候选（L263~264）" vertex="1">
+          <mxGeometry height="60" width="320" x="1090" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="eOther" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="该候选被排除&lt;br&gt;不打分、也不进入最终结果" vertex="1">
+          <mxGeometry height="66" width="320" x="1090" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="nt2" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="代码注释（L246~249）：&lt;br&gt;三路来源的文本载体不同，都要认出来；&lt;br&gt;只认 chunk 的话，FAQ 行与图谱事实会被当成空文本&lt;br&gt;跳过打分，随后被过滤后的集合排除——&lt;br&gt;图谱事实就是这样被无声丢掉的。" vertex="1">
+          <mxGeometry height="123" width="380" x="1460" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="r5" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="得到该候选的文本 text（L258 / L260 / L262）" vertex="1">
+          <mxGeometry height="44" width="340" x="440" y="1030" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="text 去空白后非空？（L265）" vertex="1">
+          <mxGeometry height="110" width="340" x="440" y="1140" as="geometry" />
+        </mxCell>
+        <mxCell id="eEmpty" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="空文本 → 跳过该候选&lt;br&gt;不进入打分集合（L265）" vertex="1">
+          <mxGeometry height="66" width="340" x="900" y="1150" as="geometry" />
+        </mxCell>
+        <mxCell id="r6" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="入列：candidate_texts.append(text[:300])&lt;br&gt;同时记下 candidate_keys（L266~267）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="1300" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="len(candidate_texts) &gt; 1？（L269）" vertex="1">
+          <mxGeometry height="130" width="340" x="440" y="1430" as="geometry" />
+        </mxCell>
+        <mxCell id="eFew" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="候选不足 2 条&lt;br&gt;跳过打分，保留原排序（L269）" vertex="1">
+          <mxGeometry height="66" width="340" x="900" y="1450" as="geometry" />
+        </mxCell>
+        <mxCell id="r7" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="读取阈值 ai_self_rag_relevance_threshold&lt;br&gt;（L271~272 · 默认值 3）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="1600" as="geometry" />
+        </mxCell>
+        <mxCell id="r8" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调用大模型逐条打 1~5 分：&lt;br&gt;ai_service.self_rag_filter_relevance(&lt;br&gt;……, threshold=rel_threshold)（L274~276）" vertex="1">
+          <mxGeometry height="81" width="380" x="420" y="1710" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="filtered 非空？（L278）" vertex="1">
+          <mxGeometry height="110" width="340" x="440" y="1850" as="geometry" />
+        </mxCell>
+        <mxCell id="eEmpty2" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="过滤为空 → 回退原排序&lt;br&gt;（final_ordered 保持不变）" vertex="1">
+          <mxGeometry height="66" width="340" x="900" y="1860" as="geometry" />
+        </mxCell>
+        <mxCell id="r9" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="按大模型分数降序重排 final_ordered（L279~288）" vertex="1">
+          <mxGeometry height="44" width="380" x="420" y="2000" as="geometry" />
+        </mxCell>
+        <mxCell id="r10" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="debug[self_rag_relevance_filtered] = len(filtered)&lt;br&gt;（L289~290）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="2110" as="geometry" />
+        </mxCell>
+        <mxCell id="rEnd" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="进入 ⑥ 上下文构建（L318）" vertex="1">
+          <mxGeometry height="56" width="380" x="420" y="2220" as="geometry" />
+        </mxCell>
+        <mxCell id="err1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="异常兜底：打印「Self-RAG 相关性过滤失败，使用原排序」&lt;br&gt;（L291~292）→ 沿用原排序" vertex="1">
+          <mxGeometry height="60" width="380" x="1320" y="1710" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="r0" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="r1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="r2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eSkip" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r3" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="r3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nFaq" value="FAQ 行">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.4;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nChunk" value="chunk 正文">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.6;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nGraph" value="图谱事实">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nOther" value="都不是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nt2" value="文本载体">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="nFaq" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;" target="r5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="nChunk" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="r5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="nGraph" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;" target="r5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="nOther" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="eOther" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="r5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eEmpty" value="否（空文本）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r6" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e19" edge="1" parent="1" source="r6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e20" edge="1" parent="1" source="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eFew" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" edge="1" parent="1" source="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r7" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" edge="1" parent="1" source="r7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="r8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="r8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="err1" value="调用抛异常">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="d5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eEmpty2" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="d5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r9" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e27" edge="1" parent="1" source="err1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="rEnd" value="沿用原排序（跳过 debug 记录）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e28" edge="1" parent="1" source="r9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="r10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e29" edge="1" parent="1" source="r10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="rEnd" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page4" name="03 反思点3-生成后验证">
+    <mxGraphModel dx="2620" dy="1505" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1760" pageHeight="1480" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t4" parent="1" style="text;whiteSpace=wrap;html=1;strokeColor=none;fillColor=none;fontSize=15;fontFamily=Microsoft YaHei;fontColor=#1F2937;align=left;verticalAlign=middle;fontStyle=1;" value="反思点3 · 生成后验证（回答有没有被知识库支持）—— 代码依据 backend/api/ai_api.py L206~227 + backend/ai_service.py self_rag_verify_answer() L930~985" vertex="1">
+          <mxGeometry height="34" width="1400" x="40" y="16" as="geometry" />
+        </mxCell>
+        <mxCell id="v1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="大模型生成完成（result 的 ok 为 True · L208）" vertex="1">
+          <mxGeometry height="44" width="380" x="420" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="启用 Self-RAG 且&lt;br&gt;ai_self_rag_verify_answer 为真？&lt;br&gt;（L208~210）" vertex="1">
+          <mxGeometry height="150" width="440" x="440" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="eSkip" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="跳过生成后验证&lt;br&gt;直接返回答案" vertex="1">
+          <mxGeometry height="66" width="380" x="900" y="232" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="skip_rag 为真？（L210）&lt;br&gt;（本轮已跳过检索就不用验证）" vertex="1">
+          <mxGeometry height="130" width="340" x="440" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="v2" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="重新检索用于验证：&lt;br&gt;ai_rag.build_rag_context(db, current_user, text)（L214）" vertex="1">
+          <mxGeometry height="81" width="380" x="420" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="verify_ctx 非空？（L215）" vertex="1">
+          <mxGeometry height="110" width="340" x="440" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="eNoCtx" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="无检索内容&lt;br&gt;不验证，直接返回答案" vertex="1">
+          <mxGeometry height="66" width="380" x="900" y="682" as="geometry" />
+        </mxCell>
+        <mxCell id="v3" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="拆行取片段：只保留非空、且不以「【」开头的行&lt;br&gt;（L217~218）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="v4" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#B0E3E6;strokeColor=#0E8088;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="调用 ai_service.self_rag_verify_answer(&lt;br&gt;question, answer, ctx_lines, model)（L219~220）" vertex="1">
+          <mxGeometry height="60" width="380" x="420" y="940" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="supported 为真？（L223）" vertex="1">
+          <mxGeometry height="110" width="340" x="440" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="v5" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="验证通过：只累加 verify 的 tokens（L222）" vertex="1">
+          <mxGeometry height="44" width="380" x="420" y="1240" as="geometry" />
+        </mxCell>
+        <mxCell id="v6" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="不通过：只打印「回答未被知识库支持」并记录 issues&lt;br&gt;（L224~225）· 不自动修正回答（L225）" vertex="1">
+          <mxGeometry height="60" width="380" x="960" y="1105" as="geometry" />
+        </mxCell>
+        <mxCell id="v7" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="返回答案（L246）" vertex="1">
+          <mxGeometry height="56" width="380" x="420" y="1380" as="geometry" />
+        </mxCell>
+        <mxCell id="err1" parent="1" style="rounded=1;arcSize=10;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="异常兜底：打印「回答验证失败」→ 不影响返回&lt;br&gt;（L226~227）" vertex="1">
+          <mxGeometry height="60" width="380" x="1270" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="nt1" parent="1" style="shape=note;size=14;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#999999;strokeWidth=1;fontSize=13;fontFamily=Microsoft YaHei;fontColor=#333333;align=center;verticalAlign=middle;" value="开关默认值（backend/config_service.py L394~397）：&lt;br&gt;ai_self_rag_verify_answer 默认 False。&lt;br&gt;代码注释：最耗 token，建议调试时开启。" vertex="1">
+          <mxGeometry height="81" width="380" x="1140" y="71.5" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="v1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="v1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nt1" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eSkip" value="否（默认）">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d2" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.7;entryY=1;entryDx=0;entryDy=0;" target="eSkip" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="v2" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="v2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="eNoCtx" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="v3" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="v3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="v4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="v4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="d4" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="v4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="err1" value="调用抛异常">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="v5" value="是">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="v6" value="否">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" edge="1" parent="1" source="v5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;" target="v7" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" edge="1" parent="1" source="v6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="v7" value="不阻断返回">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1280" y="1220" as="sourcePoint" />
+            <mxPoint x="929.9999999999995" y="1465" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" edge="1" parent="1" source="err1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=blockThin;endFill=1;strokeColor=#666666;strokeWidth=1;fontSize=12;fontFamily=Microsoft YaHei;fontColor=#333333;labelBackgroundColor=#FFFFFF;jumpStyle=arc;dashed=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="v7" value="同样返回答案">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
