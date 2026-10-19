@@ -21,9 +21,9 @@ import requests
 
 import config_service
 
-# OpenAI 兼容接口（北京地域）。各地域 Key 不通用，换地域需同步改这里与 Key
-DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-DEFAULT_MODEL = "qwen-plus"
+# OpenAI 兼容接口，默认DeepSeek
+DEFAULT_BASE_URL = "https://api.deepseek.com/v1/chat/completions"
+DEFAULT_MODEL = "deepseek-chat"
 DEFAULT_TIMEOUT = 60
 
 # content_config 的 key → 中文标题（用于拼知识库时的小标题）
@@ -56,11 +56,8 @@ def _load_env():
 
 
 def get_api_key() -> str:
-    """取千问 API Key。
-
-    优先级：后台「API 接入」里填的 → backend/.env 的 DASHSCOPE_API_KEY → 空串（视为未配置）。
-    放前面是为了能在线换 key：密钥过期或要换账号时，改后台即可，不用去动 .env 再重启。
-    读库失败（比如还没建表）时静默回落到 .env，不影响启动。
+    """取API Key。
+    优先级：后台配置 → .env 环境变量
     """
     _load_env()
     try:
@@ -71,6 +68,30 @@ def get_api_key() -> str:
     except Exception:
         pass
     return (os.getenv("DASHSCOPE_API_KEY") or "").strip()
+
+
+def get_base_url() -> str:
+    """从数据库读取当前模型的base_url，支持后台切换"""
+    try:
+        import config_service
+        db_value = config_service.get_config("ai_base_url")
+        if db_value and str(db_value).strip():
+            return str(db_value).strip()
+    except Exception:
+        pass
+    return (os.getenv("QWEN_BASE_URL") or "").strip() or DEFAULT_BASE_URL
+
+
+def get_current_model() -> str:
+    """从数据库读取当前模型名"""
+    try:
+        import config_service
+        db_value = config_service.get_config("ai_model")
+        if db_value and str(db_value).strip():
+            return str(db_value).strip()
+    except Exception:
+        pass
+    return DEFAULT_MODEL
 
 
 def is_configured() -> bool:
@@ -119,8 +140,7 @@ def ping() -> tuple:
 
 
 def _base_url() -> str:
-    _load_env()
-    return (os.getenv("QWEN_BASE_URL") or "").strip() or DEFAULT_BASE_URL
+    return get_base_url()
 
 
 def _timeout() -> int:
@@ -777,7 +797,7 @@ def chat(messages: list, model: str = None, temperature: float = 0.3,
         return fail("AI 客服尚未配置：请在 backend/.env 里填写 DASHSCOPE_API_KEY 后重启后端。"
                     "（可联系管理员处理）")
 
-    model = (model or DEFAULT_MODEL).strip() or DEFAULT_MODEL
+    model = (model or get_current_model()).strip() or get_current_model()
     # 构造请求体
     payload = {
         "model": model,

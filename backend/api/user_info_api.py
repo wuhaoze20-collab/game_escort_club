@@ -498,43 +498,30 @@ def recharge_balance(
 
 
 # ——————————————————————————————————————————————
-# 拉黑：执行逻辑（管理员直接拉黑 / 客服申请经审核通过，两条路径共用）
+# 封禁/拉黑核心逻辑
 # ——————————————————————————————————————————————
 
-def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bool,
-               requester: str = "", reason: str = "") -> int:
-    """真正执行拉黑，返回转入公司账户的金额（分）。
-
-    **这是不可逆操作**：余额转入公司账户、写处罚通告、通知用户、账号注销。
-    因此只应由两条路径调用：
-      · 管理员直接拉黑（via_review=False）
-      · 客服提交申请、管理员审核通过（via_review=True）
+def _do_final_ban(db: Session, user: User, *, operator_display: str, reason: str) -> int:
+    """最终执行永久拉黑（不可逆）：余额转公司账户、写处罚通告、账号注销。
+    24小时缓冲期到了自动调用，或管理员手动立即执行时调用。
     """
     username = user.username
     amount = 0
     role_name = "老板" if user.role == "boss" else "打手"
     display = user.nickname or username
 
-    # 拉黑前：把余额/后台金额转入公司账户。
-    #
-    # ⚠️ 单位不同，必须先统一成「分」再入账 —— company_balance 与 company_records 的单位都是分
-    #    （前端两处均按 /100 显示）：
-    #      · player_info.backend_amount 单位是「分」
-    #      · boss_info.balance          单位是「大狗币」（1 大狗币 = 1 元）
-    #    早期版本对两者一视同仁，导致**封禁老板时金额少 100 倍**
-    #    （余额 123 元只入账 123 分、处罚通告写成 ¥1.23）。
+    # 余额转入公司账户
     if user.role == "player":
         player = db.query(PlayerInfo).filter(PlayerInfo.username == username).first()
         if player:
-            amount = int(round(player.backend_amount or 0))   # 已是「分」
+            amount = int(round(player.backend_amount or 0))
             player.backend_amount = 0
     elif user.role == "boss":
         boss = db.query(BossInfo).filter(BossInfo.username == username).first()
         if boss:
-            amount = int((boss.balance or 0) * 100)           # 「元」-> 「分」（DECIMAL 精确，无需四舍五入）
+            amount = int((boss.balance or 0) * 100)
             boss.balance = 0
 
-    # 公司后台资金池入账 + 资金流水
     if amount > 0:
         cb = db.query(ContentConfig).filter(ContentConfig.config_key == "company_balance").first()
         if not cb:
@@ -549,65 +536,194 @@ def _apply_ban(db: Session, user: User, *, operator_display: str, via_review: bo
             rec = ContentConfig(config_key="company_records", config_value="[]")
             db.add(rec)
         records = json.loads(rec.config_value or "[]")
-        records.insert(0, {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "type": "拉黑",
+        records.insert(0, {"date": datetime.now().strftime("%Y-%m-%d %H:%M"), "type": "永久拉黑",
                            "user": f"{display}（{username}）", "amount": amount})
         rec.config_value = json.dumps(records, ensure_ascii=False)
 
     money_desc = (f"{('后台金额' if user.role == 'player' else '账户余额')} ¥{amount / 100:.2f} 已转入公司账户"
-                  if amount > 0 else "账号已注销")
-    if via_review:
-        head = f"{role_name}「{display}」经客服申请、管理员审核后拉黑封禁"
-        if requester:
-            head += f"（申请发起：客服 {requester}）"
-        if reason:
-            head += f"，申请理由：{reason}"
-    else:
-        head = f"{role_name}「{display}」被{operator_display}拉黑封禁"
+                  if amount > 0 else "账号已永久注销")
+    head = f"{role_name}「{display}」被{operator_display}永久拉黑封禁"
+    if reason:
+        head += f"，原因：{reason}"
 
-    # 处罚公告自动追加一条
+    # 处罚公告
     pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
     if pun:
         plist = json.loads(pun.config_value or "[]")
-        plist.insert(0, {"level": "封禁账号", "desc": f"{head}，{money_desc}",
+        plist.insert(0, {"level": "永久封禁", "desc": f"{head}，{money_desc}",
                          "date": datetime.now().strftime("%Y-%m-%d")})
         pun.config_value = json.dumps(plist, ensure_ascii=False)
 
-    # 通知被拉黑用户
     from api.notification_api import create_notification
-    create_notification(db, user.id, "账号被封禁",
-                        "您的账号已被拉黑注销，如有疑问请联系管理员", "warning", "")
+    create_notification(db, user.id, "账号被永久封禁",
+                        "您的账号已被永久拉黑注销，如有疑问请联系管理员", "warning", "")
 
-    # 处罚通告同步进知识图谱（「谁被处罚过、因为什么」靠它回答）。
-    # 旁路操作：图谱写失败绝不能影响拉黑这条不可逆主流程，整段包在 try 里。
     try:
         from kg import sync as kg_sync
         kg_sync.sync_punishments(db)
     except Exception as e:
         print(f"[kg] 处罚通告入图失败：{type(e).__name__}: {e}")
 
-    # 账号注销，无法登录
     user.account_status = "rejected"
+    user.ban_type = "permanent"
+    user.ban_until = None
+    user.ban_reason = reason
     return amount
 
 
-# 管理员直接拉黑/注销用户（打手/老板）—— 立即生效，无需审核
-@router.post("/admin/ban/{username}")
-def ban_user(
+# 临时封禁
+@router.post("/admin/temp-ban/{username}")
+def temp_ban_user(
     username: str,
+    days: int = 1,
     reason: str = "",
     current_user: User = Depends(require_roles("admin")),
     db: Session = Depends(get_db)
 ):
+    """临时封禁账号：可选 1/3/7/30 天/永久(传0或-1)。封禁后立刻踢下线。"""
     user = db.query(User).filter(User.username == username).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if user.role not in ["boss", "player"]:
+        raise HTTPException(status_code=400, detail="只能封禁老板或打手账号")
 
+    from datetime import timedelta
+    now = datetime.now()
+    display = user.nickname or username
+    role_name = "老板" if user.role == "boss" else "打手"
+
+    if days <= 0:
+        # 永久封禁（直接执行，不走缓冲期）
+        _do_final_ban(db, user, operator_display=current_user.nickname or current_user.username, reason=reason)
+        db.commit()
+        return {"message": f"用户 {username} 已被永久封禁"}
+
+    ban_until = now + timedelta(days=days)
+    user.ban_type = "temporary"
+    user.ban_until = ban_until
+    user.ban_reason = reason
+    user.ban_requested_at = now
+
+    # 处罚公告
+    pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if pun:
+        plist = json.loads(pun.config_value or "[]")
+        plist.insert(0, {"level": f"临时封禁{days}天",
+                         "desc": f"{role_name}「{display}」被{current_user.nickname or current_user.username}临时封禁{days}天"
+                                 f"（至 {ban_until.strftime('%Y-%m-%d %H:%M')}），原因：{reason or '违规'}",
+                         "date": datetime.now().strftime("%Y-%m-%d")})
+        pun.config_value = json.dumps(plist, ensure_ascii=False)
+
+    from api.notification_api import create_notification
+    create_notification(db, user.id, f"账号被临时封禁{days}天",
+                        f"您的账号因「{reason or '违规'}」被临时封禁{days}天，"
+                        f"将于 {ban_until.strftime('%Y-%m-%d %H:%M')} 自动解封", "warning", "")
+
+    try:
+        from kg import sync as kg_sync
+        kg_sync.sync_punishments(db)
+    except Exception as e:
+        print(f"[kg] 处罚通告入图失败：{type(e).__name__}: {e}")
+
+    db.commit()
+    return {"message": f"用户 {username} 已被临时封禁{days}天，至 {ban_until.strftime('%Y-%m-%d %H:%M')}",
+            "ban_until": ban_until.isoformat()}
+
+
+# 解除封禁/解封
+@router.post("/admin/unban/{username}")
+def unban_user(
+    username: str,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    """解除临时封禁或取消拉黑缓冲期，恢复账号正常使用。"""
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not user.ban_type:
+        raise HTTPException(status_code=400, detail="该账号未被封禁，无需解封")
+    if user.ban_type == "permanent":
+        raise HTTPException(status_code=400, detail="永久封禁账号不可解封，请直接重新注册")
+
+    display = user.nickname or username
+    role_name = "老板" if user.role == "boss" else "打手"
+    ban_desc = "临时封禁" if user.ban_type == "temporary" else "拉黑缓冲期"
+
+    # 处罚公告记录解封
+    pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if pun:
+        plist = json.loads(pun.config_value or "[]")
+        plist.insert(0, {"level": "解除封禁",
+                         "desc": f"{role_name}「{display}」的{ban_desc}已被管理员解除，账号恢复正常使用",
+                         "date": datetime.now().strftime("%Y-%m-%d")})
+        pun.config_value = json.dumps(plist, ensure_ascii=False)
+
+    from api.notification_api import create_notification
+    create_notification(db, user.id, "账号已解封",
+                        f"您的{ban_desc}已解除，账号恢复正常使用", "success", "")
+
+    user.ban_type = ""
+    user.ban_until = None
+    user.ban_reason = ""
+    user.ban_requested_at = None
+    if user.account_status == "rejected" and user.ban_type != "permanent":
+        user.account_status = "approved"
+
+    db.commit()
+    return {"message": f"用户 {username} 已解除封禁，账号恢复正常"}
+
+
+# 管理员发起拉黑（进入24小时缓冲期，期间可解除，也可立即执行）
+@router.post("/admin/ban/{username}")
+def ban_user(
+    username: str,
+    reason: str = "",
+    immediate: bool = False,
+    current_user: User = Depends(require_roles("admin")),
+    db: Session = Depends(get_db)
+):
+    """发起拉黑：默认进入24小时缓冲期；immediate=True 立即执行永久拉黑。"""
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
     if user.role not in ["boss", "player"]:
         raise HTTPException(status_code=400, detail="只能拉黑老板或打手账号")
 
-    _apply_ban(db, user, operator_display="管理员", via_review=False, reason=reason)
+    if immediate:
+        amount = _do_final_ban(db, user, operator_display=current_user.nickname or current_user.username, reason=reason)
+        db.commit()
+        return {"message": f"用户 {username} 已被永久拉黑，¥{amount / 100:.2f} 已转入公司账户"}
+
+    # 进入24小时缓冲期
+    from datetime import timedelta
+    now = datetime.now()
+    deadline = now + timedelta(hours=24)
+    user.ban_type = "pending_ban"
+    user.ban_until = deadline
+    user.ban_reason = reason
+    user.ban_requested_at = now
+
+    display = user.nickname or username
+    role_name = "老板" if user.role == "boss" else "打手"
+
+    pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if pun:
+        plist = json.loads(pun.config_value or "[]")
+        plist.insert(0, {"level": "拉黑缓冲期",
+                         "desc": f"{role_name}「{display}」被{current_user.nickname or current_user.username}发起拉黑，"
+                                 f"24小时缓冲期内（至 {deadline.strftime('%Y-%m-%d %H:%M')}）可解除或立即执行",
+                         "date": datetime.now().strftime("%Y-%m-%d")})
+        pun.config_value = json.dumps(plist, ensure_ascii=False)
+
+    from api.notification_api import create_notification
+    create_notification(db, user.id, "账号进入拉黑缓冲期",
+                        f"您的账号因「{reason or '违规'}」被发起拉黑，24小时内可申诉解除，"
+                        f"逾期未解除将永久封禁", "warning", "")
+
     db.commit()
-    return {"message": f"用户 {username} 已被拉黑注销，金额已转入公司账户"}
+    return {"message": f"已发起拉黑，进入24小时缓冲期（至 {deadline.strftime('%Y-%m-%d %H:%M')}），期间可解除或立即执行",
+            "ban_until": deadline.isoformat()}
 
 
 # ——————————————————————————————————————————————
@@ -719,13 +835,35 @@ def decide_ban_request(
         db.commit()
         return {"message": "已驳回该拉黑申请（未执行拉黑）"}
 
-    # 通过：此时才真正执行不可逆的拉黑
+    # 通过：进入24小时缓冲期
     target = db.query(User).filter(User.username == br.target_username).first()
     if not target:
         raise HTTPException(status_code=404, detail="被申请拉黑的账号已不存在")
 
-    amount = _apply_ban(db, target, operator_display=current_user.nickname or current_user.username,
-                        via_review=True, requester=br.requested_by, reason=br.reason)
+    from datetime import timedelta
+    now = datetime.now()
+    deadline = now + timedelta(hours=24)
+    target.ban_type = "pending_ban"
+    target.ban_until = deadline
+    target.ban_reason = br.reason
+    target.ban_requested_at = now
+
+    display = target.nickname or br.target_username
+    role_name = "老板" if target.role == "boss" else "打手"
+    pun = db.query(ContentConfig).filter(ContentConfig.config_key == "punishment").first()
+    if pun:
+        plist = json.loads(pun.config_value or "[]")
+        plist.insert(0, {"level": "拉黑缓冲期",
+                         "desc": f"{role_name}「{display}」经客服申请、管理员审核通过进入拉黑缓冲期，"
+                                 f"24小时内（至 {deadline.strftime('%Y-%m-%d %H:%M')}）可解除或立即执行",
+                         "date": datetime.now().strftime("%Y-%m-%d")})
+        pun.config_value = json.dumps(plist, ensure_ascii=False)
+
+    from api.notification_api import create_notification
+    create_notification(db, target.id, "账号进入拉黑缓冲期",
+                        f"您的账号因「{br.reason}」被客服申请拉黑、管理员审核通过，"
+                        f"24小时缓冲期内可申诉解除，逾期将永久封禁", "warning", "")
+
     br.status = "approved"
     br.note = request.note or ""
     br.processed_by = current_user.username
@@ -734,9 +872,9 @@ def decide_ban_request(
     requester = db.query(User).filter(User.username == br.requested_by).first()
     if requester:
         create_notification(db, requester.id, "拉黑申请已通过",
-                            f"你申请的拉黑「{br.target_username}」已由管理员审核通过并执行", "success", "ban-review")
+                            f"你申请的拉黑「{br.target_username}」已由管理员审核通过，进入24小时缓冲期", "success", "ban-review")
     db.commit()
-    return {"message": f"已通过并执行拉黑，¥{amount / 100:.2f} 已转入公司账户"}
+    return {"message": f"已通过审核，进入24小时拉黑缓冲期（至 {deadline.strftime('%Y-%m-%d %H:%M')}），期间可解除或立即执行"}
 
 
 # 公司后台余额与资金流水（仅管理员）

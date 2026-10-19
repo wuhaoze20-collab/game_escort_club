@@ -66,11 +66,61 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             status_code=403,
             detail="账号审核中，请等待管理员审核通过后登录"
         )
-    if user.account_status == "rejected":
+    if user.account_status == "rejected" and user.ban_type != "permanent":
+        # 普通审核驳回，不是永久封禁
         raise HTTPException(
             status_code=403,
             detail="账号审核未通过，无法登录"
         )
+
+    # —— 封禁状态检查 ——
+    now = datetime.now()
+    if user.ban_type == "permanent":
+        raise HTTPException(
+            status_code=403,
+            detail="您的账号已被永久封禁，无法登录，如有疑问请联系管理员"
+        )
+    if user.ban_type == "pending_ban":
+        if user.ban_until and user.ban_until > now:
+            remaining = user.ban_until - now
+            hours = int(remaining.total_seconds() // 3600)
+            mins = int((remaining.total_seconds() % 3600) // 60)
+            raise HTTPException(
+                status_code=403,
+                detail=f"您的账号处于拉黑缓冲期，剩余 {hours} 小时 {mins} 分钟后将永久封禁，"
+                       f"如有异议请联系管理员申诉"
+            )
+        else:
+            # 缓冲期到了，自动执行永久拉黑
+            from api.user_info_api import _do_final_ban
+            _do_final_ban(db, user, operator_display="系统自动", reason=user.ban_reason or "缓冲期逾期")
+            db.commit()
+            raise HTTPException(
+                status_code=403,
+                detail="您的账号拉黑缓冲期已过，已被永久封禁"
+            )
+    if user.ban_type == "temporary":
+        if user.ban_until and user.ban_until > now:
+            remaining = user.ban_until - now
+            days = int(remaining.total_seconds() // 86400)
+            hours = int((remaining.total_seconds() % 86400) // 3600)
+            mins = int((remaining.total_seconds() % 3600) // 60)
+            time_desc = []
+            if days > 0: time_desc.append(f"{days}天")
+            if hours > 0: time_desc.append(f"{hours}小时")
+            time_desc.append(f"{mins}分钟")
+            raise HTTPException(
+                status_code=403,
+                detail=f"您的账号因「{user.ban_reason or '违规'}」被临时封禁，"
+                       f"剩余 {' '.join(time_desc)}后自动解封"
+            )
+        else:
+            # 临时封禁到期，自动解封
+            user.ban_type = ""
+            user.ban_until = None
+            user.ban_reason = ""
+            user.ban_requested_at = None
+            db.commit()
 
     # 生成令牌（有效期取自 system_config，默认 24 小时）
     token_minutes = int(config_service.get_config("token_expire_minutes", db))

@@ -1,5 +1,37 @@
 # 更新日志 CHANGELOG
 
+## [V5.1.1] 2026-10-19
+
+### 🐛 前端 Bug 修复
+
+**1. AI 模型配置页报错 `renderConfigItem is not defined`**
+- 根因：`renderAiConfigTable()` 调用了 `renderConfigItem(c)`，但该函数从未独立定义；单条配置项渲染逻辑只内嵌在系统参数页的 `renderConfigTable()` 里。
+- 修复：抽出独立函数 `renderConfigItem(c)`，AI 配置页与系统参数页共用同一套渲染逻辑，消除代码重复。
+
+**2. 设置界面参数分组重复**
+- 根因：`RAG_CONFIG_GROUPS` 数组同时被"系统参数页过滤"和"RAG 调试页渲染"复用，导致「模型配置」「AI 客服」「AI 知识库」三组基础参数在两个页面重复出现。
+- 修复：新增 `RAG_DEBUG_GROUPS`（仅含 6 组 RAG 进阶参数），RAG 调试页与诊断跳转函数改用该数组；基础参数归「模型配置」页，进阶参数归「RAG 调试」页，分工清晰无重复。
+
+---
+
+### 🗄️ 后端兼容性修复
+
+**3. 启动崩溃 `Unknown column 'users.ban_type'`**
+- 根因：`User` 模型新增了 `ban_type` / `ban_until` / `ban_reason` / `ban_requested_at` 四个封禁字段，但 `main.py` 的 `ADD_COLUMNS` 迁移清单漏了这 4 列。
+- 修复：补全 4 条 `ALTER TABLE` 迁移语句，旧库启动时自动补列，无需手动改表。
+
+**4. 前端静态资源 404**
+- 根因：后端未挂载 `frontend/` 目录做静态资源服务，通过 `http://127.0.0.1:8000/` 访问时 tailwind.css 等资源加载失败，样式崩坏。
+- 修复：`main.py` 末尾增加 `app.mount("/", StaticFiles(...))`，FastAPI 直接托管前端静态文件。
+
+---
+
+### 📦 其他
+
+- 未跟踪的临时工具脚本（`switch_to_deepseek.py`、`sync_punishment_rules.py`、`write_deepseek_config.py`）不纳入版本管理。
+
+---
+
 ## [V5.1.0] 2026-10-15
 
 ### 🐳 Docker 全栈部署上线

@@ -48,14 +48,22 @@ DEFAULT_AI_EXTRA_INSTRUCTION = """【常见问答标准答法】（优先照这�
 # 参数元数据：默认值 + 类型 + 后台显示信息
 # 注意：这里的默认值是"出厂值"，运行时一律以数据库为准
 CONFIG_META: dict[str, dict] = {
-    # ——— API 接入 ———
-    # 放在最前：密钥没配好，后面所有 RAG 模块（向量化、重排序、Self-RAG）都用不起来，
+    # ——— 模型配置 ———
+    # 放在最前：密钥和模型没配好，后面所有 RAG 模块都用不起来，
     # 所以它是这两个页面里最该先看见、最先能改的一项。
     "ai_api_key": {
-        "default": "", "type": "str", "group": "API 接入", "label": "千问 API Key",
-        "desc": "阿里云百炼（DashScope）密钥。留空则回落到 backend/.env 的 DASHSCOPE_API_KEY；"
+        "default": "", "type": "str", "group": "模型配置", "label": "AI API Key",
+        "desc": "AI服务密钥。留空则回落到 backend/.env 的 DASHSCOPE_API_KEY；"
                 "填了就以此处为准。保存后立即生效，不用重启后端。"
                 "出于安全，读取时只回显头尾各 4 位，输入框留空表示不修改",
+    },
+    "ai_model": {
+        "default": "deepseek-chat", "type": "str", "group": "模型配置", "label": "对话模型选择",
+        "desc": "下拉选择切换对话模型，选完自动同步API地址，支持DeepSeek V3/R1、Qwen Plus/Turbo",
+    },
+    "ai_base_url": {
+        "default": "https://api.deepseek.com/v1/chat/completions", "type": "str", "group": "模型配置", "label": "API 接口地址",
+        "desc": "选完模型自动填充，一般不用手动修改；兼容OpenAI接口的模型都可以接入",
     },
     # ——— 资金与抽成 ———
     "club_commission_rate": {
@@ -134,14 +142,10 @@ CONFIG_META: dict[str, dict] = {
         "default": ["娱乐陪", "技术陪"], "type": "json", "group": "打手等级",
         "label": "打手等级大类", "desc": "JSON 数组，打手等级的两大类",
     },
-    # ——— AI 客服（千问）———
+    # ——— AI 客服 ———
     "ai_enabled": {
         "default": True, "type": "bool", "group": "AI 客服", "label": "启用 AI 客服",
-        "desc": "关闭后前端不显示聊天入口；仍需在 backend/.env 配置 DASHSCOPE_API_KEY 才能真正对话",
-    },
-    "ai_model": {
-        "default": "qwen-plus", "type": "str", "group": "AI 客服", "label": "千问模型名",
-        "desc": "如 qwen-plus（均衡）、qwen-turbo（快且便宜）、qwen-max（最强）",
+        "desc": "关闭后前端不显示聊天入口；仍需在 模型配置 里填 API Key 才能真正对话",
     },
     "ai_daily_limit": {
         "default": 30, "type": "int", "group": "AI 客服", "label": "每人每日提问上限",
@@ -187,7 +191,7 @@ CONFIG_META: dict[str, dict] = {
     },
     "ai_rag_embedding_model": {
         "default": "text-embedding-v3", "type": "str", "group": "AI 知识库", "label": "向量化模型",
-        "desc": "千问 Embedding 模型名。换模型后旧向量维度不同，必须点「重建索引」全量重算",
+        "desc": "Embedding 模型名。换模型后旧向量维度不同，必须点「重建索引」全量重算",
     },
     "ai_vl_model": {
         "default": "qwen3-vl-plus", "type": "str", "group": "AI 知识库", "label": "图片理解模型（多模态）",

@@ -22,6 +22,11 @@ class User(Base):
     failed_attempts = Column(Integer, default=0)  # 连续输错密码次数（用于登录锁定）
     lock_until = Column(DateTime, nullable=True)  # 登录锁定截止时间（None=未锁定）
     account_status = Column(String(20), default="approved")  # 注册审核状态 pending/approved/rejected
+    # 封禁/拉黑相关字段
+    ban_type = Column(String(20), default="")  # ""=正常 / temporary=临时封禁 / permanent=永久封禁 / pending_ban=待执行拉黑（24小时缓冲期）
+    ban_until = Column(DateTime, nullable=True)  # 封禁截止时间（None=永久或未封禁）
+    ban_reason = Column(String(255), default="")  # 封禁/拉黑原因
+    ban_requested_at = Column(DateTime, nullable=True)  # 拉黑申请时间（24小时缓冲期起算）
     created_at = Column(DateTime, default=datetime.now)
 
 # 内容配置表（公告、须知、价格、充值、会员、支付方式统一存储）

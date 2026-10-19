@@ -65,6 +65,18 @@ ADD_COLUMNS = (
      "ALTER TABLE users ADD COLUMN lock_until DATETIME NULL"),
     ("users", "account_status",
      "ALTER TABLE users ADD COLUMN account_status VARCHAR(20) DEFAULT 'approved'"),
+    # ---- 拉黑/封禁体系：临时封禁 / 永久封禁 / 24小时缓冲期待执行 ----
+    # models.py User 模型与 auth.py、user_info_api.py 都在读写这四列，
+    # 老库升级上来会缺列，启动时 seed_default_accounts() 一查 users 就报
+    # "Unknown column 'users.ban_type' in 'field list'"，这里自动补齐。
+    ("users", "ban_type",
+     "ALTER TABLE users ADD COLUMN ban_type VARCHAR(20) DEFAULT ''"),
+    ("users", "ban_until",
+     "ALTER TABLE users ADD COLUMN ban_until DATETIME NULL"),
+    ("users", "ban_reason",
+     "ALTER TABLE users ADD COLUMN ban_reason VARCHAR(255) DEFAULT ''"),
+    ("users", "ban_requested_at",
+     "ALTER TABLE users ADD COLUMN ban_requested_at DATETIME NULL"),
     # AI 回答用到的工具名（逗号分隔）。用于审计"AI 到底做了哪些查询"，
     # 出问题时能定位是模型编造还是工具返回了错数据。
     ("ai_messages", "tools_used",
@@ -311,6 +323,13 @@ app.mount("/bizhiku", StaticFiles(directory=BIZHIKU_DIR), name="bizhiku")
 # 挂载知识库图片静态文件（多模态 RAG 检索命中后，前端据此显示缩略图）
 app.mount("/kbimg", StaticFiles(directory=KB_IMAGES_DIR), name="kbimg")
 
+# 挂载前端静态资源兜底：tailwind.css 等。放在最后，不影响上面已注册的
+# API 路由与 /docs；未匹配的 GET 请求才落到这里（如 /tailwind.css）。
+# html=True 让目录访问自动返回 index.html，与上面的 @app.get("/") 一致。
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    import os
+    port = int(os.getenv("PORT", "8000"))  # 默认8000，Docker部署用；本地调试可设PORT=9000
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

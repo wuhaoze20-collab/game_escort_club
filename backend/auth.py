@@ -60,6 +60,35 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(User).filter(User.username == username).first()
     if user is None:
         raise credentials_exception
+
+    # 封禁状态检查：已登录用户被封禁后，任何请求都踢下线
+    now = datetime.utcnow()
+    # 用本地时区时间比较
+    from datetime import datetime as dt
+    now_local = dt.now()
+    if user.ban_type == "permanent":
+        raise HTTPException(status_code=403, detail="账号已被永久封禁，请重新登录")
+    if user.ban_type == "pending_ban":
+        if user.ban_until and user.ban_until > now_local:
+            remaining = user.ban_until - now_local
+            hours = int(remaining.total_seconds() // 3600)
+            raise HTTPException(status_code=403,
+                              detail=f"账号处于拉黑缓冲期，剩余{hours}小时后将永久封禁，请重新登录")
+    if user.ban_type == "temporary":
+        if user.ban_until and user.ban_until > now_local:
+            remaining = user.ban_until - now_local
+            days = int(remaining.total_seconds() // 86400)
+            hours = int((remaining.total_seconds() % 86400) // 3600)
+            raise HTTPException(status_code=403,
+                              detail=f"账号被临时封禁，剩余{days}天{hours}小时，请重新登录")
+        else:
+            # 临时封禁到期自动解封
+            user.ban_type = ""
+            user.ban_until = None
+            user.ban_reason = ""
+            user.ban_requested_at = None
+            db.commit()
+
     return user
 
 # 权限校验：仅允许指定角色访问

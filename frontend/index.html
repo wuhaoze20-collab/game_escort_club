@@ -19,6 +19,19 @@
         .toggle-switch input:focus + .toggle-slider { box-shadow: 0 0 0 3px rgba(16,185,129,.2); }
         /* 显式定义 hidden，不依赖 Tailwind CDN（防止 CDN 未生成导致弹窗暴露） */
         .hidden { display: none !important; }
+        /* 统一风格弹窗 */
+        .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .modal-box { background: white; border-radius: 12px; width: 90%; max-width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,.15); overflow: hidden; }
+        .modal-header { padding: 20px 24px 0; font-size: 16px; font-weight: 600; color: #1f2937; }
+        .modal-body { padding: 12px 24px 20px; color: #4b5563; font-size: 14px; line-height: 1.6; }
+        .modal-footer { padding: 0 24px 20px; display: flex; gap: 10px; justify-content: flex-end; }
+        .modal-btn { padding: 8px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; border: none; transition: all .2s; }
+        .modal-btn-cancel { background: #f3f4f6; color: #4b5563; }
+        .modal-btn-cancel:hover { background: #e5e7eb; }
+        .modal-btn-primary { background: #3b82f6; color: white; }
+        .modal-btn-primary:hover { background: #2563eb; }
+        .modal-btn-danger { background: #ef4444; color: white; }
+        .modal-btn-danger:hover { background: #dc2626; }
         /* 通知红点强制圆形 */
         #notification-badge { border-radius: 9999px !important; }
 
@@ -1334,7 +1347,7 @@
                     <button onclick="loadBanRequests()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
                 </div>
                 <p class="text-sm text-gray-500 mb-4">
-                    客服无法直接拉黑账号，只能提交申请；<b>管理员审核通过后才会真正执行</b>（余额转入公司账户 + 写入处罚通告 + 注销账号，<b>不可撤销</b>）。
+                    客服提交拉黑申请后，<b>管理员审核通过将进入24小时缓冲期</b>（缓冲期内可解除或立即执行永久封禁）；也可直接选择临时封禁（1/3/7/30天）。
                 </p>
                 <div id="ban-review-content" class="space-y-3"><div class="loading">加载中...</div></div>
             </section>
@@ -1661,6 +1674,17 @@
                     </div>
                 </section>
 
+                <!-- AI 模型配置页：集中管理AI相关参数，和业务系统参数分开 -->
+                <section id="page-ai-config" class="page-section bg-white rounded-xl shadow-sm p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">AI 模型配置</h2>
+                        <button onclick="loadAiConfig()" class="px-4 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">刷新</button>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">对话模型、API密钥、接口地址集中配置，切换模型自动同步对应接口参数，修改后立即生效。</p>
+                    <div id="ai-config-alerts"></div>
+                    <div id="ai-config-table" class="space-y-3"><div class="loading">加载中...</div></div>
+                </section>
+
                 <!-- 16.11 系统参数（仅管理员）：业务规则集中配置，改完立即生效 -->
                 <section id="page-system-config" class="page-section bg-white rounded-xl shadow-sm p-6">
                     <div class="flex justify-between items-center mb-4">
@@ -1976,8 +2000,11 @@
             document.documentElement.setAttribute('data-theme', t);
         })();
 
-        // 后端API地址
-        const API_BASE = '';
+        // 后端API地址：Docker/同源部署时用空字符串走 Nginx 或后端静态托管；
+        // 纯本地双击 index.html（file://）打开时，指向本机 uvicorn 的 8000 端口。
+        // 用 127.0.0.1 而非 localhost：Windows 会把 localhost 同时解析到 IPv6 ::1，
+        // 而 uvicorn 默认只绑 IPv4，会偶发连不上。
+        const API_BASE = location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
         
         // 全局状态
         let currentUser = null;
@@ -2593,12 +2620,15 @@
                     { key: 'boss', label: '老板管理' },
                     { key: 'player', label: '打手管理' }
                 ]},
-                { group: '系统设置', items: [
-                    { key: 'quote-manage', label: '台词管理' },
+                { group: 'AI 设置', items: [
+                    { key: 'ai-config', label: '模型配置' },
                     { key: 'ai-prompt', label: '提示词管理' },
                     { key: 'ai-faq', label: 'AI 问答库' },
                     { key: 'rag-debug', label: 'RAG 调试' },
-                    { key: 'kg-graph', label: '知识图谱' },
+                    { key: 'kg-graph', label: '知识图谱' }
+                ]},
+                { group: '系统设置', items: [
+                    { key: 'quote-manage', label: '台词管理' },
                     { key: 'system-config', label: '系统参数' }
                 ]},
                 { group: '个人中心', items: [
@@ -2845,6 +2875,91 @@
             }
         }
 
+        // AI 配置页面加载：只渲染AI相关的分组
+        async function loadAiConfig() {
+            const box = document.getElementById('ai-config-table');
+            if (!box) return;
+            box.innerHTML = '<div class="loading">加载中...</div>';
+            try {
+                const res = await apiRequest('/api/config/all');
+                configCache = (res && res.items) || [];
+                renderAiConfigTable();
+            } catch (e) {
+                box.innerHTML = '<div class="text-sm text-red-500">加载失败：' + escapeHtml(e.message) + '</div>';
+            }
+        }
+
+        // 渲染单条配置项（AI 配置页与系统参数页共用）
+        function renderConfigItem(c) {
+            const isBool = c.value_type === 'bool';
+            const isOn = isBool && (c.config_value === '1' || c.config_value === 'true' || c.config_value === 'True');
+            let controlHtml = '';
+            if (isBool) {
+                controlHtml = ''
+                    + '<label class="toggle-switch" title="点击切换">'
+                    + '  <input type="checkbox" ' + (isOn ? 'checked' : '') + ' onchange="toggleConfig(\'' + escapeHtml(c.config_key) + '\', this.checked)">'
+                    + '  <span class="toggle-slider"></span>'
+                    + '</label>'
+                    + '<span id="cfg-status-' + escapeHtml(c.config_key) + '" class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
+            } else if (c.config_key === 'ai_model') {
+                const modelOptions = [
+                    { value: 'deepseek-chat', label: 'DeepSeek V3（推荐，快且便宜）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                    { value: 'deepseek-reasoner', label: 'DeepSeek R1（推理强，速度慢）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                    { value: 'qwen-plus', label: 'Qwen Plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                    { value: 'qwen-turbo', label: 'Qwen Turbo（最快）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                ];
+                let opts = modelOptions.map(o =>
+                    '<option value="' + o.value + '" ' + (c.config_value === o.value ? 'selected' : '') + ' data-baseurl="' + o.baseUrl + '">' + o.label + '</option>'
+                ).join('');
+                controlHtml = ''
+                    + '<select id="cfg-' + escapeHtml(c.config_key) + '" onchange="onModelChange(this)" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">'
+                    + opts + '</select>'
+                    + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>';
+            } else {
+                controlHtml = ''
+                    + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="text" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
+                    + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
+                    + '<button onclick="resetConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">恢复默认</button>';
+            }
+            return ''
+                + '<div class="border border-gray-200 rounded-lg p-4">'
+                + '  <div class="flex justify-between items-start gap-4 flex-wrap">'
+                + '    <div class="flex-1 min-w-0" style="min-width:15rem">'
+                + '      <div class="text-sm font-medium text-gray-800">' + escapeHtml(c.label) + '</div>'
+                + '      <div class="text-xs text-gray-500 mt-0.5">' + escapeHtml(c.description || '') + '</div>'
+                + '      <div class="text-xs text-gray-400 mt-0.5">键名 <code>' + escapeHtml(c.config_key) + '</code>　类型 ' + escapeHtml(c.value_type) + '　默认值 <code>' + escapeHtml(c.default_value) + '</code></div>'
+                + '    </div>'
+                + '    <div class="flex gap-2 shrink-0 items-center flex-wrap justify-end">'
+                + controlHtml
+                + '    </div>'
+                + '  </div>'
+                + '</div>';
+        }
+
+        // 渲染AI配置表
+        function renderAiConfigTable() {
+            const box = document.getElementById('ai-config-table');
+            if (!box) return;
+            // 只显示AI相关的分组
+            const aiGroups = ['模型配置', 'AI 客服', 'AI 知识库'];
+            const items = configCache.filter(c => aiGroups.includes(c.group));
+            if (!items.length) {
+                box.innerHTML = '<div class="text-sm text-gray-400">暂无AI相关配置项</div>';
+                return;
+            }
+            // 按group分组渲染
+            let html = '';
+            const groups = [...new Set(items.map(c => c.group))];
+            for (const g of groups) {
+                html += '<div class="mb-4"><div class="text-sm font-medium text-gray-700 mb-2 border-b pb-1">' + escapeHtml(g) + '</div>';
+                for (const c of items.filter(x => x.group === g)) {
+                    html += renderConfigItem(c);
+                }
+                html += '</div>';
+            }
+            box.innerHTML = html;
+        }
+
         // 运行期异常留痕：把被防御代码兜住的静默故障显示出来
         // （配置读失败回退默认值、提现额算出负值、充值福利配置坏了等）
         function renderConfigAlerts() {
@@ -2885,7 +3000,7 @@
 
         // ==================== AI 知识库索引（向量检索）====================
         // 长篇规则文档（用户协议 / 打手规范 / 退款规则）由后端 seed_kb_docs.py 提供，
-        // 正文单独切块并向量化后才能被 AI 检索到。重建会调用千问 embedding 接口（按量计费），
+        // 正文单独切块并向量化后才能被 AI 检索到。重建会调用 embedding 接口（按量计费），
         // 故不放在启动时自动执行；未改动的片段按 content_hash 自动跳过，重复点不会重复花钱。
         async function loadKbIndexStatus() {
             const box = document.getElementById('kb-index-status');
@@ -2929,7 +3044,7 @@
 
         async function rebuildKbIndex() {
             const msg = document.getElementById('kb-index-msg');
-            if (!confirm('重建向量索引会调用千问 embedding 接口（按量计费），未改动的片段会自动跳过。确认继续？')) return;
+            if (!confirm('重建向量索引会调用 embedding 接口（按量计费），未改动的片段会自动跳过。确认继续？')) return;
             const btns = document.querySelectorAll('#rag-panel-kb button');
             btns.forEach(b => { b.disabled = true; });
             if (msg) msg.textContent = '正在重建索引，请稍候（首次可能要十几秒）...';
@@ -3151,7 +3266,10 @@
         // RAG 相关的参数分组（这些移到「RAG 调试」页面，不在系统参数里显示）
         // 「API 接入」排最前：密钥是整个 RAG 链路的总开关，配错了后面全都跑不起来，
         // 所以它必须是进这个页面第一眼看到、也最先能改的一项。
-        const RAG_CONFIG_GROUPS = ['API 接入', 'AI 知识库', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
+        const RAG_CONFIG_GROUPS = ['模型配置', 'AI 客服', 'API 接入', 'AI 知识库', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
+        // RAG 调试页实际渲染的分组：去掉前 3 组基础参数（模型配置/AI 客服/AI 知识库），
+        // 这 3 组已在「模型配置」页单独显示，避免两个页面重复出现同一批参数。
+        const RAG_DEBUG_GROUPS = ['API 接入', 'RAG 模块开关', '融合与召回', '重排序打分', '查询优化', 'Self-RAG'];
 
         function renderConfigTable() {
             renderConfigAlerts();
@@ -3178,6 +3296,21 @@
                             + '  <span class="toggle-slider"></span>'
                             + '</label>'
                             + '<span id="cfg-status-' + escapeHtml(c.config_key) + '" class="text-xs ' + (isOn ? 'text-green-600' : 'text-gray-400') + ' ml-2">' + (isOn ? '已开启' : '已关闭') + '</span>';
+                    } else if (c.config_key === 'ai_model') {
+                        // 模型选择下拉框
+                        const modelOptions = [
+                            { value: 'deepseek-chat', label: 'DeepSeek V3（推荐，快且便宜）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                            { value: 'deepseek-reasoner', label: 'DeepSeek R1（推理强，速度慢）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                            { value: 'qwen-plus', label: 'Qwen Plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                            { value: 'qwen-turbo', label: 'Qwen Turbo（最快）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                        ];
+                        let opts = modelOptions.map(o =>
+                            '<option value="' + o.value + '" ' + (c.config_value === o.value ? 'selected' : '') + ' data-baseurl="' + o.baseUrl + '">' + o.label + '</option>'
+                        ).join('');
+                        controlHtml = ''
+                            + '<select id="cfg-' + escapeHtml(c.config_key) + '" onchange="onModelChange(this)" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">'
+                            + opts + '</select>'
+                            + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>';
                     } else {
                         controlHtml = ''
                             + '<input id="cfg-' + escapeHtml(c.config_key) + '" type="text" value="' + escapeHtml(c.config_value) + '" class="w-56 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">'
@@ -3873,7 +4006,7 @@
             const groupOrder = [];
             configCache.forEach(c => {
                 const g = c.group || '其他';
-                if (RAG_CONFIG_GROUPS.indexOf(g) === -1) return;  // 只显示 RAG 相关分组
+                if (RAG_DEBUG_GROUPS.indexOf(g) === -1) return;  // 只显示 RAG 进阶分组（基础参数在「模型配置」页）
                 if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
                 groups[g].push(c);
             });
@@ -3910,6 +4043,22 @@
                                 + '</label>';
                         }).join('');
                         controlHtml = '<div class="flex flex-wrap gap-2">' + opts + '</div>';
+                    } else if (c.config_key === 'ai_model') {
+                        // 模型选择下拉框，选完自动带出对应base_url
+                        const modelOptions = [
+                            { value: 'deepseek-chat', label: 'DeepSeek V3（推荐，快且便宜）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                            { value: 'deepseek-reasoner', label: 'DeepSeek R1（推理强，速度慢）', baseUrl: 'https://api.deepseek.com/v1/chat/completions' },
+                            { value: 'qwen-plus', label: 'Qwen Plus', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                            { value: 'qwen-turbo', label: 'Qwen Turbo（最快）', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' },
+                        ];
+                        let opts = modelOptions.map(o =>
+                            '<option value="' + o.value + '" ' + (c.config_value === o.value ? 'selected' : '') + ' data-baseurl="' + o.baseUrl + '">' + o.label + '</option>'
+                        ).join('');
+                        controlHtml = ''
+                            + '<select id="cfg-' + escapeHtml(c.config_key) + '" onchange="onModelChange(this)" class="w-72 px-3 py-1.5 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">'
+                            + opts + '</select>'
+                            + '<button onclick="saveConfig(\'' + c.config_key + '\')" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">保存</button>'
+                            + '<div class="text-xs text-gray-400 mt-1">切换模型后会自动同步更新API地址，无需手动修改</div>';
                     } else if (c.config_key === 'ai_api_key') {
                         // 密钥栏：默认遮起来（旁边给了"显示"按钮让你核对），
                         // 输入框留空 = 不修改——后端把空值也理解成"保持原值"，
@@ -4763,7 +4912,7 @@
             const order = [];
             configCache.forEach(c => {
                 const g = c.group || '其他';
-                if (RAG_CONFIG_GROUPS.indexOf(g) === -1) return;
+                if (RAG_DEBUG_GROUPS.indexOf(g) === -1) return;
                 if (!groups[g]) { groups[g] = []; order.push(g); }
                 groups[g].push(c);
             });
@@ -4980,6 +5129,26 @@
         }
 
         // 密钥输入框的"显示/隐藏"切换。默认遮起来，避免密钥在屏幕上一览无余。
+        // 切换模型下拉框时自动同步base_url
+        async function onModelChange(sel) {
+            const opt = sel.selectedOptions[0];
+            const baseUrl = opt.getAttribute('data-baseurl');
+            if (baseUrl) {
+                // 直接调用现成的saveConfig函数保存地址，不弹alert提示
+                try {
+                    await apiRequest('/api/config/ai_base_url', 'PUT', { value: baseUrl });
+                    // 立刻更新页面上API地址输入框的显示
+                    const urlInput = document.getElementById('cfg-ai_base_url');
+                    if (urlInput) urlInput.value = baseUrl;
+                    // 更新缓存里的值
+                    const cacheItem = configCache.find(c => c.config_key === 'ai_base_url');
+                    if (cacheItem) cacheItem.config_value = baseUrl;
+                } catch (e) {
+                    console.log('同步base_url失败:', e);
+                }
+            }
+        }
+
         function toggleSecretVisible(inputId, btn) {
             const el = document.getElementById(inputId);
             if (!el) return;
@@ -5642,6 +5811,12 @@
             if (key === 'kg-graph') {
                 loadKgGraph();
             }
+            if (key === 'ai-config') {
+                loadAiConfig();
+            }
+            if (key === 'system-config') {
+                loadSystemConfig();
+            }
             // 记录当前页面，刷新后恢复
             try { localStorage.setItem('app_last_page', key); } catch (e) {}
         }
@@ -5905,7 +6080,18 @@
                         <td class="px-4 py-2 text-green-600">${item.balance} 大狗币</td>
                         <td class="px-4 py-2">${item.order_count} 次</td>
                         <td class="px-4 py-2">
-                            <button onclick="banUser('${item.username}', '老板')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition">拉黑</button>
+                            <div class="flex gap-1 items-center flex-wrap">
+                                <select class="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white">
+                                    <option value="1">封禁1天</option>
+                                    <option value="3">封禁3天</option>
+                                    <option value="7">封禁7天</option>
+                                    <option value="30">封禁30天</option>
+                                    <option value="0">永久封禁</option>
+                                </select>
+                                <button onclick="selectedTempBan('${item.username}', '老板', this)" class="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition">封禁</button>
+                                <button onclick="startBan('${item.username}', '老板')" class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition">拉黑</button>
+                                <button onclick="quickUnban('${item.username}', '老板')" class="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition">解封</button>
+                            </div>
                         </td>
                     </tr>
                 `).join('');
@@ -5936,7 +6122,18 @@
                         <td class="px-4 py-2 text-green-600">${item.good_rate != null ? item.good_rate + '%' : '-'}</td>
                         <td class="px-4 py-2">¥${(item.backend_amount / 100).toLocaleString()}</td>
                         <td class="px-4 py-2">
-                            <button onclick="banUser('${item.username}', '打手')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition">拉黑</button>
+                            <div class="flex gap-1 items-center flex-wrap">
+                                <select class="text-xs border border-gray-300 rounded px-1 py-0.5 bg-white">
+                                    <option value="1">封禁1天</option>
+                                    <option value="3">封禁3天</option>
+                                    <option value="7">封禁7天</option>
+                                    <option value="30">封禁30天</option>
+                                    <option value="0">永久封禁</option>
+                                </select>
+                                <button onclick="selectedTempBan('${item.username}', '打手', this)" class="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition">封禁</button>
+                                <button onclick="startBan('${item.username}', '打手')" class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition">拉黑</button>
+                                <button onclick="quickUnban('${item.username}', '打手')" class="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition">解封</button>
+                            </div>
                         </td>
                     </tr>
                 `).join('');
@@ -6562,36 +6759,58 @@
             }
         }
 
-        // ==================== 拉黑 ====================
-        // 管理员：直接拉黑（立即生效，不可撤销）
-        // 客服：只能提交申请，需管理员在「拉黑审核」通过后才真正执行
-        async function banUser(username, roleName) {
-            if (currentUser.role === 'service') {
-                const reason = prompt(
-                    `申请拉黑${roleName}「${username}」\n\n` +
-                    `拉黑会将其余额转入公司账户、写入处罚通告并注销账号，且不可撤销。\n` +
-                    `提交后需管理员审核通过才会执行。\n\n请填写申请理由：`
-                );
-                if (reason === null) return;           // 取消
-                if (!reason.trim()) { alert('请填写申请理由'); return; }
-                try {
-                    const res = await apiRequest('/api/ban/request', 'POST',
-                        { username: username, reason: reason.trim() });
-                    alert(res.message);
-                    await loadBanRequests();
-                } catch (e) { alert(e.message); }
-                return;
-            }
-
-            if (!confirm(`确定要拉黑${roleName}「${username}」吗？其后台金额/余额将转入公司账户，且账号将无法再登录。此操作不可撤销。`)) return;
+        // ==================== 处罚操作 ====================
+        // 选择时长后点封禁按钮
+        async function selectedTempBan(username, roleName, btn) {
+            const container = btn.parentElement;
+            const select = container.querySelector('select');
+            const days = parseInt(select.value);
+            const daysText = days === 0 ? '永久' : days + '天';
+            const ok = await showModal(`确定将${roleName}「${username}」${daysText}封禁吗？${days === 0 ? '永久封禁将把余额转入公司账户，不可恢复。' : '封禁期间无法登录，到期自动解封。'}`,
+                { title: '确认封禁', okText: '确认封禁' });
+            if (!ok) return;
             try {
-                await apiRequest(`/api/admin/ban/${username}`, 'POST');
-                alert('已拉黑！金额已转入公司账户，处罚公告已自动添加');
-                await loadBossList();
-                await loadPlayerList();
-                await loadCompanyBalance();
-                await loadAllContent(); // 刷新处罚公告等公共内容
-            } catch (e) { alert(e.message); }
+                const res = await apiRequest(`/api/admin/temp-ban/${username}?days=${days}`, 'POST');
+                await showModal(res.message, { title: '操作成功', okText: '知道了', danger: false });
+                await loadBossList(); await loadPlayerList(); await loadAllContent();
+            } catch (e) { await showModal(e.message, { title: '操作失败', okText: '知道了', danger: false }); }
+        }
+
+        // 发起拉黑（进入24小时缓冲期）
+        async function startBan(username, roleName) {
+            const reason = await showInputModal(`请填写拉黑${roleName}「${username}」的原因`, '请输入违规原因') || '违规';
+            const ok = await showModal(`确定发起对${roleName}「${username}」的拉黑吗？\n将进入24小时缓冲期，期间可解除，逾期永久封禁。`,
+                { title: '确认拉黑', okText: '确认拉黑' });
+            if (!ok) return;
+            try {
+                const res = await apiRequest(`/api/admin/ban/${username}?reason=${encodeURIComponent(reason)}`, 'POST');
+                await showModal(res.message, { title: '操作成功', okText: '知道了', danger: false });
+                await loadBossList(); await loadPlayerList(); await loadAllContent();
+            } catch (e) { await showModal(e.message, { title: '操作失败', okText: '知道了', danger: false }); }
+        }
+
+        // 快速解封
+        async function quickUnban(username, roleName) {
+            const ok = await showModal(`确定解除${roleName}「${username}」的封禁吗？`,
+                { title: '确认解封', okText: '确认解封' });
+            if (!ok) return;
+            try {
+                const res = await apiRequest(`/api/admin/unban/${username}`, 'POST');
+                await showModal(res.message, { title: '操作成功', okText: '知道了', danger: false });
+                await loadBossList(); await loadPlayerList(); await loadAllContent();
+            } catch (e) { await showModal(e.message, { title: '操作失败', okText: '知道了', danger: false }); }
+        }
+
+        // 客服提交拉黑申请
+        async function banUser(username, roleName) {
+            const reason = await showInputModal(`申请拉黑${roleName}「${username}」`, '请输入申请理由');
+            if (!reason) return;
+            try {
+                const res = await apiRequest('/api/ban/request', 'POST',
+                    { username: username, reason: reason });
+                await showModal(res.message, { title: '提交成功', okText: '知道了', danger: false });
+                await loadBanRequests();
+            } catch (e) { await showModal(e.message, { title: '提交失败', okText: '知道了', danger: false }); }
         }
 
         // ==================== 拉黑审核（客服申请、管理员审核） ====================
@@ -6630,7 +6849,7 @@
                     + '      <span class="px-2 py-0.5 rounded-full text-xs ' + (stCls[r.status] || 'bg-gray-100 text-gray-600') + '">'
                     + (stMap[r.status] || r.status) + '</span>'
                     + (isAdmin && r.status === 'pending'
-                        ? '<button onclick="decideBanRequest(' + r.id + ', \'approve\')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">通过并拉黑</button>'
+                        ? '<button onclick="decideBanRequest(' + r.id + ', \'approve\')" class="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600">通过（进入24小时缓冲期）</button>'
                           + '<button onclick="decideBanRequest(' + r.id + ', \'reject\')" class="px-3 py-1 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50">驳回</button>'
                         : '')
                     + '    </div>'
@@ -6644,10 +6863,10 @@
         async function decideBanRequest(id, action) {
             let note = '';
             if (action === 'approve') {
-                if (!confirm('通过后将立即执行拉黑：余额转入公司账户、写入处罚通告、账号注销。\n此操作不可撤销。\n\n确定通过？')) return;
-                const n = prompt('审核备注（可留空）：');
-                if (n === null) return;
-                note = n;
+                const ok = await showModal('通过后将进入24小时拉黑缓冲期：期间可解除封禁，也可立即执行永久拉黑（余额转入公司账户）。\n\n确定通过？',
+                    { title: '审核确认', okText: '确认通过' });
+                if (!ok) return;
+                note = await showInputModal('审核备注（可留空）', '选填') || '';
             } else {
                 const n = prompt('驳回原因（可留空）：');
                 if (n === null) return;
@@ -7500,6 +7719,71 @@
                 }, 450);
             }, true);
         })();
+
+        // ==================== 统一风格弹窗组件 ====================
+        // 确认/提示弹窗
+        function showModal(message, opts = {}) {
+            return new Promise((resolve) => {
+                const mask = document.createElement('div');
+                mask.className = 'modal-mask';
+                const danger = opts.danger !== false;
+                mask.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header">${opts.title || '提示'}</div>
+                        <div class="modal-body">${message}</div>
+                        <div class="modal-footer">
+                            <button class="modal-btn modal-btn-cancel" data-action="cancel">${opts.cancelText || '取消'}</button>
+                            <button class="modal-btn ${danger ? 'modal-btn-danger' : 'modal-btn-primary'}" data-action="ok">${opts.okText || '确定'}</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(mask);
+                mask.querySelector('[data-action="cancel"]').onclick = () => { document.body.removeChild(mask); resolve(false); };
+                mask.querySelector('[data-action="ok"]').onclick = () => { document.body.removeChild(mask); resolve(true); };
+                mask.onclick = (e) => { if (e.target === mask) { document.body.removeChild(mask); resolve(false); } };
+            });
+        }
+        // 带输入框的弹窗
+        function showInputModal(title, placeholder, defaultValue = '') {
+            return new Promise((resolve) => {
+                const mask = document.createElement('div');
+                mask.className = 'modal-mask';
+                mask.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header">${title}</div>
+                        <div class="modal-body">
+                            <input type="text" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="${placeholder}" value="${defaultValue}">
+                        </div>
+                        <div class="modal-footer">
+                            <button class="modal-btn modal-btn-cancel" data-action="cancel">取消</button>
+                            <button class="modal-btn modal-btn-primary" data-action="ok">确定</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(mask);
+                const input = mask.querySelector('input');
+                input.focus();
+                mask.querySelector('[data-action="cancel"]').onclick = () => { document.body.removeChild(mask); resolve(null); };
+                mask.querySelector('[data-action="ok"]').onclick = () => {
+                    const val = input.value.trim();
+                    document.body.removeChild(mask);
+                    resolve(val || null);
+                };
+                mask.onclick = (e) => { if (e.target === mask) { document.body.removeChild(mask); resolve(null); } };
+                input.onkeydown = (e) => { if (e.key === 'Enter') mask.querySelector('[data-action="ok"]').click(); };
+            });
+        }
+
+        // 全局覆盖原生弹窗，所有页面统一风格
+        window.alert = async (msg) => {
+            await showModal(msg, { title: '提示', okText: '知道了', danger: false });
+        };
+        window.confirm = async (msg) => {
+            return await showModal(msg, { title: '确认操作', okText: '确定' });
+        };
+        window.prompt = async (msg, def = '') => {
+            return await showInputModal(msg, '请输入内容', def);
+        };
     </script>
 </body>
 </html>
