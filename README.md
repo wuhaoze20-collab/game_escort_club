@@ -1,11 +1,12 @@
 # 大狗嚼电竞管理系统
 
-基于 FastAPI + MySQL + 原生前端的完整前后端分离管理系统，实现多角色权限、内容管理、订单全流程、工资结算、打手评价、盈利统计等功能。
+基于 FastAPI + MySQL + 原生前端的完整前后端分离管理系统，实现多角色权限、内容管理、订单全流程、工资结算、打手评价、盈利统计等功能，并内置 AI 客服（DeepSeek + RAG 知识库检索 + Function Calling）与 Docker 一键部署。
 
 ## 技术栈
-- **后端**：Python 3.8+ / FastAPI / SQLAlchemy / MySQL / JWT鉴权 / bcrypt密码加密
-- **前端**：原生HTML/CSS/JS + Tailwind CSS
-- **开发工具**：VSCode
+- **后端**：Python 3.8+ / FastAPI / SQLAlchemy / MySQL / JWT 鉴权 / bcrypt 密码加密
+- **AI**：DeepSeek（可后台切换 Qwen）/ 向量检索（RAG）/ Function Calling / Neo4j 知识图谱
+- **前端**：原生 HTML/CSS/JS + Tailwind CSS（单文件，无构建步骤）
+- **部署**：Docker Compose（Nginx + FastAPI + MySQL + Neo4j 四容器）
 
 ## 项目目录结构
 ```
@@ -377,7 +378,87 @@ V3.10.0 起，长篇非结构化文本（**用户服务协议、打手服务规�
 > 顺序不能颠倒（先转义、后插入自己生成的标签），否则会引入 XSS 风险。
 > 提示词里也要求模型输出纯文本，两层互为兜底。
 
-## 快速启动（详细环境配置）
+## Docker 一键部署（推荐）
+
+不需要在本机装 Python、MySQL、Neo4j，四个服务全部跑在容器里。**完整版（含排障、备份恢复、生产建议）见 [DEPLOY.md](DEPLOY.md)**。
+
+### 1. 环境要求
+
+- Docker Desktop（Windows / macOS）或 Docker Engine + Compose V2（Linux）
+- 放行端口：`80`、`3307`、`7474`、`7687`、`8000`
+
+### 2. 配置 `.env`（项目根目录）
+
+```env
+# AI 服务（默认 DeepSeek，可换回 Qwen）
+AI_API_KEY=sk-填入你自己的APIKey
+AI_MODEL=deepseek-chat
+AI_BASE_URL=https://api.deepseek.com/v1/chat/completions
+
+# MySQL（容器映射到宿主机 3307，避免与本机 3306 冲突）
+MYSQL_ROOT_PASSWORD=root123456
+MYSQL_DATABASE=game_escort_club
+
+# Neo4j
+NEO4J_AUTH=neo4j/neo4j123456
+```
+
+> `.env` 已被 `.gitignore` 排除，**不要提交**。
+
+### 3. 启动
+
+```powershell
+docker compose up -d
+```
+
+首次启动会自动构建后端镜像、拉取 MySQL 8.0 / Neo4j 5 / Nginx alpine，并建表 + 初始化默认数据，约 3–5 分钟。
+
+### 4. 验证
+
+```powershell
+docker compose ps                 # 4 个容器都应为 Up
+docker compose logs -f backend    # 出现 Uvicorn running on http://0.0.0.0:8000 即成功
+```
+
+### 5. 访问地址
+
+| 服务 | 地址 | 账号 |
+|---|---|---|
+| 系统主入口 | http://localhost | 见下方「测试账号」（密码均为 `123456`） |
+| 后端 API 文档 | http://localhost:8000/docs | — |
+| Neo4j Browser | http://localhost:7474 | `neo4j` / `neo4j123456` |
+| MySQL | localhost:3307 | `root` / `root123456`，库名 `game_escort_club` |
+
+### 6. 容器清单
+
+| 容器 | 镜像 | 作用 | 端口（宿主→容器） |
+|---|---|---|---|
+| `dgeq-frontend` | nginx:alpine | 前端静态页 + 反向代理 `/api` | 80:80 |
+| `dgeq-backend` | 本地构建 | FastAPI 后端 | 8000:8000 |
+| `dgeq-mysql` | mysql:8.0 | 业务数据 | 3307:3306 |
+| `dgeq-neo4j` | neo4j:5-community | 知识图谱 | 7474/7687 |
+
+### 7. 改代码后如何生效
+
+| 改动位置 | 操作 |
+|---|---|
+| `backend/**` | `docker compose up -d --build backend` |
+| `frontend/index.html` | 无需重建，`Ctrl + F5` 强刷浏览器 |
+
+### 8. Docker 常见问题
+
+| 现象 | 原因 / 解决 |
+|---|---|
+| `ports are not available: bind ... 3306` | 本机 MySQL 占用 3306。本项目已把容器映射到 **3307**，如仍冲突请改 `docker-compose.yml` 的 ports |
+| 镜像拉取卡住不动 | Docker Desktop → Settings → Docker Engine 加国内镜像源：`"registry-mirrors": ["https://docker.m.daocloud.io"]`，重启 Docker 后重试 |
+| 局域网其他设备打不开 | 用 `ipconfig` 查本机内网 IP，让访问者打开 `http://<内网IP>`；并放行 Windows 防火墙 80 端口入站 |
+| 后端反复 Restarting，日志报 `Unknown column 'users.xxx'` | ORM 新增字段但库里没这列，需 `ALTER TABLE` 补列（或让 `migrate_db()` 自动补） |
+| AI 客服不回复 | 看 `docker compose logs backend`，多为 API Key 无效或额度用尽 |
+| 本地开发与 Docker 并存 | 本地用 `$env:PORT=9000` 起后端，避开容器的 8000 |
+
+> Docker 容器之间必须用 `docker compose up -d` 统一编排；单独 `docker start` 会导致容器间 DNS 解析失败。
+
+## 本地运行（详细环境配置）
 
 ### 第 0 步：前置检查（只做一次）
 
@@ -938,3 +1019,7 @@ netstat -ano | findstr 8000    # 查看占用8000端口的PID
 taskkill /F /PID <PID>         # 结束占用进程后重新启动
 ```
 或修改 `backend/main.py` 中的 `port=8000` 为其他端口，并同步修改前端 `API_BASE`。
+
+## 开源协议
+
+本项目采用 [MIT License](LICENSE)，可自由使用、修改与商用，保留版权声明即可。
