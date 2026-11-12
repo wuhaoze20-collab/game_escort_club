@@ -19,7 +19,7 @@
 
 ```env
 # AI 服务配置（默认已配置DeepSeek，可自行替换）
-AI_API_KEY=sk-18a7976fef744cb2819149d0c8c85feb
+AI_API_KEY=sk-填入你自己的APIKey
 AI_MODEL=deepseek-chat
 AI_BASE_URL=https://api.deepseek.com/v1/chat/completions
 
