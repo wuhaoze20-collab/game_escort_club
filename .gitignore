@@ -59,3 +59,5 @@ chroma_db/
 # Qdrant 本地向量库（运行时生成，不入库）
 backend/qdrant_db/
 qdrant_db/
+# 项目介绍逐字稿（个人面试材料，不入公开仓库）
+大狗嚼电竞管理系统-项目介绍逐字稿.docx
