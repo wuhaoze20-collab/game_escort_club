@@ -12,11 +12,11 @@
 ```
 game_escort_club/
 ├── backend/                     # 后端服务（FastAPI）
-│   ├── api/                     # 接口路由（共 99 个接口）
+│   ├── api/                     # 接口路由（98 个操作 / 82 条路径）
 │   │   ├── __init__.py
 │   │   ├── auth_api.py          # 登录/注册/注册审核/改密/忘记密码
 │   │   ├── content_api.py       # 公告/须知/价格/福利/支付方式/处罚通告等内容接口
-│   │   ├── user_info_api.py     # 用户资料/昵称审核/等级/标签/充值/封禁(含客服申请-管理员审核)/公司账户
+│   │   ├── user_info_api.py     # 用户资料/昵称审核/等级/标签/充值/封禁(永久·临时·解封)/公司账户
 │   │   ├── order_api.py         # 点单/派单/接单/结单/确认结算/取消/工资记录
 │   │   ├── rating_api.py        # 评价/投诉/回复/复查申请与审核
 │   │   ├── stats_api.py         # 本月盈利统计
@@ -25,17 +25,23 @@ game_escort_club/
 │   │   ├── notification_api.py  # 站内消息通知
 │   │   ├── quote_api.py         # 台词增删改查 + 批量导入
 │   │   ├── config_api.py        # 系统参数读取/修改/恢复默认/静默失败留痕清理
-│   │   ├── ai_api.py            # AI 客服（千问）：对话/会话/历史 + 工具调用循环
+│   │   ├── ai_api.py            # AI 客服：对话/会话/历史 + 工具调用循环
 │   │   ├── ai_prompt_api.py     # AI 提示词段落与问答库管理 + 提示词预览
-│   │   └── ai_rag_api.py        # AI 知识库文档管理 + 向量索引重建 + 检索测试
+│   │   ├── ai_rag_api.py        # 知识库文档/图片 · 索引重建 · 检索测试 · 离线评估
+│   │   └── kg_api.py            # 知识图谱查询与图谱页数据
+│   ├── rag/                     # 模块化 RAG（13 个模块：改写/召回/融合/重排/Self-RAG…）
+│   ├── kg/                      # 知识图谱（Neo4j 同步与查询，5 个模块）
 │   ├── database.py              # 数据库连接（默认 MySQL，DB_ENGINE=sqlite 可回退）
-│   ├── models.py                # 数据库表模型（21 张表）
+│   ├── models.py                # 数据库表模型（26 张表）
 │   ├── schemas.py               # 请求/响应数据模型
-│   ├── auth.py                  # JWT 鉴权与角色权限校验
-│   ├── config_service.py        # 系统参数读取层（带缓存与默认值兜底）
-│   ├── ai_service.py            # AI 提示词装配（数据库段落 + 知识库检索注入）+ 调用千问
-│   ├── ai_rag.py                # RAG：文档分块 / 千问 embedding / 余弦检索 / RRF 混合
+│   ├── auth.py                  # JWT 鉴权、角色权限校验与封禁拦截
+│   ├── config_service.py        # 系统参数读取层（72 项 · 15 分组，带缓存与默认值兜底）
+│   ├── ai_service.py            # AI 提示词装配 + 调用对话模型（默认 DeepSeek）
+│   ├── ai_rag.py                # RAG 主流程：分块 / embedding / 混合检索 / RRF 融合
 │   ├── ai_tools.py              # AI 工具（Function Calling）：查询余额/订单/价格等
+│   ├── query_optimizer.py       # 查询改写、子查询分解、HyDE 等查询优化模块
+│   ├── rag_eval.py              # RAG 离线评估（精确率/召回率/忠实度/答案相关性）
+│   ├── ops_alerts.py            # 静默失败留痕（配置回退、账目异常等）
 │   ├── main.py                  # 程序入口（建表 + 自动补列/改类型 + 挂载路由与静态目录）
 │   ├── seed_default_accounts.py # 默认账号与内容配置初始化（启动时幂等调用）
 │   ├── seed_quotes.py           # 默认台词初始化（290 条，仅首次导入）
@@ -88,8 +94,13 @@ game_escort_club/
 | `ai_faqs` | **AI 问答库** | `question`、`keywords`(逗号分隔，命中用)、`answer`(标准答法)、`category`、`role`(生效角色)、`enabled`、`hit_count`。按提问关键词命中 Top N 条注入提示词，替代"每次塞全部资料" |
 | `ai_faq_misses` | **未命中提问记录** | `question` 唯一、`role`、`count`(累计次数)、`last_at`。问答库的反馈闭环：管理员据此看到"用户常问但没覆盖"的问题并补问答 |
 | `kb_documents` | **知识库长文档** | `doc_key` 唯一(检索来源标识)、`title`、`category`、`content`(纯文本正文)、`role`(空=全角色，否则仅该角色可检索到)、`enabled`、`sort_order`、`version`、`updated_by`。**长篇非结构化文本放这里，不放 `content_config`** —— 后者存的是结构化 JSON，且 8 个模块是无条件全量注入的；长文档全量注入会挤爆上下文并触发"中间迷失" |
-| `ai_chunks` | **向量索引片段** | `source_type`(document/faq)、`source_key`、`chunk_index`、`content`、`content_hash`(md5)、`embedding`(**TEXT 列存 JSON 数组**)、`dim`、`model`、`enabled`；`(source_type, source_key, chunk_index)` 联合唯一。`content_hash` + `dim` + `model` 三者全一致才跳过重新向量化，**是成本控制的核心**（改一篇文档只重算它自己） |
+| `ai_chunks` | **检索片段（文本侧）** | `source_type`(document/faq/image)、`source_key`、`chunk_index`、`parent_id`(父子分块：子块指向父块，NULL=父块)、`title`、`role`、`asset_path`(图片源文件名)、`content`、`content_hash`(md5)、`embedding`(JSON 数组，父块不向量化)、`dim`、`model`、`enabled`；`(source_type, source_key, chunk_index)` 联合唯一。`content_hash` + `dim` + `model` 三者全一致才跳过重新向量化，**是成本控制的核心**（改一篇文档只重算它自己） |
 | `ban_requests` | 客服发起的拉黑申请 | `target_username`/`target_role`、`requested_by`、`reason`、`status`(pending/approved/rejected)、`note`、`processed_by`/`processed_at`。**单独建表而非在 `users` 上加列**：同一账号可能被多次申请（驳回后可再申请），需要留历史 |
+| `ai_vectors` | **向量独立表** | `chunk_id` 唯一（关联 `ai_chunks.id`）、`embedding`(JSON 数组)、`dim`、`model`。与「文本片段」分表存放：文本与向量性质不同，将来换真正的向量库只需改这张表的读写 |
+| `ai_image_captions` | **知识库图片图注缓存** | `file_name` 唯一、`file_hash`(md5 图片二进制)、`caption`、`model`。缓存键是**图片文件是否变了**（不是图注文本），图片没换 = 重建索引零 API 花费 |
+| `ai_eval_history` | **RAG 评估历史** | `avg_precision`/`avg_recall`/`avg_similarity`/`avg_faithfulness`/`avg_answer_relevancy`、`config_json`(参数快照)、`items_json`(逐题详情)、`question_ids` + `fixed_set_version`（还原当时用了哪批题） |
+| `ai_eval_questions` | **评估测试题库** | `question`、`ground_truth`、`role`、`category`、`query_type`(fact/reason/compare，抽题按此分层保底)、`enabled` |
+| `ai_eval_fixed_set` | **固定评估题集** | `question_ids`(JSON)、`sample_size`、`version`、`role_dist`/`query_type_dist`。每次抽题插入新行、取 id 最大为当前：题集固定后 A/B 对比才不被「抽题运气」污染 |
 
 > **金额单位与字段类型**（易错，改动前务必先看这里）：
 
@@ -150,6 +161,22 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 
 - 登录签发 JWT（`auth.py`，`SECRET_KEY` 环境变量可覆盖，默认 24 小时有效）
 - 接口级权限用 `Depends(require_roles("admin", ...))` 校验，越权返回 403；前端再按角色隐藏菜单与按钮（**前端隐藏只是体验，真正的边界在后端**）
+- **封禁拦截在 `get_current_user()` 里**：被临时封禁/永久拉黑的账号，**下一次任意请求即返回 403 被踢下线**，不必等令牌过期
+
+### 处罚体系（24 小时缓冲 + 可选时长封禁）
+
+`users` 表新增四个字段承载处罚状态：`ban_type`（`""` / `temporary` / `permanent` / `pending_ban`）、`ban_until`、`ban_reason`、`ban_requested_at`。
+
+| 状态 | 含义 | 登录时的行为（`api/auth_api.py`） |
+|---|---|---|
+| `pending_ban` | 拉黑申请已批，处于 **24 小时缓冲期** | 提示剩余小时数；缓冲期结束仍未撤销则**自动执行**永久拉黑 |
+| `temporary` | 临时封禁（1 / 3 / 7 / 30 天） | 提示剩余「天/时/分」；到期**自动解封** |
+| `permanent` | 永久拉黑 | 直接拒绝登录，提示已被封禁 |
+
+- **真正执行拉黑**（`_do_final_ban`）：余额转入公司账户、写处罚公告、发站内通知、同步知识图谱、`account_status=rejected`、`ban_type=permanent`
+- **可撤销**：缓冲期内调 `/api/admin/unban/{username}` 即恢复；已进入 `permanent` 则不可自助恢复
+- **同步公告与知识库**：`backend/sync_punishment_rules.py` 一次性脚本，更新用户协议/打手规范的违规处理章节、追加处罚公告「规则更新」条目、给 AI 主提示词追加「处罚体系最新规则」段
+- 前端交互：老板/打手列表的操作列为「时长下拉（1/3/7/30 天/永久）+ 封禁 / 拉黑 / 解封」，确认框走系统统一主题弹窗（`showModal`），不使用浏览器原生 `confirm/prompt`
 
 ### 可维护配置（改后台即可，无需改代码或重启）
 
@@ -158,48 +185,65 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 | 内容 | 存放位置 | 后台入口 | 可操作角色 |
 |---|---|---|---|
 | **台词**（290 条，驱动顶部台词栏） | `quotes` 表 | 系统设置 → 台词管理 | 管理员 / 客服 |
-| **业务参数**（18 项） | `system_config` 表 | 系统设置 → 系统参数 | 管理员（客服只读） |
-| **AI 提示词**（5 段） | `ai_prompts` 表 | 系统设置 → 提示词管理 | **管理员**（含各角色权限清单与安全规则，故不对客服开放） |
-| **AI 问答库**（22 条出厂） | `ai_faqs` 表 | 系统设置 → AI 问答库 | 管理员 / 客服 |
-| **知识库长文档**（3 篇出厂：用户协议 / 打手规范 / 退款规则） | `kb_documents` 表 | 系统设置 → 知识库索引 | **管理员** |
+| **业务参数**（72 项 · 15 分组） | `system_config` 表 | 系统设置 → 系统参数 | 管理员（客服只读） |
+| **模型配置**（API Key / 模型 / 接口地址） | `system_config` 表 | **AI 设置 → 模型配置** | **管理员** |
+| **AI 提示词**（5 段） | `ai_prompts` 表 | **AI 设置 → 提示词管理** | **管理员**（含各角色权限清单与安全规则，故不对客服开放） |
+| **AI 问答库**（22 条出厂） | `ai_faqs` 表 | **AI 设置 → AI 问答库**（客服：系统设置 → AI 问答库） | 管理员 / 客服 |
+| **知识库长文档**（3 篇出厂：用户协议 / 打手规范 / 退款规则） | `kb_documents` 表 | **AI 设置 → RAG 调试**（页内「知识库索引」） | **管理员** |
+| **知识图谱** | Neo4j | AI 设置 → 知识图谱 | 管理员 |
 
-> 「知识库索引」页还负责**重建向量索引**与**检索测试**，详见下文「AI 知识库与向量检索（RAG）」。
+> 后台菜单自 V5.x 起把 AI 相关配置从「系统设置」中拆出，独立成 **AI 设置**（模型配置 / 提示词管理 / AI 问答库 / RAG 调试 / 知识图谱），「系统设置」只保留台词管理与业务参数。
+> 「RAG 调试」页内含知识库索引：**重建向量索引**、**检索测试**、**离线评估**（精确率/召回率/忠实度），详见下文 RAG 一节。
 
-**业务参数清单**（`config_service.CONFIG_META`，含默认值与类型校验）：
+**业务参数清单**（`config_service.CONFIG_META`，72 项、15 个分组，含默认值与类型校验）：
 
-| 参数 | 默认值 | 说明 |
+| 分组 | 代表参数 | 说明 |
 |---|---|---|
-| `club_commission_rate` | 0.3 | 俱乐部抽成比例（0~1） |
-| `tip_max_rate` | 0.3 | 单笔订单累计打赏上限比例 |
-| `withdraw_cooldown_days` | 30 | 提现冷却天数 |
-| `recharge_max_amount` | 10000000 | 单次充值上限（分） |
-| `login_max_failed_attempts` | 5 | 连续输错密码锁定阈值 |
-| `login_lock_minutes` | 10 | 账户锁定时长（分钟） |
-| `token_expire_minutes` | 1440 | 登录令牌有效期（分钟） |
-| `order_min_amount` / `order_max_amount` | 100 / 5000000 | 订单金额下限 / 上限（分） |
-| `order_max_duration_min` | 1440 | 单笔订单时长上限（分钟） |
-| `order_remark_max_len` / `order_service_note_max_len` / `game_type_max_len` | 500 / 50 / 50 | 各类文本字段字数上限 |
-| `nickname_max_len` / `tag_max_len` | 20 / 20 | 昵称 / 标签字数上限 |
-| `violation_nickname` | 违规昵称 | 昵称被打回后的占位文案 |
-| `tech_levels` / `level_types` | 985…明星护 / 娱乐陪·技术陪 | 打手等级列表（JSON 数组） |
-| `ai_enabled` | true | 是否启用 AI 客服（关闭后前端不显示气泡） |
-| `ai_model` | qwen-plus | 千问模型名（qwen-turbo 更快更便宜、qwen-max 最强） |
-| `ai_daily_limit` | 30 | 每人每日提问上限（0 = 不限制） |
-| `ai_temperature` | 0.3 | 回答随机度，客服场景建议偏低 |
-| `ai_max_tokens` | 800 | 单次回答最大长度 |
-| `ai_extra_instruction` | 见下 | 附加到系统提示词末尾的临时话术（**出厂内容为常见问答标准答法与语气要求**，可整段改写或清空） |
-| `ai_history_rounds` | 6 | 每次携带的历史对话轮数 |
-| `ai_faq_top_n` | 4 | 问答库按关键词命中的条数上限（0 = 关闭按需注入） |
-| `ai_rag_*`（6 项） | — | 向量检索开关、Top K、相似度阈值、embedding 模型、分块字数、注入字数上限。**详见下文 RAG 一节** |
+| 模型配置 | `ai_model`、`ai_base_url`、`ai_api_key` | 对话模型下拉（默认 `deepseek-chat`）、接口地址（默认 DeepSeek）、API Key |
+| 资金与抽成 | `club_commission_rate` / `tip_max_rate` / `withdraw_cooldown_days` / `recharge_max_amount` | 抽成 0.3、打赏上限 30%、提现冷却 30 天、单次充值上限 |
+| 登录安全 | `login_max_failed_attempts` / `login_lock_minutes` / `token_expire_minutes` | 错 5 次锁 10 分钟、令牌 1440 分钟 |
+| 订单校验 | `order_min_amount` / `order_max_amount` / `order_max_duration_min` / 各类文本上限 | 金额、时长、备注字数校验 |
+| 资料校验 | `nickname_max_len` / `tag_max_len` / `violation_nickname` | 昵称与标签字数、违规昵称占位 |
+| 打手等级 | `tech_levels` / `level_types` | 985…明星护 / 娱乐陪·技术陪（JSON 数组） |
+| AI 客服 | `ai_enabled` / `ai_daily_limit` / `ai_temperature` / `ai_max_tokens` / `ai_extra_instruction` / `ai_history_rounds` / `ai_faq_top_n` | 开关、每日 30 条上限、随机度、回答长度、附加话术、历史轮数、问答命中条数 |
+| AI 知识库 | `ai_rag_enabled` / `ai_rag_top_k` / `ai_rag_min_score` / `ai_rag_embedding_model` / `ai_vl_model`（图片理解）/ `ai_rag_chunk_size` / `ai_rag_child_chunk_size` / `ai_rag_max_chars` | 向量检索总开关（出厂关闭）、召回与分块参数 |
+| RAG 模块开关 | 查询改写 / 向量检索 / 关键词检索 / 知识图谱检索 / RRF 融合 / 重排序 / AutoMerging | 13 个模块的逐个启停与参数 |
+| 向量存储 | `rag_vector_backend`(chroma/qdrant/内置)、`rag_chroma_candidates` | 向量检索后端选择与候选数 |
+| 知识图谱 | 启用开关、新订单自动入图、图谱页节点上限 | Neo4j 同步策略 |
+| 融合与召回 | RRF 常数 k、文档/图片/FAQ/图谱通道权重、各通道召回条数 | 混合检索的权重与上限 |
+| 重排序打分 | 重排·RRF 分 / 向量分 / 关键词分 / FAQ 加成权重 | 重排序打分公式的权重 |
+| 查询优化 | 查询重写 / 子查询分解 / 后退提示 / 查询扩展 / HyDE | 默认全关，按需开启 |
+| Self-RAG | 启用开关、检索前判断、相关性过滤阈值、生成后验证 | 自我反思式检索 |
 
 > 修改参数会**立即生效**（写入即失效缓存）。填了非法值会被拒绝并提示原因（例如比例越界、类型不符），不会写进库。
 > 台词改动会同步影响所有角色的顶部台词栏（前端登录时拉取一次，之后本地 10 秒轮换，不会高频请求后端）。
+> **切换对话模型时接口地址会自动跟随**：模型下拉项带 `data-baseurl`，选中即同步写 `ai_base_url`（走 `PUT /api/config/{key}`），无需手工改地址。
 
-### AI 客服（接入通义千问）
+### AI 客服（默认 DeepSeek，可后台切换 Qwen）
 
 登录后右下角有一个**悬浮气泡**，点开即可对话。它是**客服答疑型**：依据数据库里的内容配置与知识库回答；
 开启 Function Calling 后还能查**提问者自己**的订单、余额与价格（**只读，且身份只来自令牌**）。
 用户协议、打手规范、退款规则等长文档在打开 RAG 开关后走**向量检索**按需注入。
+
+**对话模型与地址**（`backend/ai_service.py`）：
+
+| 项 | 默认值 | 说明 |
+|---|---|---|
+| `DEFAULT_MODEL` | `deepseek-chat` | 代码级兜底；运行时以 `system_config.ai_model` 为准 |
+| `DEFAULT_BASE_URL` | `https://api.deepseek.com/v1/chat/completions` | 同上，以 `ai_base_url` 为准 |
+| `get_current_model()` / `get_base_url()` | — | 每次调用从配置读，**后台改完即时生效，无需重启** |
+
+可切换的模型（AI 设置 → 模型配置 下拉，每项自带对应接口地址）：
+
+| 选项 | 接口地址 |
+|---|---|
+| DeepSeek V3（`deepseek-chat`，默认） | `https://api.deepseek.com/v1/chat/completions` |
+| DeepSeek R1（`deepseek-reasoner`） | 同上 |
+| Qwen Plus（`qwen-plus`） | `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` |
+| Qwen Turbo（`qwen-turbo`） | 同上 |
+
+> **向量化仍是千问**：`ai_rag_embedding_model` 默认 `text-embedding-v3`（1024 维）。换对话模型**不影响**已建索引；
+> 只有换 embedding 模型才必须点「重建索引」全量重算。因此用 DeepSeek 对话时，`DASHSCOPE_API_KEY` 仍需保留给向量化与图片理解用。
 
 **配置步骤（三步）**：
 
@@ -208,24 +252,27 @@ processing / pending_settlement ──(管理员直接完成)──→ completed
 cd C:\Users\18642\game_escort_club\backend
 copy .env.example .env
 
-# 2. 编辑 .env，填入你的阿里云百炼 API Key
-#    DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx
+# 2. 编辑 .env，填入对话模型 Key（默认 DeepSeek）
+#    AI_API_KEY=sk-xxxxxxxxxxxxxxxx
+#    DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxx   # 向量化/图片理解仍用千问，需另配
 
 # 3. 重启后端
 venv\Scripts\python.exe main.py
 ```
 
+也可以不改 `.env`，直接登录管理员 → **AI 设置 → 模型配置**，在下拉里选模型、填 API Key、保存即可（存进 `system_config`，优先级高于环境变量）。
+
 > **不配置也能正常启动**：AI 功能会自动关闭（前端不显示气泡），其它功能完全不受影响。
 
-**工作原理**：每次提问时，后端拼一份系统提示词塞给千问，按以下顺序组装：
+**工作原理**：每次提问时，后端拼一份系统提示词塞给对话模型，按以下顺序组装：
 
 | 顺序 | 内容 | 来源 | 谁能改 |
 |---|---|---|---|
-| ① | **提示词段落**（角色设定、回答规则 1-6、界面与路径 7-10、权限 11-13、安全 14-16） | `ai_prompts` 表 | **管理员**（「系统设置 → 提示词管理」，改完立即生效、可恢复出厂） |
+| ① | **提示词段落**（角色设定、回答规则 1-6、界面与路径 7-10、权限 11-13、安全 14-16） | `ai_prompts` 表 | **管理员**（「AI 设置 → 提示词管理」，改完立即生效、可恢复出厂） |
 | ② | 当前用户（称呼、角色） | 运行时 | — |
 | ③ | **该用户的真实侧边栏菜单 + 权限 + 操作路径** | `ai_service.ROLE_MENUS/CAPS/FLOWS` | 改代码（须与前端保持一致） |
 | ④ | **平台知识库** | `content_config` 的 8 个内容模块 | 管理员/客服（内容页编辑） |
-| ⑤ | **知识库检索片段** —— 关闭 RAG 时只按提问关键词从问答库挑 Top N 条；**打开 RAG 后**为「关键词命中 + 向量检索」RRF 融合结果（问答库 + 长文档片段同池竞争） | `ai_faqs` / `kb_documents` → `ai_chunks` | **管理员/客服**（「AI 问答库」）；长文档与向量索引进 **管理员**（「知识库索引」） |
+| ⑤ | **知识库检索片段** —— 关闭 RAG 时只按提问关键词从问答库挑 Top N 条；**打开 RAG 后**为「关键词命中 + 向量检索」RRF 融合结果（问答库 + 长文档片段同池竞争） | `ai_faqs` / `kb_documents` → `ai_chunks` / `ai_vectors` | **管理员/客服**（「AI 问答库」）；长文档与向量索引进 **管理员**（「AI 设置 → RAG 调试」） |
 | ⑥ | 当前时间 | 运行时 | — |
 | ⑦ | 【补充指示】常见问答标准答法与语气要求 | `system_config.ai_extra_instruction` | 管理员（「系统参数」） |
 
@@ -303,7 +350,7 @@ V3.10.0 起，长篇非结构化文本（**用户服务协议、打手服务规�
 **配置步骤**：
 
 1. 按上文配好 `.env` 的 `DASHSCOPE_API_KEY`（与 AI 聊天同一个 Key），重启后端
-2. 用管理员登录 →「系统设置 → **知识库索引**」→ 点 **重建索引**（会真实调用千问 embedding，产生少量费用）
+2. 用管理员登录 →「AI 设置 → RAG 调试 → **知识库索引**」→ 点 **重建索引**（会真实调用千问 embedding，产生少量费用）
 3. 在**检索测试**区选角色、输入一句真实提问，检查命中质量（页面会列出关键词分、向量相似度、
    融合后实际注入的文本）——确认无误后再打开开关
 4. 回到「系统参数」把 **`ai_rag_enabled` 改为 `true`**。**出厂默认是关闭的**，
@@ -560,8 +607,8 @@ venv\Scripts\python main.py
 |---|---|---|
 | `ModuleNotFoundError: No module named 'fastapi'` | **用错了 Python 解释器**（最常见）：用了系统 Python，或用了**别的项目**的虚拟环境 | 必须用本项目的 `backend\venv\Scripts\python.exe`。用 `python -c "import sys; print(sys.executable)"` 确认当前解释器路径，若输出不是 `...\game_escort_club\backend\venv\...` 就是选错了 |
 | `RuntimeError: Directory '../frontend/avatars' does not exist` | 在旧版本中因工作目录不是 `backend` 导致（**V3.4.1 已修复，不再依赖工作目录**） | 升级到最新代码；或先 `cd` 到 `backend` 再启动 |
-| `[Errno 10048] ... address already in use` | 8000 端口被占用 | 方法一：`netstat -ano | findstr 8000` 查出 PID 后 `taskkill /F /PID <PID>` 结束占用进程；方法二：改 `main.py` 里的 `port=8000` 为其他端口 |
-| 启动无报错但页面连不上 | 后端没起来 / 前端 API 地址不对 | 确认终端停留在运行状态（不要关闭窗口）；确认 `frontend/index.html` 顶部 `API_BASE` 为 `http://localhost:8000` |
+| `[Errno 10048] ... address already in use` | 8000 端口被占用 | 方法一：`netstat -ano | findstr 8000` 查出 PID 后 `taskkill /F /PID <PID>` 结束占用进程；方法二：启动前设环境变量 `$env:PORT=9000`（`main.py` 读 `PORT`，默认 8000） |
+| 启动无报错但页面连不上 | 后端没起来 / 前端 API 地址不对 | 确认终端停留在运行状态（不要关闭窗口）；`API_BASE` 已自适应：`file://` 打开时连 `http://127.0.0.1:8000`，走 Nginx 时用相对路径 `/api`（无需手改） |
 
 > **本机有多个 Python 时的建议**：不要靠 `python` 这个命令名去猜，直接用完整路径启动最稳妥：
 > ```
@@ -716,11 +763,11 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 
 ## 接口列表
 
-共 **99 个接口**。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
+共 **98 个接口操作**、**82 条路径**（同一路径不同方法合并计入路径）。除「所有人」外均需 `Authorization: Bearer <token>`；权限由 `auth.py` 的 `require_roles()` 在接口级校验，越权返回 403。
 
-> 另有一个应用级路由 `GET /`（返回 `frontend/index.html`），它不算业务接口，故未计入 99。
-> 因此 `check_consistency.py` 报告的是 **90 条路由**、归一化后 **85 个路径**（差额来自同一路径的不同方法，
-> 如 `GET`/`POST /api/player/tags`），与 `/openapi.json` 的 `paths` 数量一致。
+> 上述口径取自运行中的后端 `/openapi.json`（`paths` = 82，`operations` = 98）。
+> 另有一个应用级路由 `GET /`（返回 `frontend/index.html`），不算业务接口，未计入。
+> 下表按业务模块列出主要接口；RAG 评估（`/api/ai/rag/eval/*`）、知识库图片（`/images/*`）等调试类接口见 `backend/api/ai_rag_api.py`。
 
 ### 认证与账户（6）
 | 方法 | 路径 | 说明 | 权限 |
@@ -747,7 +794,7 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | POST | /api/notification/{notification_id}/read | 标记单条已读 | 所有登录用户 |
 | POST | /api/notification/read-all | 全部标记已读 | 所有登录用户 |
 
-### 用户资料 / 标签 / 账户（21）
+### 用户资料 / 标签 / 账户（23）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | GET | /api/boss/list | 获取老板列表 | 管理员/客服 |
@@ -766,10 +813,12 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | GET | /api/player/tags/review | 标签审核列表 | 管理员/客服 |
 | POST | /api/player/tags/{tag_id}/decision | 标签审核通过 / 驳回 | 管理员/客服 |
 | POST | /api/boss/recharge | 老板充值大狗币 | 老板 |
-| POST | /api/admin/ban/{username} | 拉黑老板/打手（后台金额转入公司账户，**不可逆**） | 管理员 |
+| POST | /api/admin/ban/{username}?immediate= | 拉黑：默认进入 **24 小时缓冲期**（可撤销）；`immediate=true` 立即永久执行（余额转公司账户、写处罚公告） | 管理员 |
+| POST | /api/admin/temp-ban/{username}?days= | **临时封禁**：1 / 3 / 7 / 30 天，`days<=0` 视为永久 | 管理员 |
+| POST | /api/admin/unban/{username} | **解封 / 撤销拉黑**：清除封禁状态（缓冲期内的拉黑也可撤销） | 管理员 |
 | POST | /api/ban/request | 客服发起拉黑申请（不立即执行，等管理员审核） | 客服 |
 | GET | /api/ban/requests | 拉黑申请列表 | 管理员/客服 |
-| POST | /api/ban/requests/{id}/decision | 拉黑申请审核（approve 通过后才真正执行 / reject 驳回） | 管理员 |
+| POST | /api/ban/requests/{id}/decision | 拉黑申请审核（approve 后进入 24 小时缓冲期 / reject 驳回） | 管理员 |
 | GET | /api/admin/company-balance | 查询公司后台余额 | 管理员 |
 
 ### 订单与工资（11）
@@ -830,12 +879,13 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | DELETE | /api/quote/{quote_id} | 删除台词 | 管理员/客服 |
 | POST | /api/quote/batch-import | 批量导入（每行一条，`台词|出处`，自动跳过重复） | 管理员/客服 |
 
-### 系统参数（4）
+### 系统参数（5）
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | GET | /api/config/all | 读取全部参数（含默认值、类型、说明）与静默失败留痕 | 管理员/客服 |
-| PUT | /api/config/{config_key} | 修改参数（校验类型与取值范围，改完立即生效） | 管理员 |
+| PUT | /api/config/{config_key} | 修改参数（校验类型与取值范围，改完立即生效；**切换模型时前端用它同步 `ai_base_url`**） | 管理员 |
 | POST | /api/config/{config_key}/reset | 恢复该参数为默认值 | 管理员 |
+| POST | /api/config/test-ai | **测试当前模型连通性**（按库里配置真实发一次请求，返回 ok / 错误信息） | 管理员 |
 | POST | /api/config/alerts/clear | 清空静默失败留痕列表 | 管理员 |
 
 ### AI 客服（5）
@@ -866,7 +916,10 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | DELETE | /api/ai/faqs/misses/{miss_id} | 忽略某条未命中记录 | 管理员/客服 |
 | POST | /api/ai/faqs/misses/clear | 清空全部未命中记录 | 管理员/客服 |
 
-### AI 知识库与向量检索（10）
+### AI 知识库与向量检索（10 个核心 + 其余调试接口）
+> `backend/api/ai_rag_api.py` 共 28 个路由（prefix `/api/ai/kb`），下表只列核心 10 个；
+> 另有 `/upload`（文档上传）、`/images`、`/images/upload`、`/images/{name}/recaption`、`/images/{name}`（多模态图库）
+> 与 `/eval/*`（评估题库、固定题集、运行、历史、对比）。
 > **文档管理仅管理员**（正文包含平台规则原话，且改动直接影响 AI 口径）；
 > **阅读接口四角色都可**——「用户协议」是给所有用户看的页面。
 
@@ -884,13 +937,13 @@ venv\Scripts\python main.py       # 重启后端，自动重建所有表+初始�
 | POST | /api/ai/kb/search | **检索测试**：返回关键词命中、向量相似度、融合结果与实际注入文本 | 管理员 |
 
 ## 开发说明
-1. 数据库表结构在 `backend/models.py`（21 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
+1. 数据库表结构在 `backend/models.py`（26 张表）。改表后重启后端即可：新表由 `Base.metadata.create_all()` 自动创建，**新增列**由 `main.py` 的 `migrate_db()` 自动补齐（走 `information_schema` 检测），无需手动 `ALTER`
    - `migrate_db()` 除补列外还做**列类型迁移**：例如 `boss_info.balance` 若仍是 `int`，会在启动时自动 `ALTER` 成 `DECIMAL(10,2)`（包含 `NULL` 归零）。迁移前先查 `information_schema` 判断当前类型，**已是目标类型则不执行**，因此可反复重启而不会重复改表
    - 新增列一律加进 `main.py` 顶部的 `ADD_COLUMNS` 元组，格式 `(表名, 列名, DDL)`；判定走 `information_schema`，已存在则跳过
    - 新增需要小数或不同精度的金额字段时，请同时在 `models.py` 声明正确类型、在 `schemas.py` 用 `float`（用 `int` 会把小数**静默截断**），并在 `migrate_db()` 里补一段类型迁移
 2. 默认账号与页面内容初始化在 `backend/seed_default_accounts.py`；默认台词在 `backend/seed_quotes.py`；AI 提示词与问答库在 `backend/seed_ai_content.py`；知识库长文档在 `backend/seed_kb_docs.py`。都在启动时幂等调用（**各自整体判空**），**已存在的数据不会被覆盖** —— 所以后台删掉的问答或改坏的提示词，重启不会自己回来
-   - ⚠️ **`seed_kb_docs.py` 里的 3 篇文档写的全是平台真实规则**（抽成 30%、提现冷却 30 天、单笔充值上限 10 万元等）。**改了业务规则必须同步改这个文件**，否则新环境初始化出来的文档就是错的，AI 会照着一份过时的协议回答。存量库则需要在「知识库索引」页手工改（seed 幂等不会覆盖）
-   - ⚠️ 启动时**只写入文档、不建索引**：建索引要真实调用 embedding 接口有成本，且没配 Key 时会失败。必须由管理员在「知识库索引」页显式点「重建索引」
+   - ⚠️ **`seed_kb_docs.py` 里的 3 篇文档写的全是平台真实规则**（抽成 30%、提现冷却 30 天、单笔充值上限 10 万元等）。**改了业务规则必须同步改这个文件**，否则新环境初始化出来的文档就是错的，AI 会照着一份过时的协议回答。存量库则需要在「AI 设置 → RAG 调试」页内的「知识库索引」手工改（seed 幂等不会覆盖）
+   - ⚠️ 启动时**只写入文档、不建索引**：建索引要真实调用 embedding 接口有成本，且没配 Key 时会失败。必须由管理员在「AI 设置 → RAG 调试」页显式点「重建索引」
 3. **俱乐部抽成比例等业务参数不要写死在代码里**：一律通过 `config_service.get_config(...)` 读取（`system_config` 表），默认值定义在 `config_service.CONFIG_META`。新增业务参数只需在 `CONFIG_META` 里加一条，后台设置页会自动出现该项
    - ⚠️ 新增的配置项若**内容可能很长**（如整段提示词），存量库需要放宽列宽：`main.py` 的 `migrate_columns_to_text()` 已把 `system_config.config_value` 与 `content_config.config_value` 改为 `TEXT`，因为 255 会直接报 `Data too long`（V3.9.0 踩过）
    - ⚠️ **改了出厂默认值不会影响已初始化的库**（seed 幂等：表非空即整体跳过）。需要让存量库也拿到新内容时，要么在后台界面上改，要么写一个一次性同步脚本按 `question`/`section_key` 找到已有行只更新目标字段（**不要整行覆盖**，否则会冲掉后台的编辑）
@@ -988,7 +1041,7 @@ schtasks /create /tn "game_club_backup" /tr "C:\Users\18642\game_escort_club\bac
 
 ### 1. 前端请求失败 / 数据加载不出来
 1. 确认后端已启动且窗口保持运行：终端应显示 `Uvicorn running on http://127.0.0.1:8000`
-2. 确认前端 `API_BASE` 与后端端口一致：`frontend/index.html` 顶部默认为 `http://localhost:8000`
+2. 前端 `API_BASE` 按协议自适应（`file://` → `http://127.0.0.1:8000`；http 页面 → 相对路径 `/api`），如改了后端端口，用 `file://` 方式打开时需同步改这一行
 3. 浏览器按 `F12` → Console 查看报错：若是 `Failed to fetch` / `ERR_CONNECTION_REFUSED`，说明后端没起来或端口不对
 4. 后端 CORS 已放开，file:// 直接打开和 Live Server 打开均可正常请求
 
@@ -1018,7 +1071,7 @@ venv\Scripts\pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.c
 netstat -ano | findstr 8000    # 查看占用8000端口的PID
 taskkill /F /PID <PID>         # 结束占用进程后重新启动
 ```
-或修改 `backend/main.py` 中的 `port=8000` 为其他端口，并同步修改前端 `API_BASE`。
+或设环境变量换端口：`$env:PORT=9000`（`main.py` 默认读 `PORT`，缺省 8000）。用 `file://` 打开前端时需同步改 `API_BASE` 端口。
 
 ## 开源协议
 
